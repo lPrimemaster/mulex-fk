@@ -1,0 +1,5 @@
+# Build dir
+[Bb]uild/
+
+# Clangd cache
+.cache/
