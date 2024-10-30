@@ -19,9 +19,30 @@
 
 #include "../mxlogger.h"
 
-#include <thread>
 #include <cstring>
-#include <chrono>
+
+#ifdef _WIN32
+	struct WSAGuard
+	{
+		WSAGuard()
+		{
+			// On windows we need to start WSA
+			static WSADATA wsa;
+			if(WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+			{
+				mulex::LogError("WSA startup failed");
+			}
+			mulex::LogTrace("WSA initialized");
+		}
+		~WSAGuard()
+		{
+			WSACleanup();
+			mulex::LogTrace("WSA terminated");
+		}
+	};
+
+static WSAGuard _wsaguard;
+#endif
 
 namespace mulex
 {
@@ -34,7 +55,6 @@ namespace mulex
 	{
 		Socket socket;
 		socket._error = false;
-#ifdef __unix__
 		socket._handle = ::socket(AF_INET, SOCK_STREAM, 0);
 		if(socket._handle < 0)
 		{
@@ -42,15 +62,13 @@ namespace mulex
 			socket._error = true;
 			return socket;
 		}
-#else
-#endif
 		LogTrace("SocketInit() OK.");
 		return socket;
 	}
 
 	void SocketBindListen(Socket& socket, std::uint16_t port)
 	{
-#ifdef __unix__
+// #ifdef __unix__
 		sockaddr_in serveraddr;
 		serveraddr.sin_family = AF_INET;
 		serveraddr.sin_port = htons(port);
@@ -71,8 +89,40 @@ namespace mulex
 			LogError("Failed to listen to socket. listen returned %d", listenerr);
 			return;
 		}
-#else
-#endif
+// #else
+// 		struct addrinfo* serveraddr = NULL, hints;
+// 		ZeroMemory(&hints, sizeof(hints));
+// 		hints.ai_family = AF_INET;
+// 		hints.ai_socktype = SOCK_STREAM;
+// 		hints.ai_protocol = IPROTO_TCP;
+//
+// 		if(getaddrinfo(NULL, std::to_string(port).c_str(), &hints, &serveraddr) != 0)
+// 		{
+// 			LogError("Failed to get server address info.");
+// 			socket._error = true;
+// 			return;
+// 		}
+//
+// 		int binderr = ::bind(socket._handle, serveraddr->ai_addr, static_cast<int>(result->ai_addrlen));
+// 		if(binderr == SOCKET_ERROR)
+// 		{
+// 			socket._error = true;
+// 			LogError("Failed to bind to socket. bind returned %d", binderr);
+// 			freeaddrinfo(result);
+// 			return;
+// 		}
+//
+// 		int listenerr = ::listen(socket._handle, SOMAXCONN);
+// 		if(listenerr == SOCKET_ERROR)
+// 		{
+// 			socket._error = true;
+// 			LogError("Failed to listen to socket. listen returned %d", listenerr);
+// 			freeaddrinfo(result);
+// 			return;
+// 		}
+//
+// 		freeaddrinfo(result);
+// #endif
 		LogTrace("SocketBindListen() OK.");
 	}
 
@@ -90,6 +140,8 @@ namespace mulex
 		}
 		return (::fcntl(socket._handle, F_SETFL, flags | O_NONBLOCK) == 0);
 #else
+		unsigned long nonblocking = 1;
+		return (::ioctlsocket(socket._handle, FIONBIO, &nonblocking) == 0);
 #endif
 	}
 
@@ -97,11 +149,11 @@ namespace mulex
 	{
 		Socket client;
 		client._error = false;
-#ifdef __unix__
 		sockaddr_in clientaddr;
 		socklen_t sz = sizeof(clientaddr);
 		*would_block = false;
 		client._handle = ::accept(socket._handle, reinterpret_cast<sockaddr*>(&clientaddr), &sz);
+#ifdef __unix__
 		if(client._handle < 0)
 		{
 			if((errno == EAGAIN) || (errno == EWOULDBLOCK))
@@ -113,15 +165,25 @@ namespace mulex
 			client._error = true;
 			return client;
 		}
-		
+#else
+		if(client._handle == SOCKET_ERROR)
+		{
+			if(WSAGetLastError() == WSAEWOULDBLOCK)
+			{
+				*would_block = true;
+				return client;
+			}
+			LogError("Failed to accept connection. accept returned %d", client._handle);
+			client._error = true;
+			return client;
+		}
+#endif
 		char buffer[INET_ADDRSTRLEN];
 		LogDebug(
 			"Got new connection from: %s:%d",
 			inet_ntop(AF_INET, &clientaddr.sin_addr, buffer, INET_ADDRSTRLEN),
 			ntohs(clientaddr.sin_port)
 		);
-#else
-#endif
 		LogTrace("SocketAccept() OK.");
 		return client;
 	}
@@ -130,69 +192,64 @@ namespace mulex
 		const Socket& socket,
 		std::uint8_t* buffer,
 		std::uint64_t len,
-		std::atomic<bool>* notify_unblock,
-		std::uint32_t timeout_ms
+		std::uint64_t* rlen
 	)
 	{
-		// Setup timeout clock
-		std::chrono::time_point<std::chrono::steady_clock> srb_start;
-		if(timeout_ms > 0)
-		{
-			srb_start = std::chrono::steady_clock::now();
-		}
-
-		// Expect the len
-		while(len > 0)
-		{
 #ifdef __unix__
-			int res = ::recv(socket._handle, buffer, len, MSG_DONTWAIT);
+			std::int64_t res = ::recv(socket._handle, buffer, len, MSG_DONTWAIT);
+			if(rlen) *rlen = 0;
 			if(res > 0)
 			{
-				buffer += res;
-				len -= res;
+				if(rlen) *rlen = static_cast<std::uint64_t>(res);
+				return SocketResult::OK;
 			}
 			else if(res < 0)
 			{
 				if((errno == EWOULDBLOCK) || (errno == EAGAIN))
 				{
-					// TODO: use select();
-					// For now just yield for a while and retry
-					// After just put in a select thread spinning
-					// for all the sockets and condition variables
-					if(!notify_unblock && timeout_ms == 0)
-					{
-						LogError("For no unblocker, it is required to specify a non zero timeout.");
-						return SocketResult::ERROR;
-					}
-					if(timeout_ms > 0)
-					{
-						if(std::chrono::steady_clock::now() - srb_start > std::chrono::milliseconds(timeout_ms))
-						{
-							LogTrace("SocketRecvBytes() timeout.");
-							return SocketResult::TIMEOUT;
-						}
-					}
-					if(notify_unblock && !notify_unblock->load())
-					{
-						LogTrace("SocketRecvBytes() notified to exit. Returning.");
-						return SocketResult::DISCONNECT;
-					}
-					std::this_thread::sleep_for(std::chrono::microseconds(100));
+					return SocketResult::TIMEOUT;
 				}
-				else
+
+				LogError("Socket receive error.");
+				return SocketResult::ERROR;
+			}
+			else if(res == 0)
+			{
+				LogWarning("Socket disconnected.");
+				return SocketResult::DISCONNECT;
+			}
+		return SocketResult::OK;
+#else
+			// Windows does not have a non-blocking flag for recv only
+			// And we don't want the whole socket to be non-blocking due to send
+			unsigned long toread;
+			::ioctlsocket(socket._handle, FIONREAD, &toread);
+			if(rlen) *rlen = 0;
+			if(toread > 0)
+			{
+				std::int32_t res = ::recv(socket._handle, reinterpret_cast<char*>(buffer), len, 0);
+				if(res > 0)
+				{
+					if(rlen) *rlen = static_cast<std::uint64_t>(res);
+					return SocketResult::OK;
+				}
+				else if(res < 0)
 				{
 					LogError("Socket receive error.");
 					return SocketResult::ERROR;
 				}
+				else if(res == 0)
+				{
+					LogWarning("Socket disconnected.");
+					return SocketResult::DISCONNECT;
+				}
+				return SocketResult::OK;
 			}
-			else if(res == 0)
+			else
 			{
-				return SocketResult::DISCONNECT;
+				return SocketResult::TIMEOUT;
 			}
-		}
-#else
 #endif
-		return SocketResult::OK;
 	}
 
 	SocketResult SocketSendBytes(const Socket& socket, std::uint8_t* buffer, std::uint64_t len)
@@ -200,6 +257,7 @@ namespace mulex
 #ifdef __unix__
 		int ret = ::send(socket._handle, buffer, len, MSG_NOSIGNAL);
 #else
+		int ret = ::send(socket._handle, reinterpret_cast<char*>(buffer), len, 0);
 #endif
 		if(ret < 0)
 		{
@@ -264,6 +322,7 @@ namespace mulex
 #ifdef __unix__
 		::close(socket._handle);
 #else
+		::closesocket(socket._handle);
 #endif
 	}
 

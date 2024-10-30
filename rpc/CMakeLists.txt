@@ -1,4 +1,4 @@
-configure_file(mxrpcgen.py mxrpcgen.py)
+configure_file(mxrpcgen.py ../mxrpcgen.py)
 
 # Generate RPC calls at configure time
 execute_process(
@@ -7,7 +7,7 @@ execute_process(
 		--ignore ${CMAKE_BINARY_DIR} test .cache .git
 		--recursive
 		--output-file ${RPC_SPEC_FILE}
-	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 	RESULT_VARIABLE mxrpcret
 )
 
@@ -21,6 +21,10 @@ add_library(mxrpc
 	../mxsystem.cpp
 )
 
+if(WIN32)
+	target_link_libraries(mxrpc wsock32 ws2_32)
+endif()
+
 target_include_directories(mxrpc PRIVATE
-	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )

@@ -2,10 +2,21 @@
 #include <vector>
 #include <cstdint>
 #include <optional>
-#include <shared_mutex>
+#include <condition_variable>
+#include <thread>
+#include <stack>
 #include "rpc/socket.h"
-#include "mxtypes.h"
-#include "mxlogger.h"
+// #include "rpc/rpc.h"
+
+#ifdef __linux__
+#else
+#endif
+
+namespace mulex
+{
+	struct RPCGenericType;
+	class RPCClientThread;
+}
 
 namespace mulex
 {
@@ -13,12 +24,25 @@ namespace mulex
 	inline void SysPackArguments(std::vector<std::uint8_t>& buffer, T& t)
 	{
 		static_assert(
+			std::is_same_v<T, mulex::RPCGenericType> ||
 			std::is_trivially_copyable_v<T>,
 			"SysPackArguments requires trivially copyable arguments."
 		);
-		std::uint8_t ibuf[sizeof(T)];
-		*reinterpret_cast<T*>(ibuf) = t; // NOTE: Copy constructor
-		buffer.insert(buffer.end(), ibuf, ibuf + sizeof(T));
+
+		if constexpr(std::is_same_v<T, mulex::RPCGenericType>)
+		{
+			std::uint8_t sbuf[sizeof(std::uint64_t)];
+			*reinterpret_cast<std::uint64_t*>(sbuf) = t._data.size();
+			buffer.insert(buffer.end(), sbuf, sbuf + sizeof(std::uint64_t));
+			buffer.insert(buffer.end(), t._data.begin(), t._data.end());
+		}
+		else
+		{
+
+			std::uint8_t ibuf[sizeof(T)];
+			*reinterpret_cast<T*>(ibuf) = t; // NOTE: Copy constructor
+			buffer.insert(buffer.end(), ibuf, ibuf + sizeof(T));
+		}
 	}
 
 	template<typename ...Args>
@@ -41,10 +65,55 @@ namespace mulex
 		return sizeof(T) + SysVargSize<U, Args...>();
 	}
 
+	class SysBufferStack
+	{
+	public:
+		void push(std::vector<std::uint8_t>&& data);
+		std::vector<std::uint8_t> pop();
+
+	private:
+		std::stack<std::vector<std::uint8_t>> _stack;
+		std::mutex _mutex;
+		std::condition_variable _notifier;
+	};
+	
+	class SysByteStream
+	{
+	public:
+		SysByteStream(std::uint64_t size, std::uint64_t headersize, std::uint64_t headeroffset);
+		
+		bool push(std::uint8_t* data, std::uint64_t size);
+		std::uint64_t fetch(std::uint8_t* buffer, std::uint64_t size);
+		void requestUnblock();
+		const bool unblockRequested() const;
+
+	private:
+		std::vector<std::uint8_t> _buffer;
+		std::uint64_t 	  		  _buffer_offset;
+		std::uint64_t			  _header_size;
+		std::uint64_t			  _header_size_offset;
+		std::atomic<bool> 		  _unblock_sig;
+		std::mutex 				  _mutex;
+		std::condition_variable   _notifier;
+	};
+
+	struct SysRecvThread
+	{
+		SysRecvThread(const Socket& socket, std::uint64_t ssize, std::uint64_t sheadersize, std::uint64_t sheaderoffset);
+		SysByteStream _stream;
+		std::thread   _handle;
+	};
+
+	static constexpr std::uint64_t SYS_RECV_THREAD_BUFFER_SIZE = 0x6400000; // 100MB Maximum return size !
+
+	[[nodiscard]] std::unique_ptr<SysRecvThread> SysStartRecvThread(const Socket& socket, std::uint64_t headersize, std::uint64_t headeroffset);
+	bool SysRecvThreadCanStart([[maybe_unused]] const Socket& socket);
+
 	struct Experiment
 	{
 		Socket _exp_socket;
 		Socket _rpc_socket;
+		std::unique_ptr<RPCClientThread> _rpc_client;
 	};
 
 	static constexpr std::uint16_t EXP_DEFAULT_PORT = 5700;
@@ -53,102 +122,7 @@ namespace mulex
 	bool SysConnectToExperiment(const char* hostname, std::uint16_t port = EXP_DEFAULT_PORT);
 	void SysDisconnectFromExperiment();
 
-	static constexpr std::uint64_t RDB_MAX_KEY_SIZE = 512;
-	static constexpr std::uint64_t RDB_MAX_STRING_SIZE = 512;
-
-	using RdbKeyName = mxstring<RDB_MAX_KEY_SIZE>;
-
-	struct RdbKey
-	{
-		RdbKeyName _name;
-	};
-
-	enum class RdbValueType : std::uint8_t
-	{
-		INT8,
-		INT16,
-		INT32,
-		INT64,
-		UINT8,
-		UINT16,
-		UINT32,
-		UINT64,
-		FLOAT32,
-		FLOAT64,
-		STRING
-	};
-
-	struct RdbValue
-	{
-		RdbValueType  _type;
-		std::uint64_t _size;
-		std::uint64_t _count;
-		std::uint8_t  _ptr[];
-
-		template<typename T>
-		constexpr inline T as() const
-		{
-			if constexpr(std::is_pointer_v<T>)
-			{
-				// Arrays
-				if(_count == 0)
-				{
-					LogError("RdbValue::as() called with pointer type but its value is not an array.");
-					return nullptr;
-				}
-				return reinterpret_cast<T>(_ptr);
-			}
-			else
-			{
-				// Non arrays
-				if(_count > 0)
-				{
-					LogError("RdbValue::as() called with non pointer type but its value is an array.");
-					return T();
-				}
-				return *reinterpret_cast<T*>(_ptr);
-			}
-		}
-	};
-
-	struct RdbEntry
-	{
-		// Entry locking
-		mutable std::shared_mutex _rw_lock;
-
-		// Entry data
-		RdbKey   _key;
-		RdbValue _value;
-	};
-
-	void RdbInit(std::uint64_t size);
-	void RdbClose();
-
-	// TODO: (Cesar) Implement this
-	bool RdbImportFromSQL(const std::string& filename);
-
-	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, void* data, std::uint64_t count = 0);
-	bool RdbDeleteEntry(const RdbKeyName& key);
-	RdbEntry* RdbFindEntryByName(const RdbKeyName& key);
-
-	MX_RPC_RAW_METHOD std::vector<std::uint8_t> RdbReadValueDirect(mulex::RdbKeyName keyname);
-	MX_RPC_METHOD void RdbWriteValueDirect(mulex::RdbKeyName keyname, std::vector<std::uint8_t> data);
-
-	bool RdbKeyIsNotLeaf(const RdbKeyName& keyname);
-
-	void RdbLockEntryRead(const RdbEntry& entry);
-	void RdbLockEntryReadWrite(const RdbEntry& entry);
-	void RdbUnlockEntryRead(const RdbEntry& entry);
-	void RdbUnlockEntryReadWrite(const RdbEntry& entry);
-
-	class RdbAccess
-	{
-	public:
-		RdbAccess(const std::string& rootkey = "");
-		
-		template<typename T>
-		inline T operator[](const std::string& key)
-		{
-		}
-	};
+	using SysSigintActionFunc = void(*)(int);
+	void SysRegisterSigintAction(SysSigintActionFunc f);
+	// std::map<std::string, >
 } // namespace mulex

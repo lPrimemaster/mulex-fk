@@ -3,6 +3,11 @@
 #include <atomic>
 #include <string>
 
+#ifdef _WIN32
+#include <WinSock2.h>
+#undef ERROR
+#endif
+
 namespace mulex
 {
 
@@ -13,6 +18,11 @@ namespace mulex
 		bool _error;
 	};
 #else
+	struct Socket
+	{
+		SOCKET _handle;
+		bool _error;
+	};
 #endif
 
 	enum class SocketResult
@@ -29,7 +39,7 @@ namespace mulex
 	void SocketBindListen(Socket& socket, std::uint16_t port);
 	bool SocketSetNonBlocking(const Socket& socket);
 	Socket SocketAccept(const Socket& socket, bool* would_block);
-	SocketResult SocketRecvBytes(const Socket& socket, std::uint8_t* buffer, std::uint64_t len, std::atomic<bool>* notify_unblock, std::uint32_t timeout_ms = 0);
+	SocketResult SocketRecvBytes(const Socket& socket, std::uint8_t* buffer, std::uint64_t len, std::uint64_t* rlen);
 	SocketResult SocketSendBytes(const Socket& socket, std::uint8_t* buffer, std::uint64_t len);
 	void SocketConnect(Socket& socket, const std::string& hostname, std::uint16_t port);
 	void SocketClose(Socket& socket);

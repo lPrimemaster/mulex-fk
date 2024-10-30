@@ -3,7 +3,7 @@ add_test(test_log test_log)
 
 # Generate test RPC calls at configure time
 execute_process(
-	COMMAND python3 ../rpc/mxrpcgen.py
+	COMMAND python3 ../mxrpcgen.py
 		--dirs ${CMAKE_CURRENT_SOURCE_DIR}
 		--output-file rpcspec.inl
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -16,7 +16,23 @@ endif()
 
 add_executable(test_rpc rpc.cpp ../rpc/rpc.cpp ../rpc/socket.cpp ../mxsystem.cpp)
 
+if(WIN32)
+	target_link_libraries(test_rpc wsock32 ws2_32)
+endif()
+
 target_include_directories(test_rpc PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
 )
 add_test(test_rpc test_rpc)
+
+add_executable(test_rdb rdb.cpp ../rdb/mxrdb.cpp ../rpc/rpc.cpp ../rpc/socket.cpp ../mxsystem.cpp)
+
+if(WIN32)
+	target_link_libraries(test_rdb wsock32 ws2_32)
+endif()
+
+target_include_directories(test_rdb PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
+
+add_test(test_rdb test_rdb)

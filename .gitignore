@@ -1,5 +1,8 @@
 # Build dir
 [Bb]uild/
 
+# Windows build dir
+build_win/
+
 # Clangd cache
 .cache/
