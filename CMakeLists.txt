@@ -21,9 +21,10 @@ add_executable(mxmain
 # Add mulex functionalities
 add_subdirectory(rpc)
 add_subdirectory(rdb)
+add_subdirectory(drv)
 
 # Link main
-target_link_libraries(mxmain PRIVATE mxrpc mxrdb)
+target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv)
 
 # Add testing
 enable_testing()

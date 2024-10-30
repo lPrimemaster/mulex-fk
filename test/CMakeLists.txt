@@ -36,3 +36,6 @@ target_include_directories(test_rdb PRIVATE
 )
 
 add_test(test_rdb test_rdb)
+
+add_executable(test_drv drv.cpp ../drv/mxdrv.cpp)
+add_test(test_drv test_drv)

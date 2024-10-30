@@ -68,7 +68,6 @@ namespace mulex
 
 	void SocketBindListen(Socket& socket, std::uint16_t port)
 	{
-// #ifdef __unix__
 		sockaddr_in serveraddr;
 		serveraddr.sin_family = AF_INET;
 		serveraddr.sin_port = htons(port);
@@ -89,40 +88,6 @@ namespace mulex
 			LogError("Failed to listen to socket. listen returned %d", listenerr);
 			return;
 		}
-// #else
-// 		struct addrinfo* serveraddr = NULL, hints;
-// 		ZeroMemory(&hints, sizeof(hints));
-// 		hints.ai_family = AF_INET;
-// 		hints.ai_socktype = SOCK_STREAM;
-// 		hints.ai_protocol = IPROTO_TCP;
-//
-// 		if(getaddrinfo(NULL, std::to_string(port).c_str(), &hints, &serveraddr) != 0)
-// 		{
-// 			LogError("Failed to get server address info.");
-// 			socket._error = true;
-// 			return;
-// 		}
-//
-// 		int binderr = ::bind(socket._handle, serveraddr->ai_addr, static_cast<int>(result->ai_addrlen));
-// 		if(binderr == SOCKET_ERROR)
-// 		{
-// 			socket._error = true;
-// 			LogError("Failed to bind to socket. bind returned %d", binderr);
-// 			freeaddrinfo(result);
-// 			return;
-// 		}
-//
-// 		int listenerr = ::listen(socket._handle, SOMAXCONN);
-// 		if(listenerr == SOCKET_ERROR)
-// 		{
-// 			socket._error = true;
-// 			LogError("Failed to listen to socket. listen returned %d", listenerr);
-// 			freeaddrinfo(result);
-// 			return;
-// 		}
-//
-// 		freeaddrinfo(result);
-// #endif
 		LogTrace("SocketBindListen() OK.");
 	}
 
