@@ -9,11 +9,11 @@ namespace mulex
 {
 	namespace detail
 	{
-		struct LogErrorPolicy   { static std::string Prefix() { return "[ERROR]"; } };
-		struct LogWarningPolicy { static std::string Prefix() { return  "[WARN]"; } };
-		struct LogMessagePolicy { static std::string Prefix() { return   "[MSG]"; } };
-		struct LogDebugPolicy   { static std::string Prefix() { return "[DEBUG]"; } };
-		struct LogTracePolicy   { static std::string Prefix() { return "[TRACE]"; } };
+		struct LogErrorPolicy   { constexpr static std::string_view Prefix() { return "[ERROR]"; } };
+		struct LogWarningPolicy { constexpr static std::string_view Prefix() { return  "[WARN]"; } };
+		struct LogMessagePolicy { constexpr static std::string_view Prefix() { return   "[MSG]"; } };
+		struct LogDebugPolicy   { constexpr static std::string_view Prefix() { return "[DEBUG]"; } };
+		struct LogTracePolicy   { constexpr static std::string_view Prefix() { return "[TRACE]"; } };
 	}
 
 	template<typename Policy>

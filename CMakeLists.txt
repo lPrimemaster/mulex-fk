@@ -11,9 +11,7 @@ endif()
 
 # RPC related configuration
 set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
-set(RPC_CALL_RAW_KEYWORD "MX_RPC_RAW_METHOD")
 add_definitions(-D${RPC_CALL_KEYWORD}=)
-add_definitions(-D${RPC_CALL_RAW_KEYWORD}=)
 set(RPC_SPEC_FILE rpcspec.inl)
 
 add_executable(mxmain

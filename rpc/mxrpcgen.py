@@ -18,12 +18,17 @@ class RPCMethodType:
     def __init__(self, typename: str, fulltypename: str):
         self.typename = typename
         self.fulltypename = fulltypename
+        self._cached_inner_typename = None
+        self._is_vector = None
 
     def is_type(self, typename: str) -> bool:
         return self.fulltypename == typename
 
     def is_reference(self) -> bool:
         return '&' in self.fulltypename
+
+    def is_generic(self) -> bool:
+        return self.is_type('mulex::RPCGenericType')
 
 
 class RPCMethodArg:
@@ -41,13 +46,11 @@ class RPCMethodDetails:
                  name: str,
                  fullname: str,
                  rettype: RPCMethodType,
-                 args: List[RPCMethodArg],
-                 israw: bool):
+                 args: List[RPCMethodArg]):
         self.name = name
         self.fullname = fullname
         self.rettype = rettype
         self.args = args
-        self.israw = israw
 
     def __str__(self):
         print_lines = [
@@ -72,11 +75,10 @@ class RPCFileParser:
     def __init__(self, filenames: List[str]):
         # Define all the variables to parse the file
         self.rpc_call_keyword = '${RPC_CALL_KEYWORD}'
-        self.rpc_call_raw_keyword = '${RPC_CALL_RAW_KEYWORD}'
         self.filenames = filenames
         self.rpc_methods = {}
 
-    def parse(self) -> Dict[str, RPCMethodDetails]:
+    def parse(self) -> Dict[str, List[RPCMethodDetails]]:
         total_calls = 0
         for file in self.filenames:
             self.rpc_methods[file] = self._parse_file(file)
@@ -104,20 +106,15 @@ class RPCFileParser:
     def _find_def_lines(self, lines: List[str]) -> List[int]:
         lines_with_def = []
         for i, line in enumerate(lines):
-            if self.rpc_call_keyword in line:
+            if self.rpc_call_keyword in line and not line.strip().startswith('//'):
                 lines_with_def.append(i)
-                continue
-
-            if self.rpc_call_raw_keyword in line:
-                lines_with_def.append(i)
-
         return lines_with_def
 
     # BUG: This does not work for scenarios like
     #      `namespace x { } CALL_DESC <func_dec>;`
     #      or
     #      `namespace x { class y { CALL_DESC <func_dec>; } }`
-    def _find_lines_scope(self, lines: List[str], indices: List[int]) -> str:
+    def _find_lines_scope(self, lines: List[str], indices: List[int]) -> Dict[int, str]:
         scope_dict = {}
         scope_name_stack = []
         scope_stack = 0
@@ -126,6 +123,9 @@ class RPCFileParser:
             for kw in ['namespace', 'class', 'struct']:
                 match = re.findall(fr'^[ \t]*{kw} +([a-zA-Z0-9_]*)', line)
                 if match:
+                    # This is a forward declaration: skip it
+                    if re.findall(fr'^[ \t]*{kw} +([a-zA-Z0-9_]*);', line):
+                        continue
                     scope_name_stack.append((match[0], scope_stack + 1))
 
                 if '{' in line:
@@ -146,18 +146,10 @@ class RPCFileParser:
         return scope_dict
 
     def _find_rpc_declaration(self, line: str, scope: str) -> RPCMethodDetails:
-        raw = False
         declaration = re.findall(
             fr'^[ \t]*{self.rpc_call_keyword} +(.+) +(.+)\((.*)\)',
             line
         )
-
-        if not declaration:
-            raw = True
-            declaration = re.findall(
-                fr'^[ \t]*{self.rpc_call_raw_keyword} +(.+) +(.+)\((.*)\)',
-                line
-            )
 
         try:
             return_type = self._parse_return_type(declaration[0][0])
@@ -175,26 +167,19 @@ class RPCFileParser:
             print(f'[mxrpcgen]\tat: {line.strip()}')
             sys.exit(1)
 
-        if raw and not return_type.is_type('std::vector<std::uint8_t>'):
-            print('[mxrpcgen] Error, return type '
-                  'for raw call must be `std::vector<std::uint8_t>`.')
-            sys.exit(1)
-
         if scope:
             return RPCMethodDetails(
                 method_name,
                 f'{scope}::{method_name}',
                 return_type,
-                arguments,
-                raw
+                arguments
             )
 
         return RPCMethodDetails(
             method_name,
             method_name,
             return_type,
-            arguments,
-            raw
+            arguments
         )
 
     def _parse_return_type(self, return_type: str) -> RPCMethodType:
@@ -227,7 +212,7 @@ class RPCFileParser:
 
 
 class RPCGenerator:
-    def __init__(self, methods: Dict[str, RPCMethodDetails]):
+    def __init__(self, methods: Dict[str, List[RPCMethodDetails]]):
         self.buffer = io.StringIO()
         self.methods = methods
 
@@ -270,13 +255,15 @@ class RPCGenerator:
         return id_table
 
     def _generate_case(self, idt: Tuple[RPCMethodDetails, int, int]) -> None:
-        method, mid, id = idt
+        method, mid, _ = idt
         self._write_indented(3, f'case {mid}:\n')
         self._write_indented(3, '{\n')
 
         # Static assertion checks for trivially copyable
+        # for non void and non generic types
         ret_is_void = method.rettype.is_type('void')
-        if not ret_is_void and not method.israw:
+        ret_is_gene = method.rettype.is_generic()
+        if not ret_is_void and not ret_is_gene:
             self._write_indented(
                 4, 'static_assert(std::is_trivially_copyable_v<'
                    f'{method.rettype.fulltypename}>, "RPC return type must be '
@@ -285,47 +272,61 @@ class RPCGenerator:
 
         if len(method.args) > 0:
             for arg in method.args:
-                self._write_indented(
-                    4, 'static_assert(std::is_trivially_copyable_v<'
-                       f'{arg.typename.fulltypename}>, '
-                       '"RPC parameter type must be '
-                       'trivially copyable. But is of type: '
-                       f'{arg.typename.fulltypename}");\n')
-
-        # Return type (except void)
-        if not ret_is_void:
-            if not method.israw:
-                self._write_indented(
-                    4, 'retbuf.resize(sizeof('
-                       f'{method.rettype.fulltypename}));\n'
-                )
-                self._write_indented(
-                    4, f'{method.rettype.fulltypename}* r = '
-                       f'reinterpret_cast<{method.rettype.fulltypename}*>'
-                       '(retbuf.data());\n'
-                )
+                if not arg.typename.is_generic():
+                    self._write_indented(
+                        4, 'static_assert(std::is_trivially_copyable_v<'
+                           f'{arg.typename.fulltypename}>, '
+                           '"RPC parameter type must be '
+                           'trivially copyable. But is of type: '
+                           f'{arg.typename.fulltypename}");\n')
 
         # Argument offsets
         if len(method.args) > 1:
             for i, arg in enumerate(method.args[:-1]):
                 if i == 0:
-                    self._write_indented(
-                        4,
-                        f'constexpr std::uint64_t o1 = '
-                        f'sizeof({arg.typename.fulltypename});\n'
-                    )
+                    if arg.typename.is_generic():
+                        self._write_indented(
+                            4,
+                            'const std::uint64_t o1 = '
+                            f'*reinterpret_cast<const std::uint64_t*>(args) + sizeof(std::uint64_t);\n'
+                        )
+                    else:
+                        self._write_indented(
+                            4,
+                            'constexpr std::uint64_t o1 = '
+                            f'sizeof({arg.typename.fulltypename});\n'
+                        )
                 else:
-                    self._write_indented(
-                        4,
-                        f'constexpr std::uint64_t o{i + 1} = o{i} + '
-                        f'sizeof({arg.typename.fulltypename});\n'
-                    )
+                    if arg.typename.is_generic():
+                        self._write_indented(
+                            4,
+                            f'const std::uint64_t o{i + 1} = o{i} + '
+                            f'*reinterpret_cast<const std::uint64_t*>(args + o{i}) + sizeof(std::uint64_t);\n'
+                        )
+                    else:
+                        self._write_indented(
+                            4,
+                            f'constexpr std::uint64_t o{i + 1} = o{i} + '
+                            f'sizeof({arg.typename.fulltypename});\n'
+                        )
+
+        # Return type (except void and generic)
+        if not ret_is_void and not ret_is_gene:
+            self._write_indented(
+                4, 'retbuf.resize(sizeof('
+                   f'{method.rettype.fulltypename}));\n'
+            )
+            self._write_indented(
+                4, f'{method.rettype.fulltypename}* r = '
+                   f'reinterpret_cast<{method.rettype.fulltypename}*>'
+                   '(retbuf.data());\n'
+            )
 
         # Invokes the copy constructor
         if ret_is_void:
             self._write_indented(4, f'{method.fullname}(')
-        elif method.israw:
-            self._write_indented(4, f'retbuf = {method.fullname}(')
+        elif ret_is_gene:
+            self._write_indented(4, f'mulex::RPCGenericType r = {method.fullname}(')
         else:
             self._write_indented(4, f'*r = {method.fullname}(')
         if len(method.args) > 0:
@@ -337,19 +338,33 @@ class RPCGenerator:
                     constkw = 'const '
 
                 if i == 0:
-                    self._write_indented(
-                        5,
-                        '*reinterpret_cast<'
-                        f'{constkw}{arg.typename.fulltypename}'
-                        '*>(args)'
-                    )
+                    if arg.typename.is_generic():
+                        self._write_indented(
+                            5,
+                            'mulex::RPCGenericType::FromData(args + sizeof(std::uint64_t), '
+                            '*reinterpret_cast<const std::uint64_t*>(args))'
+                        )
+                    else:
+                        self._write_indented(
+                            5,
+                            '*reinterpret_cast<'
+                            f'{constkw}{arg.typename.fulltypename}'
+                            '*>(args)'
+                        )
                 else:
-                    self._write_indented(
-                        5,
-                        '*reinterpret_cast<'
-                        f'{constkw}{arg.typename.fulltypename}'
-                        f'*>(args + o{i})'
-                    )
+                    if arg.typename.is_generic():
+                        self._write_indented(
+                            5,
+                            f'mulex::RPCGenericType::FromData(args + o{i} + sizeof(std::uint64_t), '
+                            f'*reinterpret_cast<const std::uint64_t*>(args + o{i}))'
+                        )
+                    else:
+                        self._write_indented(
+                            5,
+                            '*reinterpret_cast<'
+                            f'{constkw}{arg.typename.fulltypename}'
+                            f'*>(args + o{i})'
+                        )
                 if i != len(method.args) - 1:
                     self._write_indented(0, ',\n')
                 else:
@@ -357,6 +372,12 @@ class RPCGenerator:
             self._write_indented(4, ');\n')
         else:
             self._write_indented(0, ');\n')
+
+        if ret_is_gene:
+            self._write_indented(4, 'std::uint64_t data_size = r._data.size();\n')
+            self._write_indented(4, 'retbuf.resize(data_size + sizeof(std::uint64_t));\n')
+            self._write_indented(4, 'std::memcpy(retbuf.data(), &data_size, sizeof(std::uint64_t));\n')
+            self._write_indented(4, 'std::memcpy(retbuf.data() + sizeof(std::uint64_t), r._data.data(), data_size);\n')
 
         self._write_indented(4, 'break;\n')
         self._write_indented(3, '};\n')
