@@ -1,9 +1,14 @@
 #include "test.h"
 #include "../mxdrv.h"
 #include "../mxlogger.h"
+
+#ifdef __linux__
 #include <termios.h>
 #include <pty.h>
 #include <fcntl.h>
+#else
+#include <Windows.h>
+#endif
 #include <cstring>
 #include <thread>
 #include <unistd.h>
@@ -15,6 +20,7 @@ int main(int argc, char* argv[])
 	std::mutex m;
 	char name[256];
 
+#ifdef __linux__
 	// Setup a pty for testing
 	std::thread([&m, &name](){
 		int master, slave;
@@ -42,7 +48,18 @@ int main(int argc, char* argv[])
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 	
-	DrvSerialArgs sa = { B115200, 0, O_RDWR | O_NOCTTY | O_SYNC, false };
+	DrvSerialArgs sa = { 115200, 0, O_RDWR | O_NOCTTY | O_SYNC, true };
+#else
+	// Setup a ConPTY for testing
+	std::thread([&m, &name](){
+		// TODO: (Cesar)
+	}).detach();
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	
+	DrvSerialArgs sa = { 115200, 0, GENERIC_READ | GENERIC_WRITE, true };
+#endif
+
 	m.lock();
 	LogDebug("Testing using %s", name);
 	DrvSerial serial = DrvSerialInit(name, sa);
@@ -56,8 +73,6 @@ int main(int argc, char* argv[])
 
 	std::cout << "MAIN: " << reinterpret_cast<char*>(buffer) << std::endl;
 	ASSERT_THROW(std::string(reinterpret_cast<char*>(buffer)) == "Hello Back");
-
-
 
 	DrvSerialClose(serial);
 	return 0;

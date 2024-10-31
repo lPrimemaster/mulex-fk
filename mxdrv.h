@@ -1,6 +1,11 @@
 #include <string>
 #include <cstdint>
 
+#ifdef _WIN32
+#include <Windows.h>
+#undef ERROR
+#endif
+
 namespace mulex
 {
 	struct DrvSerial
@@ -26,7 +31,11 @@ namespace mulex
 	{
 		int baud;
 		int parity;
+#ifdef __linux__
 		int flags;
+#else
+		long unsigned int flags;
+#endif
 		bool blocking;
 	};
 
