@@ -124,5 +124,6 @@ namespace mulex
 
 	using SysSigintActionFunc = void(*)(int);
 	void SysRegisterSigintAction(SysSigintActionFunc f);
-	// std::map<std::string, >
+
+	std::int64_t SysGetCurrentTime();
 } // namespace mulex

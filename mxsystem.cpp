@@ -186,4 +186,9 @@ namespace mulex
 	{
 		return _unblock_sig.load();
 	}
+
+	std::int64_t SysGetCurrentTime()
+	{
+		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+	}
 } // namespace mulex

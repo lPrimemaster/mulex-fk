@@ -6,8 +6,10 @@
 #endif
 #include <string.h>
 #include <unistd.h>
+#include <thread>
 
 #include "../mxlogger.h"
+#include "../mxsystem.h"
 
 namespace mulex
 {
@@ -175,7 +177,7 @@ namespace mulex
 			LogError("Failed to write bytes to serial handle: %d", serial._handle);
 			return DrvSerialResult::ERROR;
 		}
-		else if(nw < len)
+		else if(static_cast<std::uint64_t>(nw) < len)
 		{
 			LogTrace("DrvSerialWrite wrote %d bytes.", nw);
 			return DrvSerialResult::WRITE_PARTIAL;
@@ -247,12 +249,15 @@ namespace mulex
 				// 				 Even though we want to avoid this error
 				//				 perhaps one should guard against it on the runtime
 				LogError("Serial read buffer too small. Truncating output");
+				if(rlen) *rlen = len;
+				LogTrace("DrvSerialRead read %d bytes.", len);
 				return DrvSerialResult::READ_PARTIAL;
 			}
 
 			buffer[i++] = byte;
 		}
 		if(rlen) *rlen = i;
+		LogTrace("DrvSerialRead read %d bytes.", i);
 		return DrvSerialResult::READ_OK;
 #endif
 	}
@@ -269,4 +274,293 @@ namespace mulex
 #endif
 		}
 	}
+
+	DrvTCP DrvTCPInit(const std::string& hostname, const std::uint16_t& port, const std::uint16_t& recvtimeout)
+	{
+		DrvTCP handle;
+		handle._timeout = recvtimeout;
+		handle._socket = SocketInit();
+		if(handle._socket._error)
+		{
+			return handle;
+		}
+
+		SocketConnect(handle._socket, hostname, port);
+
+		if(handle._socket._error)
+		{
+			LogError("DrvTCP failed to connect to socket at: %s:%d", hostname.c_str(), port);
+		}
+		else
+		{
+			LogDebug("DrvTCP connected to: %s:%d", hostname.c_str(), port);
+		}
+
+		if(recvtimeout == 0)
+		{
+			LogWarning("DrvTCP running without recv timeout. This is unrecommended");
+			LogWarning("DrvTCPRecv is a blocking operation");
+		}
+		
+		return handle;
+	}
+
+	DrvTCPResult DrvTCPSend(const DrvTCP& handle, std::uint8_t* buffer, std::uint64_t len)
+	{
+		if(SocketSendBytes(handle._socket, buffer, len) == SocketResult::ERROR)
+		{
+			return DrvTCPResult::ERROR;
+		}
+		return DrvTCPResult::SEND_OK;
+	}
+
+	DrvTCPResult DrvTCPRecv(const DrvTCP& handle, std::uint8_t* buffer, std::uint64_t len, std::uint64_t exlen, std::uint64_t* rlen)
+	{
+		if(!rlen)
+		{
+			LogError("DrvTCP rlen pointer cannot be nullptr");
+			return DrvTCPResult::ERROR;
+		}
+
+		if(exlen > len)
+		{
+			LogError("DrvTCP buffer as apparent len of %llu but expects %llu bytes", len, exlen);
+			return DrvTCPResult::ERROR;
+		}
+
+		std::int64_t ms = SysGetCurrentTime();
+		std::uint64_t totlen = 0;
+
+		while(exlen > 0)
+		{
+			if(handle._timeout > 0 && (SysGetCurrentTime() - ms >= handle._timeout))
+			{
+				*rlen = totlen;
+				LogTrace("DrvTCP received %llu bytes, expected %llu", totlen, exlen);
+				LogWarning("DrvTCP timeout reading");
+				return DrvTCPResult::RECV_TIMEOUT;
+			}
+
+			std::this_thread::sleep_for(std::chrono::microseconds(10));
+			SocketResult result = SocketRecvBytes(handle._socket, buffer + totlen, len - totlen, rlen);
+			
+			if(result == SocketResult::ERROR || result == SocketResult::DISCONNECT)
+			{
+				LogError("DrvTCP failed to receive data");
+				return DrvTCPResult::ERROR;
+			}
+			
+			exlen -= *rlen;
+			totlen += *rlen;
+		}
+
+		*rlen = totlen;
+		LogTrace("DrvTCP received %llu bytes", totlen);
+		return DrvTCPResult::RECV_OK;
+	}
+
+	void DrvTCPClose(DrvTCP& handle)
+	{
+		if(!handle._socket._error)
+		{
+			SocketClose(handle._socket);
+		}
+		LogDebug("DrvTCP disconnected");
+	}
+
+#ifdef USB_SUPPORT
+	class LibUsbGuard
+	{
+	public:
+		LibUsbGuard()
+		{
+			if(libusb_init(&_ctx) < 0)
+			{
+				_error = true;
+				LogError("LibUsbGuard failed to init libusb context");
+			}
+			else
+			{
+				LogTrace("LibUsb initialized");
+			}
+		}
+
+		libusb_context* operator&()
+		{
+			return _ctx;
+		}
+
+		~LibUsbGuard()
+		{
+			if(_ctx)
+			{
+				libusb_exit(_ctx);
+				LogTrace("LibUsb terminated");
+			}
+		}
+
+		bool ok() const
+		{
+			return !_error;
+		}
+
+	private:
+		libusb_context* _ctx = nullptr;
+		bool _error = false;
+	};
+	
+	DrvUSB DrvUSBInit(const std::string& devpidvid)
+	{
+		static LibUsbGuard _libusbguard;
+		DrvUSB handle;
+		handle._error = false;
+		
+		if(!_libusbguard.ok())
+		{
+			handle._error = true;
+			LogError("LibUsb context is not valid");
+			return handle;
+		}
+
+		std::uint16_t vid = std::stoi(devpidvid.substr(0, 4), 0, 16);
+		std::uint16_t pid = std::stoi(devpidvid.substr(5, 4), 0, 16);
+		LogTrace("Translated vid - %d", vid);
+		LogTrace("Translated pid - %d", pid);
+		handle._handle = libusb_open_device_with_vid_pid(&_libusbguard, vid, pid);
+
+		if(!handle._handle)
+		{
+			handle._error = true;
+			LogError("DrvUSB could not find device: %s", devpidvid.c_str());
+			return handle;
+		}
+
+		libusb_config_descriptor* config;
+		if(libusb_get_active_config_descriptor(libusb_get_device(handle._handle), &config) < 0)
+		{
+			handle._error = true;
+			LogError("DrvUSB failed to find config descriptor: %s", devpidvid.c_str());
+			libusb_close(handle._handle);
+			return handle;
+		}
+
+		if(config->bNumInterfaces < 1)
+		{
+			handle._error = true;
+			LogError("DrvUSB device %s does not contain interfaces", devpidvid.c_str());
+			libusb_free_config_descriptor(config);
+			libusb_close(handle._handle);
+			return handle;
+		}
+
+		handle._endpoint_inbulk = 0;
+		handle._endpoint_outbulk = 0;
+
+		libusb_interface interface = config->interface[0];
+		for(int i = 0; i < interface.num_altsetting; i++)
+		{
+	  		for(int e = 0; e < interface.altsetting[i].bNumEndpoints; e++)
+			{
+				libusb_endpoint_descriptor endpoint = interface.altsetting[i].endpoint[e];
+				if((endpoint.bEndpointAddress & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
+				{
+					switch(endpoint.bmAttributes & LIBUSB_TRANSFER_TYPE_MASK)
+		 			{
+						case LIBUSB_TRANSFER_TYPE_BULK:
+							handle._endpoint_inbulk = endpoint.bEndpointAddress;
+							LogTrace("Found bulk IN endpoint: %d", endpoint.bEndpointAddress);
+							continue;
+						default:
+							LogTrace("Found non-bulk IN endpoint: %d", endpoint.bEndpointAddress);
+							break; // Skip non-bulk enpoints (not supported for now)
+					}
+				}
+
+				if((endpoint.bEndpointAddress & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
+				{
+					switch(endpoint.bmAttributes & LIBUSB_TRANSFER_TYPE_MASK)
+		 			{
+						case LIBUSB_TRANSFER_TYPE_BULK:
+							handle._endpoint_outbulk = endpoint.bEndpointAddress;
+							LogTrace("Found bulk OUT endpoint: %d", endpoint.bEndpointAddress);
+							continue;
+						default:
+							LogTrace("Found non-bulk OUT endpoint: %d", endpoint.bEndpointAddress);
+							break; // Skip non-bulk enpoints (not supported for now)
+					}
+				}
+			}
+		}
+		
+		if((handle._endpoint_inbulk == 0) || (handle._endpoint_outbulk == 0))
+		{
+			handle._error = true;
+			LogError("Failed to find bulk endpoints for device: %s", devpidvid.c_str());
+			libusb_free_config_descriptor(config);
+			libusb_close(handle._handle);
+			return handle;
+		}
+
+		if(libusb_claim_interface(handle._handle, 0) < 0)
+		{
+			handle._error = true;
+			LogError("DrvUSB could not claim device interface 0: %s", devpidvid.c_str());
+			libusb_free_config_descriptor(config);
+			libusb_close(handle._handle);
+			return handle;
+		}
+		
+		libusb_free_config_descriptor(config);
+		LogDebug("DrvUSB connected to: %s", devpidvid.c_str());
+		return handle;
+	}
+
+	DrvUSBResult DrvUSBWriteBulk(const DrvUSB& handle, std::uint8_t* buffer, std::uint64_t len, std::uint64_t* wlen)
+	{
+		int rb;
+		int res = libusb_bulk_transfer(handle._handle, handle._endpoint_outbulk, buffer, static_cast<int>(len), &rb, 0);
+		
+		if(res == 0)
+		{
+			if(wlen) *wlen = rb;
+			LogTrace("DrvUSBWriteBulk() wrote %d bytes", rb);
+			return DrvUSBResult::WRITE_OK;
+		}
+
+		if(wlen) *wlen = 0;
+		LogError("DrvUSBWriteBulk() failed: %s", libusb_error_name(res));
+		return DrvUSBResult::ERROR;
+	}
+
+	DrvUSBResult DrvUSBReadBulk(const DrvUSB& handle, std::uint8_t* buffer, std::uint64_t len, std::uint64_t* rlen)
+	{
+		int rb;
+		int res = libusb_bulk_transfer(handle._handle, handle._endpoint_inbulk, buffer, static_cast<int>(len), &rb, 0);
+		
+		if(res == 0)
+		{
+			if(rlen) *rlen = rb;
+			LogTrace("DrvUSBReadBulk() read %d bytes", rb);
+			return DrvUSBResult::READ_OK;
+		}
+
+		if(rlen) *rlen = 0;
+		LogError("DrvUSBReadBulk() failed: %s", libusb_error_name(res));
+		return DrvUSBResult::ERROR;
+	}
+
+	void DrvUSBClose(DrvUSB& handle)
+	{
+		if(!handle._error)
+		{
+			if(libusb_release_interface(handle._handle, 0) < 0)
+			{
+				LogError("DrvUSB failed to release interface 0");
+			}
+			libusb_close(handle._handle);
+		}
+		LogDebug("DrvUSB closing handle");
+	}
+#endif
+
 } // namespace mulex

@@ -69,9 +69,13 @@ namespace mulex
 		// Entry locking
 		mutable std::shared_mutex _rw_lock;
 
+		// Entry statistics
+		std::int64_t _tcreated;
+		std::int64_t _tmodified;
+
 		// Entry data
 		RdbKey   _key;
-		RdbValue _value;
+		RdbValue _value; // NOTE: Must be last
 	};
 
 	void RdbInit(std::uint64_t size);

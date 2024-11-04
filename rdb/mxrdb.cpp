@@ -185,6 +185,10 @@ namespace mulex
 		// Placement new and assign members
 		RdbEntry* entry = new(ptr) RdbEntry();
 
+		// Setup entry related statistics
+		entry->_tcreated = SysGetCurrentTime();
+		entry->_tmodified = entry->_tcreated;
+
 		entry->_key._name = key;
 		entry->_value._count = count;
 		entry->_value._size = data_size;
@@ -342,6 +346,7 @@ namespace mulex
 		}
 		else
 		{
+			entry->_tmodified = SysGetCurrentTime();
 			std::memcpy(entry->_value._ptr, data._data.data(), data._data.size());
 		}
 

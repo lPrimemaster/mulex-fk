@@ -37,5 +37,23 @@ target_include_directories(test_rdb PRIVATE
 
 add_test(test_rdb test_rdb)
 
-add_executable(test_drv drv.cpp ../drv/mxdrv.cpp)
+add_executable(test_drv drv.cpp ../drv/mxdrv.cpp ../rpc/socket.cpp ../mxsystem.cpp ../rpc/rpc.cpp ../rdb/mxrdb.cpp)
+
+if(WIN32)
+	target_link_libraries(test_drv PRIVATE wsock32 ws2_32)
+endif()
+
+if(USB_SUPPORT)
+	find_package(libusb REQUIRED)
+endif()
+
+target_include_directories(test_drv PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+	${LIBUSB_INCLUDE_DIR}
+)
+
+if(USB_SUPPORT)
+	target_link_libraries(test_drv PRIVATE ${LIBUSB_LIBRARY})
+endif()
+
 add_test(test_drv test_drv)
