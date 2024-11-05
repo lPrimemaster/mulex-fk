@@ -24,11 +24,11 @@ namespace mulex
 	
 	struct RPCMessageHeader
 	{
-		// string32 	  client;
+		std::uint64_t client;
 		std::uint16_t procedureid;
 		std::uint64_t msgid;
 		std::uint32_t payloadsize;
-		std::uint8_t  padding[8];
+		// std::uint8_t  padding[10];
 	};
 
 	struct RPCReturnValue
@@ -135,6 +135,7 @@ namespace mulex
 	constexpr std::uint64_t RPC_MESSAGE_HEADER_SIZE = sizeof(RPCMessageHeader);
 
 	std::uint64_t GetNextMessageId();
+	std::uint64_t GetCurrentCallerId();
 
 	class RPCClientThread
 	{
@@ -187,6 +188,7 @@ namespace mulex
 	{
 		const mulex::Socket& conn = _rpc_socket;
 		mulex::RPCMessageHeader header;
+		header.client = SysGetClientId();
 		header.procedureid = procedureid;
 		header.msgid = GetNextMessageId();
 		if constexpr(sizeof...(args) > 0)
@@ -243,6 +245,7 @@ namespace mulex
 	{
 		const mulex::Socket& conn = _rpc_socket;
 		mulex::RPCMessageHeader header;
+		header.client = SysGetClientId();
 		header.procedureid = procedureid;
 		header.msgid = GetNextMessageId();
 		header.payloadsize = static_cast<std::uint32_t>(SysVargSize<Args...>());

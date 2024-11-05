@@ -123,18 +123,21 @@ namespace mulex
 	std::optional<const Experiment*> SysGetConnectedExperiment();
 	bool SysConnectToExperiment(const char* hostname, std::uint16_t port = EXP_DEFAULT_PORT);
 	void SysDisconnectFromExperiment();
-	std::string_view SysGetExperimentDir();
 
 	using SysSigintActionFunc = void(*)(int);
 	void SysRegisterSigintAction(SysSigintActionFunc f);
 
-	void SysInitializeExperiment(int argc, char* argv[]);
+	bool SysDaemonize();
+	bool SysInitializeExperiment(int argc, char* argv[]);
 	void SysAddArgument(const std::string& longname, const char shortname, bool needvalue, std::function<void(const std::string&)> action, const std::string& helptxt = "");
-	void SysParseArguments(int argc, char* argv[]);
+	bool SysParseArguments(int argc, char* argv[]);
 	std::int64_t SysGetCurrentTime();
 	std::string_view SysGetCacheDir();
+	bool SysCreateNewExperiment(const std::string& expname);
 	std::string SysGetExperimentHome();
 	std::string SysGetBinaryName();
+	std::string SysGetHostname();
+	std::uint64_t SysGetClientId();
 	std::vector<std::uint8_t> SysReadBinFile(const std::string& file);
 	void SysWriteBinFile(const std::string& file, const std::vector<std::uint8_t>& data);
 } // namespace mulex

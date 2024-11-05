@@ -12,6 +12,11 @@
 
 static std::atomic<std::uint64_t> _client_msg_id = 0;
 
+// NOTE: (Cesar) In theory this could be thread unsafe
+// 				 But this practically guards vs using
+// 				 RPC calls on a local context
+static std::atomic<std::uint64_t> _client_current_caller = 0;
+
 namespace mulex
 {
 
@@ -33,6 +38,11 @@ namespace mulex
 	std::uint64_t GetNextMessageId()
 	{
 		return _client_msg_id++;
+	}
+
+	std::uint64_t GetCurrentCallerId()
+	{
+		return _client_current_caller.load();
 	}
 
 	RPCClientThread::RPCClientThread(const std::string& hostname, std::uint16_t rpcport)
@@ -175,14 +185,20 @@ namespace mulex
 			}
 
 			LogTrace("[rpcserver] Got RPC Header:");
-			// LogTrace("[rpcserver] \tClient: %s", header.client);
+			LogTrace("[rpcserver] \tClient: %llu", header.client);
 			LogTrace("[rpcserver] \tMethodid: %d", header.procedureid);
 			LogTrace("[rpcserver] \tMsgid: %llu", header.msgid);
 			LogTrace("[rpcserver] \tPayloadsz: %lu", header.payloadsize);
 
 
+			// Set the current global client state
+			_client_current_caller.store(header.client);
+		
 			// Execute the request locally on the RPC thread
 			std::vector<std::uint8_t> ret = RPCCallLocally(header.procedureid, buffer.data());
+
+			// Pop the current global client state
+			_client_current_caller.store(0x00);
 
 			RPCReturnValue response;
 			response.status = RPCResult::OK;

@@ -7,6 +7,8 @@
 #ifdef _WIN32
 #include <Windows.h>
 #include <shlwapi.h>
+#else
+#include <fcntl.h>
 #endif
 
 static mulex::Experiment _sys_experiment;
@@ -19,6 +21,8 @@ static std::map<char, bool> _sys_argscmd_short_reqarg;
 static std::map<std::string, std::function<void(const std::string&)>> _sys_argscmd_long;
 static std::map<std::string, bool> _sys_argscmd_long_reqarg;
 static std::map<std::string, std::string> _sys_argscmd_helptxt;
+static bool _sys_isdaemon = false;
+static std::uint64_t _sys_cid = 0x00;
 
 namespace mulex
 {
@@ -39,10 +43,28 @@ namespace mulex
 			return;
 		}
 
+		if(longname == "daemon" || shortname == 'D')
+		{
+			LogError("SysAddArgument: Failed to add a new argument: <daemon/D> is a reserved argument name.");
+			return;
+		}
+
+		if(_sys_argscmd_long.find(longname) != _sys_argscmd_long.end())
+		{
+			LogError("SysAddArgument: Argument named <%s> already exists.", longname.c_str());
+			return;
+		}
+
+		if(_sys_argscmd_short.find(shortname) != _sys_argscmd_short.end())
+		{
+			LogError("SysAddArgument: Argument named <%c> already exists.", shortname);
+			return;
+		}
+
 		SysAddArgumentI(longname, shortname, needvalue, action, helptxt);
 	}
 
-	void SysParseArguments(int argc, char* argv[])
+	bool SysParseArguments(int argc, char* argv[])
 	{
 		SysAddArgumentI("help", 'h', false, [](const std::string&){
 			std::cout << "Arguments help:" << std::endl;
@@ -61,8 +83,21 @@ namespace mulex
 				}
 				std::cout << std::endl;
 			}
-			::exit(0); // NOTE: (Cesar) Due to this, SysParseArguments needs to happen early on on main and/or any BE's
+			::exit(0);
 		}, "Prints this help message.");
+
+		SysAddArgumentI("daemon", 'D', false, [](const std::string&){
+			if(!SysDaemonize())
+			{
+#ifdef __linux__
+				LogError("Daemonize failed or not available on this system.");
+#else
+				LogError("Daemonize is not available on Windows.");
+#endif
+				LogDebug("Aborting execution.");
+				::exit(0);
+			}
+		}, "Turn the current process into a daemon (linux only).");
 
 		// Ignore argv[0]
 		for(int i = 1; i < argc;)
@@ -70,13 +105,13 @@ namespace mulex
 			if(strlen(argv[i]) < 2)
 			{
 				LogError("SysParseArguments: Failed to parse arguments.");
-				return;
+				return false;
 			}
 			if(argv[i][0] != '-')
 			{
 				// We don't support positional arguments
 				LogError("SysParseArguments: Positional arguments are not supported [%s].", argv[i]);
-				return;
+				return false;
 			}
 			else if(argv[i][1] != '-')
 			{
@@ -84,21 +119,21 @@ namespace mulex
 				if(strlen(argv[i]) > 2)
 				{
 					LogError("SysParseArguments: Wrong syntax at: %s. Expected one character identifier.", argv[i]);
-					return;
+					return false;
 				}
 
 				auto it = _sys_argscmd_short.find(argv[i][1]);
 				if(it == _sys_argscmd_short.end())
 				{
 					LogError("SysParseArguments: Unrecognized command line argument: %s.", argv[i]);
-					return;
+					return false;
 				}
 
 	  			bool reqarg = _sys_argscmd_short_reqarg[argv[i++][1]];
 				if(reqarg && (i >= argc || argv[i][0] == '-'))
 				{
 					LogError("SysParseArguments: Expected argument after %s.", argv[i - 1]);
-					return;
+					return false;
 				}
 
 				if(reqarg)
@@ -117,14 +152,14 @@ namespace mulex
 				if(it == _sys_argscmd_long.end())
 				{
 					LogError("SysParseArguments: Unrecognized command line argument: %s.", argv[i]);
-					return;
+					return false;
 				}
 
 	  			bool reqarg = _sys_argscmd_long_reqarg[&argv[i++][2]];
 				if(reqarg && (i >= argc || argv[i][0] == '-'))
 				{
 					LogError("SysParseArguments: Expected argument after %s.", argv[i - 1]);
-					return;
+					return false;
 				}
 
 				if(reqarg)
@@ -137,9 +172,58 @@ namespace mulex
 				}
 			}
 		}
+		return true;
 	}
 
-	void SysInitializeExperiment(int argc, char* argv[])
+	bool SysDaemonize()
+	{
+#ifdef __linux__
+		LogTrace("SysDaemonize: Attempting to fork...");
+		int pid = ::fork();
+		if(pid < 0)
+		{
+			LogError("SysDaemonize: Failed to spawn daemon with fork().");
+			return false;
+		}
+		else if(pid != 0)
+		{
+			::exit(0);
+		}
+
+		_sys_isdaemon = true;
+		for(int i = 0; i < 3; i++)
+		{
+			::close(i);
+			int fd = ::open("/dev/null", O_RDWR, 0);
+			if(fd < 0)
+			{
+				fd = ::open("/dev/null", O_WRONLY, 0);
+			}
+			
+			if(fd < 0)
+			{
+				LogError("SysDaemonize: Failed to open /dev/null.");
+				return false;
+			}
+
+			if(fd != i)
+			{
+				LogError("SysDaemonize: Failed to assign file descriptor to /dev/null.");
+				return false;
+			}
+		}
+
+		setsid();
+
+		return true;
+#else
+		// Do nothing on windows
+		// TODO: (Cesar) Implement a service or some other mechanism to mimic a daemon on windows
+		return false;
+#endif
+	}
+
+	bool SysInitializeExperiment(int argc, char* argv[])
 	{
 		if(argc < 2)
 		{
@@ -147,10 +231,31 @@ namespace mulex
 			// and will not be saved
 			LogWarning("SysInitializeExperiment: Could not detect experiment name.");
 			LogWarning("SysInitializeExperiment: Data and metadata will not be saved.");
-			return;
+			return true;
 		}
 
-		SysParseArguments(argc, argv);
+		SysAddArgument("name", 'n', true, [](const std::string& expname){ _sys_expname = expname; }, "Set the current experiment name.");
+
+		if(!SysParseArguments(argc, argv))
+		{
+			return false;
+		}
+
+		std::string exphome = SysGetExperimentHome();
+
+		if(exphome.empty() && !_sys_expname.empty())
+		{
+			SysCreateNewExperiment(_sys_expname);
+		}
+
+		if(!std::filesystem::is_directory(exphome))
+		{
+			LogError("SysInitializeExperiment: Experiment home is know but does not exist.");
+			LogDebug("SysInitializeExperiment: Creating directory.");
+			SysCreateNewExperiment(_sys_expname);
+		}
+
+		return true;
 	}
 
 	std::optional<const Experiment*> SysGetConnectedExperiment()
@@ -361,6 +466,30 @@ namespace mulex
 		return _mxcachedir;	
 	}
 
+	bool SysCreateNewExperiment(const std::string& expname)
+	{
+		// Write to cache
+		std::string_view cache = SysGetCacheDir();
+		std::string exp_cache = std::string(cache) + "/exp";
+		std::string exp_home = std::string(SysGetCacheDir()) + "/" + expname;
+		std::ofstream outfile(exp_cache, std::ios::app);
+		if(!outfile.is_open())
+		{
+			LogError("SysCreateNewExperiment: Failed to open <exp> file.");
+			return false;
+		}
+
+		outfile << expname << "," << exp_home << '\n';
+
+		// Now create the experiment directory
+		if(!std::filesystem::create_directory(exp_home))
+		{
+			LogError("SysCreateNewExperiment: Failed to create exp home directory under <%s>.", exp_home.c_str());
+			return false;
+		}
+		return true;
+	}
+
 	std::string SysGetExperimentHome()
 	{
 		std::string_view cache = SysGetCacheDir();
@@ -417,6 +546,84 @@ namespace mulex
 #endif
 		_sys_binname = binname;
 		return _sys_binname;
+	}
+
+	std::string SysGetHostname()
+	{
+		char hostname[256];
+#ifdef __linux__
+		if(::gethostname(hostname, 256) < 0)
+		{
+			LogError("SysGetHostname: Failed to get local host name.");
+			return "";
+		}
+#else
+		DWORD size = 256;
+		if(GetComputerNameA(hostname, &size) == 0)
+		{
+			LogError("SysGetHostname: Failed to get local host name.");
+			return "";
+		}
+#endif
+		return hostname;
+	}
+
+	static std::uint64_t mmh64a(const char* key, int len)
+	{
+		static constexpr std::uint64_t seed = 0x42069;
+		const std::uint64_t m = 0xc6a4a7935bd1e995LLU;
+		const int r = 47;
+
+		std::uint64_t h = seed ^ (len * m);
+
+		const std::uint64_t* data = (const uint64_t*)key;
+		const std::uint64_t* end = (len >> 3) + data;
+
+		while(data != end)
+		{
+			std::uint64_t k = *data++;
+
+			k *= m; 
+			k ^= k >> r; 
+			k *= m; 
+
+			h ^= k;
+			h *= m; 
+		}
+
+		const std::uint8_t* data2 = (const std::uint8_t*)data;
+
+		switch(len & 7)
+		{
+			case 7: h ^= (std::uint64_t)(data2[6]) << 48;
+			case 6: h ^= (std::uint64_t)(data2[5]) << 40;
+			case 5: h ^= (std::uint64_t)(data2[4]) << 32;
+			case 4: h ^= (std::uint64_t)(data2[3]) << 24;
+			case 3: h ^= (std::uint64_t)(data2[2]) << 16;
+			case 2: h ^= (std::uint64_t)(data2[1]) << 8;
+			case 1: h ^= (std::uint64_t)(data2[0]);
+				  	h *= m;
+		};
+
+		h ^= h >> r;
+		h *= m;
+		h ^= h >> r;
+
+		return h;
+	}
+
+	std::uint64_t SysGetClientId()
+	{
+		if(_sys_cid == 0x00)
+		{
+			std::string bname = SysGetBinaryName();
+			std::string hname = SysGetHostname();
+			std::string tname = bname + "@" + hname;
+			// int size = tname.size() > 128 ? 128 : static_cast<int>(tname.size());
+			int size = tname.size();
+			_sys_cid = mmh64a(tname.c_str(), size);
+		}
+		return _sys_cid;
 	}
 
 	std::vector<std::uint8_t> SysReadBinFile(const std::string& file)
