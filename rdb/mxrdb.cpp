@@ -31,8 +31,9 @@ namespace mulex
 		{
 			std::uint64_t nidx = FindString(data, idx);
 			std::uint64_t offset = *reinterpret_cast<const std::uint64_t*>(data + nidx);
-			idx = nidx + sizeof(std::uint64_t);
+			LogTrace("[rdb] Loading entry: %s <%llu>", data + idx, offset);
 			_rdb_offset_map.emplace(std::string(data + idx), reinterpret_cast<RdbEntry*>(_rdb_handle + offset));
+			idx = nidx + sizeof(std::uint64_t);
 		}
 	}
 
@@ -61,14 +62,25 @@ namespace mulex
 
 		// Extract map size from the raw data
 		std::uint64_t mapsize = *reinterpret_cast<std::uint64_t*>(data.data());
+		LogTrace("[rdb] Load mapsize %llu", mapsize);
 
 		// Extract rdb size from the raw data
 		std::uint64_t rdbsize = *reinterpret_cast<std::uint64_t*>(data.data() + sizeof(std::uint64_t));
+		std::uint64_t rdbsize_unaligned = rdbsize;
+		LogTrace("[rdb] Load rdb true size %llu", rdbsize);
+
+		if(rdbsize == 0)
+		{
+			_rdb_size = 0;
+			_rdb_offset = 0;
+			return;
+		}
 
 		// Make sure size is a multiple of 1024 and aligned
 		if(rdbsize % 1024 != 0)
 		{
 			rdbsize = 1024 * ((rdbsize / 1024) + 1);
+			LogTrace("[rdb] Load rdb aligned size %llu", rdbsize);
 		}
 #ifdef __unix__
 		_rdb_handle = reinterpret_cast<std::uint8_t*>(std::aligned_alloc(1024, rdbsize));
@@ -76,12 +88,12 @@ namespace mulex
 		_rdb_handle = reinterpret_cast<std::uint8_t*>(_aligned_malloc(rdbsize, 1024));
 #endif
 		_rdb_size = rdbsize;
-		_rdb_offset = rdbsize;
+		_rdb_offset = rdbsize_unaligned;
 
 		// Copy the data and set the map offsets
-		std::memcpy(_rdb_handle, data.data() + mapsize + 2 * sizeof(std::uint64_t), rdbsize);
-		
 		RdbLoadOffsetMap(reinterpret_cast<char*>(data.data() + 2 * sizeof(std::uint64_t)), mapsize);
+
+		std::memcpy(_rdb_handle, data.data() + mapsize + 2 * sizeof(std::uint64_t), rdbsize_unaligned);
 	}
 
 	static void RdbSaveToFile(const std::string& filename)
@@ -101,6 +113,8 @@ namespace mulex
 
 	void RdbInit(std::uint64_t size)
 	{
+		std::unique_lock lock(_rdb_rw_lock);
+
 		// Make sure size is a multiple of 1024 and aligned
 		if(size % 1024 != 0)
 		{
@@ -122,7 +136,18 @@ namespace mulex
 		else
 		{
 			RdbLoadFromFile(exphome + "/rdb.bin");
+			if(_rdb_size == 0)
+			{
+				LogTrace("[rdb] File <rdb.bin> is empty. Allocating default space for rdb.");
+#ifdef __unix__
+				_rdb_handle = reinterpret_cast<std::uint8_t*>(std::aligned_alloc(1024, size));
+#else
+				_rdb_handle = reinterpret_cast<std::uint8_t*>(_aligned_malloc(size, 1024));
+#endif
+				_rdb_size = size;
+			}
 		}
+
 
 
 		if(!_rdb_handle)
@@ -239,7 +264,7 @@ namespace mulex
 		}
 	}
 
-	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, void* data, std::uint64_t count)
+	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, const void* data, std::uint64_t count)
 	{
 		// NOTE: (Cesar) Needs to be before the lock
 		if(RdbFindEntryByName(key))
@@ -262,7 +287,7 @@ namespace mulex
 		// NOTE: (Cesar) This might invalidate the rdb handle
 		if(!RdbCheckSizeAndGrowIfNeeded(data_total_size_bytes))
 		{
-			LogError("[rdb] Failed to allocate more space on rdb for new key");
+			LogError("[rdb] Failed to allocate more space on rdb for new key.");
 			return nullptr;
 		}
 

@@ -6,9 +6,13 @@ static volatile sig_atomic_t stop = 0;
 
 int main(int argc, char* argv[])
 {
-	mulex::SysInitializeExperiment(argc, argv);
+	if(!mulex::SysInitializeExperiment(argc, argv))
+	{
+		::exit(0);
+	}
 
 	mulex::RdbInit(1024 * 1024);
+	mulex::PdbInit();
 	mulex::RPCServerThread rpcThread;
 	mulex::SysRegisterSigintAction([](int s){
 		stop = s;
@@ -29,6 +33,7 @@ int main(int argc, char* argv[])
 
 	mulex::LogMessage("[mxserver] ctrl-C detected. Exiting...");
 
+	mulex::PdbClose();
 	mulex::RdbClose();
 
 	return 0;
