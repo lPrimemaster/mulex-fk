@@ -6,6 +6,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <fstream>
+#include <filesystem>
 #include <rpcspec.inl>
 
 static std::uint8_t* _rdb_handle = nullptr;
@@ -17,6 +18,87 @@ static std::map<std::string, mulex::RdbEntry*> _rdb_offset_map;
 
 namespace mulex
 {
+	static std::uint64_t FindString(const char* data, std::uint64_t idx)
+	{
+		while(data[idx] != 0) idx++;
+		return idx + 1;
+	}
+
+	static void RdbLoadOffsetMap(const char* data, std::uint64_t size)
+	{
+		std::uint64_t idx = 0;
+		while(idx < size)
+		{
+			std::uint64_t nidx = FindString(data, idx);
+			std::uint64_t offset = *reinterpret_cast<const std::uint64_t*>(data + nidx);
+			idx = nidx + sizeof(std::uint64_t);
+			_rdb_offset_map.emplace(std::string(data + idx), reinterpret_cast<RdbEntry*>(_rdb_handle + offset));
+		}
+	}
+
+	static std::vector<std::uint8_t> RdbWriteOffsetMap()
+	{
+		std::vector<std::uint8_t> data;
+		std::uint64_t offset = 0;
+		for(const auto& it : _rdb_offset_map)
+		{
+			std::uint64_t ssize = it.first.size() + 1;
+			data.resize(data.size() + ssize + sizeof(std::uint64_t));
+			std::uint8_t* ptr = data.data() + offset;
+			std::memcpy(ptr, it.first.c_str(), ssize);
+
+			std::uint64_t entry_offset = reinterpret_cast<std::uint8_t*>(it.second) - _rdb_handle;
+			std::memcpy(ptr + ssize, &entry_offset, sizeof(std::uint64_t));
+			offset += (ssize + sizeof(std::uint64_t));
+		}
+		return data;
+	}
+
+	static void RdbLoadFromFile(const std::string& filename)
+	{
+		// Load the existing rdb data
+		std::vector<std::uint8_t> data = SysReadBinFile(filename);
+
+		// Extract map size from the raw data
+		std::uint64_t mapsize = *reinterpret_cast<std::uint64_t*>(data.data());
+
+		// Extract rdb size from the raw data
+		std::uint64_t rdbsize = *reinterpret_cast<std::uint64_t*>(data.data() + sizeof(std::uint64_t));
+
+		// Make sure size is a multiple of 1024 and aligned
+		if(rdbsize % 1024 != 0)
+		{
+			rdbsize = 1024 * ((rdbsize / 1024) + 1);
+		}
+#ifdef __unix__
+		_rdb_handle = reinterpret_cast<std::uint8_t*>(std::aligned_alloc(1024, rdbsize));
+#else
+		_rdb_handle = reinterpret_cast<std::uint8_t*>(_aligned_malloc(rdbsize, 1024));
+#endif
+		_rdb_size = rdbsize;
+		_rdb_offset = rdbsize;
+
+		// Copy the data and set the map offsets
+		std::memcpy(_rdb_handle, data.data() + mapsize + 2 * sizeof(std::uint64_t), rdbsize);
+		
+		RdbLoadOffsetMap(reinterpret_cast<char*>(data.data() + 2 * sizeof(std::uint64_t)), mapsize);
+	}
+
+	static void RdbSaveToFile(const std::string& filename)
+	{
+		std::vector<std::uint8_t> data_offset = RdbWriteOffsetMap();
+		std::uint64_t mapsize = data_offset.size();
+		std::vector<std::uint8_t> output;
+		output.resize(mapsize + _rdb_offset + 2 * sizeof(std::uint64_t));
+
+		std::memcpy(output.data(), &mapsize, sizeof(std::uint64_t));
+		std::memcpy(output.data() + sizeof(std::uint64_t), &_rdb_offset, sizeof(std::uint64_t));
+		std::memcpy(output.data() + 2 * sizeof(std::uint64_t), data_offset.data(), mapsize);
+		std::memcpy(output.data() + mapsize + 2 * sizeof(std::uint64_t), _rdb_handle, _rdb_offset);
+
+		SysWriteBinFile(filename, output);
+	}
+
 	void RdbInit(std::uint64_t size)
 	{
 		// Make sure size is a multiple of 1024 and aligned
@@ -25,30 +107,49 @@ namespace mulex
 			size = 1024 * ((size / 1024) + 1);
 		}
 
+		std::string exphome = SysGetExperimentHome();
+		if(!std::filesystem::is_regular_file(exphome + "/rdb.bin"))
+		{
+			LogWarning("[rdb] Could not find rdb cache under experiment home dir.");
+			LogWarning("[rdb] Initializing empty rdb.");
 #ifdef __unix__
-		_rdb_handle = reinterpret_cast<std::uint8_t*>(std::aligned_alloc(1024, size));
+			_rdb_handle = reinterpret_cast<std::uint8_t*>(std::aligned_alloc(1024, size));
 #else
-		_rdb_handle = reinterpret_cast<std::uint8_t*>(_aligned_malloc(size, 1024));
+			_rdb_handle = reinterpret_cast<std::uint8_t*>(_aligned_malloc(size, 1024));
 #endif
-		_rdb_size = size;
+			_rdb_size = size;
+		}
+		else
+		{
+			RdbLoadFromFile(exphome + "/rdb.bin");
+		}
+
 
 		if(!_rdb_handle)
 		{
 			LogError("[rdb] Failed to create rdb.");
-			LogError("[rdb] Allocation failed with size: %llu kb.", size / 1024);
+			LogError("[rdb] Allocation failed with size: %llu kb.", _rdb_size / 1024);
 			_rdb_size = 0;
 			return;
 		}
 
-		LogDebug("[rdb] Init() OK. Allocated: %llu kb.", size / 1024);
+		LogDebug("[rdb] Init() OK. Allocated: %llu kb.", _rdb_size / 1024);
 	}
 
 	void RdbClose()
 	{
 		std::unique_lock lock(_rdb_rw_lock);
 		LogDebug("[rdb] Closing rdb.");
+
 		if(_rdb_handle)
 		{
+			std::string exphome = SysGetExperimentHome();
+			if(!exphome.empty())
+			{
+				LogDebug("[rdb] Found experiment home. Saving rdb data.");
+				RdbSaveToFile(exphome + "/rdb.bin");
+			}
+
 			_rdb_size = 0;
 			_rdb_offset = 0;
 			_rdb_offset_map.clear();
@@ -361,6 +462,27 @@ namespace mulex
 	void RdbDeleteValueDirect(mulex::RdbKeyName keyname)
 	{
 		RdbDeleteEntry(keyname);
+	}
+
+	void RdbAppendValue(const RdbKeyName& key, const RdbValueType& type, void* data)
+	{
+		RdbEntry* entry = RdbFindEntryByName(key);
+		if(!entry)
+		{
+			return;
+		}
+
+		RdbLockEntryReadWrite(*entry);
+
+		if(entry->_value._count == 0)
+		{
+			LogError("[rdb] Cannot append to a non-array entry.");
+		}
+		else
+		{
+		}
+
+		RdbUnlockEntryReadWrite(*entry);
 	}
 
 	void RdbProxyValue::writeEntry()

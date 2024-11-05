@@ -15,14 +15,16 @@ if(mxrpcret EQUAL "1")
 	message(FATAL_ERROR "mxrpcgen failed")
 endif()
 
+
 add_library(mxrpc
 	rpc.cpp
 	socket.cpp
+	mxmsg.cpp
 	../mxsystem.cpp
 )
 
 if(WIN32)
-	target_link_libraries(mxrpc wsock32 ws2_32)
+	target_link_libraries(mxrpc wsock32 ws2_32 Shlwapi)
 endif()
 
 target_include_directories(mxrpc PRIVATE

@@ -2,7 +2,7 @@
 #include "mxtypes.h"
 #include "mxlogger.h"
 #include <shared_mutex>
-#include "rpc/rpc.h"
+#include "network/rpc.h"
 
 namespace mulex
 {
@@ -94,12 +94,14 @@ namespace mulex
 	MX_RPC_METHOD void RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data);
 	MX_RPC_METHOD void RdbDeleteValueDirect(mulex::RdbKeyName keyname);
 
-	bool RdbKeyIsNotLeaf(const RdbKeyName& keyname);
-
 	void RdbLockEntryRead(const RdbEntry& entry);
 	void RdbLockEntryReadWrite(const RdbEntry& entry);
 	void RdbUnlockEntryRead(const RdbEntry& entry);
 	void RdbUnlockEntryReadWrite(const RdbEntry& entry);
+
+	// NOTE: (Cesar) This needs to be called after the Rdb
+	void PdbInit();
+	void PdbClose();
 
 	class RdbProxyValue
 	{

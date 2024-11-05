@@ -14,10 +14,10 @@ if(mxrpcret EQUAL "1")
 	message(FATAL_ERROR "mxrpcgen failed")
 endif()
 
-add_executable(test_rpc rpc.cpp ../rpc/rpc.cpp ../rpc/socket.cpp ../mxsystem.cpp)
+add_executable(test_rpc rpc.cpp ../network/rpc.cpp ../network/socket.cpp ../mxsystem.cpp)
 
 if(WIN32)
-	target_link_libraries(test_rpc wsock32 ws2_32)
+	target_link_libraries(test_rpc wsock32 ws2_32 Shlwapi)
 endif()
 
 target_include_directories(test_rpc PRIVATE
@@ -25,10 +25,10 @@ target_include_directories(test_rpc PRIVATE
 )
 add_test(test_rpc test_rpc)
 
-add_executable(test_rdb rdb.cpp ../rdb/mxrdb.cpp ../rpc/rpc.cpp ../rpc/socket.cpp ../mxsystem.cpp)
+add_executable(test_rdb rdb.cpp ../rdb/mxrdb.cpp ../network/rpc.cpp  ../network/mxmsg.cpp ../network/socket.cpp ../mxsystem.cpp)
 
 if(WIN32)
-	target_link_libraries(test_rdb wsock32 ws2_32)
+	target_link_libraries(test_rdb wsock32 ws2_32 Shlwapi)
 endif()
 
 target_include_directories(test_rdb PRIVATE
@@ -37,10 +37,10 @@ target_include_directories(test_rdb PRIVATE
 
 add_test(test_rdb test_rdb)
 
-add_executable(test_drv drv.cpp ../drv/mxdrv.cpp ../rpc/socket.cpp ../mxsystem.cpp ../rpc/rpc.cpp ../rdb/mxrdb.cpp)
+add_executable(test_drv drv.cpp ../drv/mxdrv.cpp ../network/socket.cpp ../network/mxmsg.cpp ../mxsystem.cpp ../network/rpc.cpp ../rdb/mxrdb.cpp)
 
 if(WIN32)
-	target_link_libraries(test_drv PRIVATE wsock32 ws2_32)
+	target_link_libraries(test_drv PRIVATE wsock32 ws2_32 Shlwapi)
 endif()
 
 if(USB_SUPPORT)
@@ -57,3 +57,15 @@ if(USB_SUPPORT)
 endif()
 
 add_test(test_drv test_drv)
+
+add_executable(test_argparse argparse.cpp ../rdb/mxrdb.cpp ../network/rpc.cpp ../network/mxmsg.cpp ../network/socket.cpp ../mxsystem.cpp)
+
+if(WIN32)
+	target_link_libraries(test_argparse wsock32 ws2_32 Shlwapi)
+endif()
+
+target_include_directories(test_argparse PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
+
+add_test(test_argparse test_argparse)

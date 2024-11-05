@@ -3,7 +3,7 @@ if(USB_SUPPORT)
 endif()
 
 add_library(mxdrv
-	../rpc/socket.cpp
+	../network/socket.cpp
 	../mxsystem.cpp
 	mxdrv.cpp
 )

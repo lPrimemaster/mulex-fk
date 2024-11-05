@@ -40,8 +40,6 @@
 			mulex::LogTrace("WSA terminated");
 		}
 	};
-
-static WSAGuard _wsaguard;
 #endif
 
 namespace mulex
@@ -53,6 +51,9 @@ namespace mulex
 
 	Socket SocketInit()
 	{
+#ifdef _WIN32
+		static WSAGuard _wsaguard;
+#endif
 		Socket socket;
 		socket._error = false;
 		socket._handle = ::socket(AF_INET, SOCK_STREAM, 0);

@@ -1,6 +1,6 @@
 #pragma once
 #include "../mxtypes.h"
-#include "../rpc/rpc.h"
+#include "../network/rpc.h"
 
 MX_RPC_METHOD int RpcEchoValue(int v);
 MX_RPC_METHOD mulex::string32 RpcEchoString(mulex::string32 v);

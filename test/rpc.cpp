@@ -1,5 +1,5 @@
 #include "test.h"
-#include "../rpc/rpc.h"
+#include "../network/rpc.h"
 #include "../mxlogger.h"
 #include <cstring>
 #include "rpc.h"

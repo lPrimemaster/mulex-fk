@@ -1,4 +1,4 @@
-#include "rpc/rpc.h"
+#include "network/rpc.h"
 #include "mxrdb.h"
 
 #include <signal.h>
@@ -6,6 +6,8 @@ static volatile sig_atomic_t stop = 0;
 
 int main(int argc, char* argv[])
 {
+	mulex::SysInitializeExperiment(argc, argv);
+
 	mulex::RdbInit(1024 * 1024);
 	mulex::RPCServerThread rpcThread;
 	mulex::SysRegisterSigintAction([](int s){

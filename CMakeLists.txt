@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
+include(FetchContent)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -16,6 +17,16 @@ if(USB_SUPPORT)
 	add_definitions(-DUSB_SUPPORT)
 endif()
 
+# SQLite3
+FetchContent_Declare(
+	sqlite3
+	URL https://www.sqlite.org/2024/sqlite-amalgamation-3470000.zip
+	URL_HASH SHA3_256=e35ee48efc24fe58d0e9102034ac0a41e3904641a745e94ab11a841fe9d7355e
+)
+if (NOT sqlite3_POPULATED)
+	FetchContent_Populate(sqlite3)
+endif()
+
 # RPC related configuration
 set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
 add_definitions(-D${RPC_CALL_KEYWORD}=)
@@ -26,7 +37,7 @@ add_executable(mxmain
 )
 
 # Add mulex functionalities
-add_subdirectory(rpc)
+add_subdirectory(network)
 add_subdirectory(rdb)
 add_subdirectory(drv)
 

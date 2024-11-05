@@ -1,7 +1,7 @@
 #include <string>
 #include <cstdint>
 
-#include "rpc/socket.h"
+#include "network/socket.h"
 
 #ifdef _WIN32
 #include <Windows.h>
