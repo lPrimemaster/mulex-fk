@@ -40,6 +40,7 @@ add_executable(mxmain
 add_subdirectory(network)
 add_subdirectory(rdb)
 add_subdirectory(drv)
+add_subdirectory(ctargets)
 
 # Link main
 target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv)

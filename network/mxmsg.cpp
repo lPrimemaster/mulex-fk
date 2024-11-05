@@ -98,16 +98,23 @@ namespace mulex
 
 	void MsgWrite(mulex::MsgClass mclass, std::int64_t timestamp, mulex::RPCGenericType msg)
 	{
-		// TODO: (Cesar) Client ID for each connection
-		std::uint16_t cid = 0;
-		char key[256];
-		snprintf(key, 256, "/mxmsg/%03d/logs", cid);
-		RdbEntry* entry = RdbFindEntryByName(key);
+		std::uint16_t cid = GetCurrentCallerId();
+		std::string rkey = "/system/clients/" + std::to_string(cid) + "/msg";
 
+		RdbEntry* entry = RdbFindEntryByName(rkey + "/count");
 		if(entry)
 		{
+			std::uint64_t count = RdbReadValueDirect(rkey + "/count");
+			RdbWriteValueDirect(rkey + "/count", count + 1);
 		}
-
-		RdbNewEntry(key, RdbValueType::STRING, nullptr, 0);
+		else
+		{
+			std::uint64_t count = 1;
+			RdbNewEntry(rkey + "/count", RdbValueType::UINT64, &count);
+		}
+		
+		// TODO: (Cesar) Get caller name (TODO register callers)
+		//				 Log the message on the pdb and trigger event 
+		//				 TODO - rdb Events ? / msg events ?
 	}
 } // namespace mulex

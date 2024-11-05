@@ -85,7 +85,7 @@ namespace mulex
 	bool RdbImportFromSQL(const std::string& filename);
 	void RdbDumpMetadata(const std::string& filename);
 
-	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, void* data, std::uint64_t count = 0);
+	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, const void* data, std::uint64_t count = 0);
 	bool RdbDeleteEntry(const RdbKeyName& key);
 	RdbEntry* RdbFindEntryByName(const RdbKeyName& key);
 
