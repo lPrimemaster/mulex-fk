@@ -18,7 +18,7 @@ else()
 	)
 
 if(WIN32)
-	set(LUSB_NAMES usb-1.0.a) # Ignore .dll.a (AKA .so)
+	set(LUSB_NAMES usb-1.0) # Ignore .dll.a (AKA .so)
 else()
 	set(LUSB_NAMES usb-1.0 usb)
 endif()

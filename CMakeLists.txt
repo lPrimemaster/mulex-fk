@@ -43,7 +43,7 @@ add_subdirectory(drv)
 add_subdirectory(ctargets)
 
 # Link main
-target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv)
+target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp)
 
 # Add testing
 enable_testing()

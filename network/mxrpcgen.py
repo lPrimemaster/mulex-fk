@@ -418,7 +418,12 @@ def get_files(args: argparse.Namespace) -> List[str]:
     files_to_parse = []
     for dir in args.dirs:
         for root, _, filenames in os.walk(args.dirs[0]):
-            if os.path.basename(root) in args.ignore or root in args.ignore:
+            ignoreDir = False
+            for ignore in args.ignore:
+                if ignore in os.path.basename(root) or ignore in root:
+                    ignoreDir = True
+                    break
+            if ignoreDir:
                 continue
 
             for file in filenames:

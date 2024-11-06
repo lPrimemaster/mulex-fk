@@ -1,5 +1,6 @@
 #include "network/rpc.h"
 #include "mxrdb.h"
+#include "mxhttp.h"
 
 #include <signal.h>
 static volatile sig_atomic_t stop = 0;
@@ -23,6 +24,8 @@ int main(int argc, char* argv[])
 		std::this_thread::yield();
 	}
 
+	mulex::HttpStartServer(8080);
+
 	mulex::LogMessage("[mxserver] Running...");
 	mulex::LogMessage("[mxserver] Press ctrl-C to exit.");
 
@@ -32,6 +35,8 @@ int main(int argc, char* argv[])
 	}
 
 	mulex::LogMessage("[mxserver] ctrl-C detected. Exiting...");
+
+	mulex::HttpStopServer();
 
 	mulex::PdbClose();
 	mulex::RdbClose();
