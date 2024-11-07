@@ -40,7 +40,6 @@ namespace mulex
 		// This avoids the need to use a mutex to print
 		// Making the logger natively thread-safe
 		std::stringstream ss;
-		// TODO: Create some GetBackendName() function
 		ss << Policy::Prefix() << " " << buffer.data() << '\n';
 		std::string output = ss.str();
 		

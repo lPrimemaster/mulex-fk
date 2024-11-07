@@ -529,7 +529,7 @@ namespace mulex
 		return "";
 	}
 
-	std::string SysGetBinaryName()
+	std::string_view SysGetBinaryName()
 	{
 		if(!_sys_binname.empty())
 		{
@@ -616,7 +616,7 @@ namespace mulex
 	{
 		if(_sys_cid == 0x00)
 		{
-			std::string bname = SysGetBinaryName();
+			std::string bname = std::string(SysGetBinaryName());
 			std::string hname = SysGetHostname();
 			std::string tname = bname + "@" + hname;
 			// int size = tname.size() > 128 ? 128 : static_cast<int>(tname.size());

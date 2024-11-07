@@ -193,6 +193,7 @@ namespace mulex
 
 
 			// Set the current global client state
+			// NOTE: (Cesar) : This wont work if we have multiple threads serving RPC requests
 			_client_current_caller.store(header.client);
 		
 			// Execute the request locally on the RPC thread

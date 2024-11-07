@@ -135,7 +135,7 @@ namespace mulex
 	std::string_view SysGetCacheDir();
 	bool SysCreateNewExperiment(const std::string& expname);
 	std::string SysGetExperimentHome();
-	std::string SysGetBinaryName();
+	std::string_view SysGetBinaryName();
 	std::string SysGetHostname();
 	std::uint64_t SysGetClientId();
 	std::vector<std::uint8_t> SysReadBinFile(const std::string& file);
