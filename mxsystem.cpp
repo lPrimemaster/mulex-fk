@@ -361,9 +361,52 @@ namespace mulex
 	{
 		std::unique_lock<std::mutex> lock(_mutex);
 		_notifier.wait(lock);
+		if(_stack.empty())
+		{
+			return std::vector<std::uint8_t>();
+		}
 		std::vector<std::uint8_t> val = std::move(_stack.top());
 		_stack.pop();
 		return val;
+	}
+
+	void SysBufferStack::requestUnblock()
+	{
+		_notifier.notify_all();
+	}
+
+	void SysRefBufferStack::push(std::vector<std::uint8_t>&& data, std::uint16_t ref)
+	{
+		_refcount.store(ref);
+		{
+			std::unique_lock<std::mutex> lock(_mutex);
+			_stack.push(std::move(data));
+		}
+		_notifier.notify_all();	
+	}
+
+	std::vector<std::uint8_t> SysRefBufferStack::pop()
+	{
+		std::unique_lock<std::mutex> lock(_mutex);
+		_notifier.wait(lock);
+		if(_stack.empty())
+		{
+			return std::vector<std::uint8_t>();
+		}
+		std::vector<std::uint8_t> val = _stack.top();
+		_refcount--; // This is atomic
+		if(_refcount.load() == 0)
+		{
+			lock.lock();
+			if(!_stack.empty()) _stack.pop();
+			lock.unlock();
+		}
+		return val;
+	}
+
+	void SysRefBufferStack::requestUnblock()
+	{
+		_notifier.notify_all();
 	}
 
 	SysByteStream::SysByteStream(std::uint64_t size, std::uint64_t headersize, std::uint64_t headeroffset)

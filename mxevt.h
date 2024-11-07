@@ -1,0 +1,96 @@
+#pragma once
+#include <cstdint>
+#include <string>
+#include <thread>
+#include <map>
+
+#include "network/socket.h"
+#include "network/rpc.h"
+#include "mxsystem.h"
+
+namespace mulex
+{
+	static constexpr std::uint16_t EVT_PORT = 5702;
+	static constexpr std::uint16_t EVT_RECV_TIMEOUT = 10000; // 10 sec
+
+	enum class EvtResult
+	{
+		OK,
+		FAILED,
+		TIMEOUT
+	};
+	
+	struct EvtHeader
+	{
+		std::uint64_t client;
+		std::uint16_t eventid;
+		std::uint64_t msgid;
+		std::uint32_t payloadsize;
+		// std::uint8_t  padding[10];
+	};
+
+	constexpr std::uint64_t EVT_HEADER_SIZE = sizeof(EvtHeader);
+	constexpr std::uint64_t EVT_MAX_SUB = 64;
+
+	std::uint64_t GetNextMessageId();
+
+	class EvtClientThread
+	{
+	private:
+		using EvtCallbackFunc = std::function<void(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata)>;
+	public:
+		EvtClientThread(const std::string& hostname, std::uint16_t evtport = EVT_PORT);
+		~EvtClientThread();
+
+		void emit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
+		void regist(const std::string& event);
+		void subscribe(const std::string& event, EvtCallbackFunc callback);
+
+	private:
+		void clientListenThread(const Socket& socket);
+		void clientEmitThread(const Socket& socket);
+
+	private:
+		Socket _evt_socket;
+		std::unique_ptr<std::thread> _evt_listen_thread;
+		std::unique_ptr<std::thread> _evt_emit_thread;
+		SysByteStream* _evt_stream;
+		SysBufferStack _evt_emit_stack;
+		std::atomic<bool> _evt_thread_running = false;
+		std::atomic<bool> _evt_thread_ready = false;
+		std::map<std::string, std::uint16_t> _evt_registry;
+		std::map<std::uint16_t, std::vector<EvtCallbackFunc>> _evt_callbacks;
+	};
+
+	class EvtServerThread
+	{
+	public:
+		EvtServerThread();
+		~EvtServerThread();
+		bool ready() const;
+
+		void emit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
+
+	private:
+		void serverConnAcceptThread();
+		void serverListenThread(const Socket& socket);
+		void serverEmitThread(const Socket& socket);
+
+	private:
+		Socket _server_socket;
+		std::map<Socket, std::unique_ptr<std::thread>> _evt_listen_thread;
+		std::map<Socket, std::unique_ptr<std::thread>> _evt_emit_thread;
+		std::map<Socket, SysByteStream*> _evt_stream;
+		std::map<Socket, std::atomic<bool>> _evt_thread_sig;
+		SysRefBufferStack _evt_emit_stack;
+		std::unique_ptr<std::thread> _evt_accept_thread;
+		std::atomic<bool> _evt_thread_running = false;
+		std::atomic<bool> _evt_thread_ready = false;
+		std::mutex _connections_mutex;
+	};
+
+
+	MX_RPC_METHOD bool EvtRegister(mulex::string32 name);
+	MX_RPC_METHOD std::uint16_t EvtGetId(mulex::string32 name);
+	void EvtTriggerEvent(const void* data, std::uint64_t len);
+} // namespace mulex

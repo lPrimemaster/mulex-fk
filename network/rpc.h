@@ -52,6 +52,11 @@ namespace mulex
 			_data.resize(sizeof(T));
 			std::memcpy(_data.data(), &t, sizeof(T));
 		}
+
+		/* implicit */ RPCGenericType(const std::nullptr_t& t)
+		{
+			_data.clear();
+		}
 		
 		template<typename T>
 		/* implicit */ RPCGenericType(const std::vector<T>& vt)
@@ -127,6 +132,27 @@ namespace mulex
 			ret.resize(_data.size() / sizeof(T));
 			std::memcpy(ret.data(), _data.data(), _data.size());
 			return ret;
+		}
+
+		template<typename T>
+		T* asPointer()
+		{
+			static_assert(std::is_trivially_copyable_v<T>, "RPCGenericType, type must be trivially copyable.");
+			static_assert(!std::is_pointer_v<T>, "RPCGenericType, type must not be a pointer.");
+
+			if(_data.empty())
+			{
+				LogError("Failed to cast an empty data to requested type");
+				LogWarning("Returning default constructed object");
+				return nullptr;
+			}
+
+			return reinterpret_cast<T*>(_data.data());
+		}
+
+		std::uint8_t* getData()
+		{
+			return _data.empty() ? nullptr : _data.data();
 		}
 
 		std::vector<std::uint8_t> _data;

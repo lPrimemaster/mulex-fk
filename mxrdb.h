@@ -64,6 +64,20 @@ namespace mulex
 		}
 	};
 
+	enum class RdbEntryFlag : std::uint64_t
+	{
+		EVENT_MOD_WATCHER = 0x01
+	};
+
+	std::uint64_t operator&  (RdbEntryFlag  a, RdbEntryFlag b);
+	std::uint64_t operator&  (std::uint64_t a, RdbEntryFlag b);
+
+	std::uint64_t operator|  (RdbEntryFlag  a, RdbEntryFlag b);
+	std::uint64_t operator|  (std::uint64_t a, RdbEntryFlag b);
+
+	std::uint64_t operator&= (std::uint64_t a, RdbEntryFlag b);
+	std::uint64_t operator|= (std::uint64_t a, RdbEntryFlag b);
+
 	struct RdbEntry
 	{
 		// Entry locking
@@ -72,6 +86,9 @@ namespace mulex
 		// Entry statistics
 		std::int64_t _tcreated;
 		std::int64_t _tmodified;
+
+		// Entry metadata
+		std::uint64_t _flags;
 
 		// Entry data
 		RdbKey   _key;
@@ -91,8 +108,11 @@ namespace mulex
 
 	MX_RPC_METHOD mulex::RPCGenericType RdbReadValueDirect(mulex::RdbKeyName keyname);
 	MX_RPC_METHOD void RdbWriteValueDirect(mulex::RdbKeyName keyname, mulex::RPCGenericType data);
-	MX_RPC_METHOD void RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data);
+	MX_RPC_METHOD bool RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data);
 	MX_RPC_METHOD void RdbDeleteValueDirect(mulex::RdbKeyName keyname);
+	MX_RPC_METHOD bool RdbValueExists(mulex::RdbKeyName keyname);
+
+	void RdbTriggerEvent(std::uint64_t clientid, const RdbEntry& entry);
 
 	void RdbLockEntryRead(const RdbEntry& entry);
 	void RdbLockEntryReadWrite(const RdbEntry& entry);
@@ -118,6 +138,13 @@ namespace mulex
 		}
 
 		template<typename T>
+		T* asPointer()
+		{
+			readEntry();
+			return _genvalue.asPointer<T>();
+		}
+
+		template<typename T>
 		operator T()
 		{
 			// Read t from the rdb
@@ -132,6 +159,13 @@ namespace mulex
 			readEntry();
 			return _genvalue.asVectorType<T>();
 		}
+
+		inline void flush()
+		{
+			writeEntry();
+		}
+
+		bool exists();
 
 	private:
 		void writeEntry();
@@ -152,7 +186,7 @@ namespace mulex
 			return RdbProxyValue(_rootkey + key);
 		}
 
-		void create(const std::string& key, RdbValueType type, RPCGenericType value, std::uint64_t count = 0);
+		bool create(const std::string& key, RdbValueType type, RPCGenericType value, std::uint64_t count = 0);
 		void erase(const std::string& key);
 
 	private:

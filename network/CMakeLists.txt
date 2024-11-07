@@ -35,6 +35,7 @@ set_property(TARGET libuSockets PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINAR
 add_library(mxrpc
 	rpc.cpp
 	socket.cpp
+	mxevt.cpp
 	mxmsg.cpp
 	../mxsystem.cpp
 )

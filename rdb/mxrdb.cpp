@@ -18,6 +18,38 @@ static std::map<std::string, mulex::RdbEntry*> _rdb_offset_map;
 
 namespace mulex
 {
+	std::uint64_t operator& (std::uint64_t a, RdbEntryFlag b)
+	{
+		return a & static_cast<std::uint64_t>(b);
+	}
+
+	std::uint64_t operator& (RdbEntryFlag a, RdbEntryFlag b)
+	{
+		return static_cast<std::uint64_t>(a) & static_cast<std::uint64_t>(b);
+	}
+
+	std::uint64_t operator| (RdbEntryFlag a, RdbEntryFlag b)
+	{
+		return static_cast<std::uint64_t>(a) | static_cast<std::uint64_t>(b);
+	}
+
+	std::uint64_t operator| (std::uint64_t a, RdbEntryFlag b)
+	{
+		return a | static_cast<std::uint64_t>(b);
+	}
+
+	std::uint64_t operator&= (std::uint64_t a, RdbEntryFlag b)
+	{
+		a = a & b;
+		return a;
+	}
+
+	std::uint64_t operator|= (std::uint64_t a, RdbEntryFlag b)
+	{
+		a = a | b;
+		return a;
+	}
+
 	static std::uint64_t FindString(const char* data, std::uint64_t idx)
 	{
 		while(data[idx] != 0) idx++;
@@ -323,7 +355,15 @@ namespace mulex
 
 		// Now copy the actual value data
 		ptr += sizeof(RdbEntry);
-		std::memcpy(ptr, data, data_total_size_bytes);
+		if(data != nullptr)
+		{
+			std::memcpy(ptr, data, data_total_size_bytes);
+		}
+		else
+		{
+			std::memset(ptr, 0, data_total_size_bytes);
+		}
+		
 
 		// Finally put the key on the map
 		_rdb_offset_map.emplace(key.c_str(), entry);
@@ -411,6 +451,11 @@ namespace mulex
 		}
 	}
 
+	void RdbTriggerEvent(std::uint64_t clientid, const RdbEntry& entry)
+	{
+		
+	}
+
 	void RdbLockEntryRead(const RdbEntry& entry)
 	{
 		_rdb_rw_lock.lock_shared();
@@ -455,6 +500,12 @@ namespace mulex
 		return RPCGenericType::FromData(buffer);
 	}
 
+	bool RdbValueExists(RdbKeyName keyname)
+	{
+		const RdbEntry* entry = RdbFindEntryByName(keyname);
+		return entry != nullptr;
+	}
+
 	void RdbWriteValueDirect(mulex::RdbKeyName keyname, RPCGenericType data)
 	{
 		RdbEntry* entry = RdbFindEntryByName(keyname);
@@ -473,41 +524,29 @@ namespace mulex
 		else
 		{
 			entry->_tmodified = SysGetCurrentTime();
-			std::memcpy(entry->_value._ptr, data._data.data(), data._data.size());
+			std::memcpy(entry->_value._ptr, data.getData(), data._data.size());
+
+			if(entry->_flags & RdbEntryFlag::EVENT_MOD_WATCHER)
+			{
+				// NOTE: (Cesar) : cid is 0 for system modifications
+				const std::uint64_t cid = SysGetClientId();
+
+				// Sends the modified data to all subscribers
+				// RdbTriggerEvent(cid, *entry);
+			}
 		}
 
 		RdbUnlockEntryReadWrite(*entry);
 	}
 
-	void RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data)
+	bool RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data)
 	{
-		RdbNewEntry(keyname, type, data._data.data(), count);
+		return (RdbNewEntry(keyname, type, data.getData(), count) != nullptr);
 	}
 
 	void RdbDeleteValueDirect(mulex::RdbKeyName keyname)
 	{
 		RdbDeleteEntry(keyname);
-	}
-
-	void RdbAppendValue(const RdbKeyName& key, const RdbValueType& type, void* data)
-	{
-		RdbEntry* entry = RdbFindEntryByName(key);
-		if(!entry)
-		{
-			return;
-		}
-
-		RdbLockEntryReadWrite(*entry);
-
-		if(entry->_value._count == 0)
-		{
-			LogError("[rdb] Cannot append to a non-array entry.");
-		}
-		else
-		{
-		}
-
-		RdbUnlockEntryReadWrite(*entry);
 	}
 
 	void RdbProxyValue::writeEntry()
@@ -528,13 +567,24 @@ namespace mulex
 		}
 	}
 
-	void RdbAccess::create(const std::string& key, RdbValueType type, RPCGenericType value, std::uint64_t count)
+	bool RdbProxyValue::exists()
 	{
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
-			exp.value()->_rpc_client->call(RPC_CALL_MULEX_RDBCREATEVALUEDIRECT, RdbKeyName(key), type, count, value);
+			return exp.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_RDBVALUEEXISTS, RdbKeyName(_key));
 		}
+		return false;
+	}
+
+	bool RdbAccess::create(const std::string& key, RdbValueType type, RPCGenericType value, std::uint64_t count)
+	{
+		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
+		if(exp.has_value())
+		{
+			return exp.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_RDBCREATEVALUEDIRECT, RdbKeyName(key), type, count, value);
+		}
+		return false;
 	}
 
 	void RdbAccess::erase(const std::string& key)

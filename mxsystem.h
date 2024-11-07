@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <thread>
 #include <stack>
+#include <shared_mutex>
 #include <functional>
 #include "network/socket.h"
 // #include "network/rpc.h"
@@ -71,8 +72,23 @@ namespace mulex
 	public:
 		void push(std::vector<std::uint8_t>&& data);
 		std::vector<std::uint8_t> pop();
+		void requestUnblock();
 
 	private:
+		std::stack<std::vector<std::uint8_t>> _stack;
+		std::mutex _mutex;
+		std::condition_variable _notifier;
+	};
+
+	class SysRefBufferStack
+	{
+	public:
+		void push(std::vector<std::uint8_t>&& data, std::uint16_t ref);
+		std::vector<std::uint8_t> pop();
+		void requestUnblock();
+
+	private:
+		std::atomic<std::uint16_t> _refcount = 0;
 		std::stack<std::vector<std::uint8_t>> _stack;
 		std::mutex _mutex;
 		std::condition_variable _notifier;

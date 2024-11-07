@@ -94,13 +94,15 @@ namespace mulex
 			case MsgClass::WARN:  return "[WARN]";
 			case MsgClass::ERROR: return "[ERROR]";
 		}
+		return "";
 	}
 
 	void MsgWrite(mulex::MsgClass mclass, std::int64_t timestamp, mulex::RPCGenericType msg)
 	{
-		std::uint16_t cid = GetCurrentCallerId();
-		std::string rkey = "/system/clients/" + std::to_string(cid) + "/msg";
+		const std::uint16_t cid = GetCurrentCallerId();
 
+		// Write message rdb stats
+		std::string rkey = "/system/clients/" + std::to_string(cid) + "/msg";
 		RdbEntry* entry = RdbFindEntryByName(rkey + "/count");
 		if(entry)
 		{
@@ -111,6 +113,16 @@ namespace mulex
 		{
 			std::uint64_t count = 1;
 			RdbNewEntry(rkey + "/count", RdbValueType::UINT64, &count);
+		}
+
+		entry = RdbFindEntryByName(rkey + "/last");
+		if(entry)
+		{
+			RdbWriteValueDirect(rkey + "/last", msg);
+		}
+		else
+		{
+			RdbNewEntry(rkey + "/last", RdbValueType::STRING, msg.getData());
 		}
 		
 		// TODO: (Cesar) Get caller name (TODO register callers)
