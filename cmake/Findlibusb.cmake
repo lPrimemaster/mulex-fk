@@ -17,11 +17,7 @@ else()
 			libusb-1.0
 	)
 
-if(WIN32)
-	set(LUSB_NAMES usb-1.0) # Ignore .dll.a (AKA .so)
-else()
 	set(LUSB_NAMES usb-1.0 usb)
-endif()
 
 	find_library(LIBUSB_LIBRARY
 		NAMES ${LUSB_NAMES}
