@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <functional>
+#include <algorithm>
 
 #include "rpc.h"
 #include <rpcspec.inl>
