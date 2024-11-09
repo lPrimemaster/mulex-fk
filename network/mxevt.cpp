@@ -6,6 +6,7 @@
 #include <functional>
 #include <cstring>
 #include <algorithm>
+#include <set>
 
 #include "../mxevt.h"
 
@@ -20,9 +21,24 @@ static std::atomic<std::uint64_t> _client_msg_id = 0;
 // 				 RPC calls on a local context
 static std::atomic<std::uint64_t> _client_current_caller = 0;
 
+static std::map<std::string, std::uint16_t> _evt_server_reg;
+static std::atomic<std::uint16_t> _evt_server_reg_next = 0;
+
+// NOTE: (Cesar) Map for eventid -> subscribed clientid list
+static std::map<std::uint16_t, std::set<std::uint64_t>> _evt_current_subscriptions;
+static std::mutex _evt_sub_lock;
+
+static std::map<std::uint16_t, std::function<void(const mulex::Socket&, std::uint64_t, std::uint16_t, const std::uint8_t*, std::uint64_t)>> _evt_server_callbacks;
+
+#ifdef __linux__
+static std::map<int, std::uint64_t> _evt_client_socket_pair;
+#else
+static std::map<SOCKET, std::uint64_t> _evt_client_socket_pair;
+#endif
+
 namespace mulex
 {
-	std::uint64_t GetNextMessageId()
+	std::uint64_t GetNextEventMessageId()
 	{
 		return _client_msg_id++;
 	}
@@ -38,6 +54,9 @@ namespace mulex
 		_evt_emit_thread = std::make_unique<std::thread>(
 			std::bind(&EvtClientThread::clientEmitThread, this, _evt_socket)
 		);
+
+		// Tell the server who we are
+		emit("mxevt::getclientmeta", nullptr, 0);
 	}
 
 	EvtClientThread::~EvtClientThread()
@@ -73,8 +92,9 @@ namespace mulex
 			//				  and see how it goes
 			EvtHeader header;
 			std::memcpy(&header, fbuffer.data(), sizeof(EvtHeader));
-			LogTrace("[evtclient] Got Event <%d> from <%llu>", header.eventid, header.client);
-			// TODO: For now just trace
+			LogTrace("[evtclient] Got Event <%d> from <0x%llx>", header.eventid, header.client);
+			
+			_evt_callbacks.at(header.eventid)(fbuffer.data(), fbuffer.size(), _evt_userdata.at(header.eventid));
 		}
 		
 		recvthread->_handle.join();
@@ -97,26 +117,52 @@ namespace mulex
 			//				  and see how it goes
 			EvtHeader header;
 			std::memcpy(&header, data.data(), sizeof(EvtHeader));
-			LogTrace("[evtclient] Emitting Event <%d> from <%llu>", header.eventid, header.client);
+			LogTrace("[evtclient] Emitting Event <%d> from <0x%llx>", header.eventid, header.client);
 			
 			SocketSendBytes(socket, data.data(), data.size());
 		}
 	}
 
-	void EvtClientThread::emit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
+	std::uint16_t EvtClientThread::findEvent(const std::string& event)
 	{
 		auto evt = _evt_registry.find(event);
+		std::uint16_t eventid = 0;
 		if(evt == _evt_registry.end())
 		{
-			LogError("[evtclient] Could not find event <%s> in registry.", event.c_str());
+			LogDebug("[evtclient] Could not find event <%s> in local registry.", event.c_str());
+			LogDebug("[evtclient] Looking in server for <%s>.", event.c_str());
+			std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
+			if(!experiment.has_value())
+			{
+				LogError("[evtclient] Failed to emit event. Not connected to an experiment.");
+				return 0;
+			}
+
+			std::uint16_t eid = experiment.value()->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
+			if(eid != 0)
+			{
+				// Cache it
+				_evt_registry.emplace(event, eid);
+			}
+			return eid;
+		}
+		return evt->second;
+	}
+
+	void EvtClientThread::emit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
+	{
+		std::uint16_t eid = findEvent(event);
+		if(eid == 0)
+		{
+			LogError("[evtclient] Failed to find event in server. Emit aborted.");
 			return;
 		}
 
 		// Make header
 		EvtHeader header;
 		header.client = SysGetClientId();
-		header.eventid = evt->second;
-		header.msgid = GetNextMessageId();
+		header.eventid = eid;
+		header.msgid = GetNextEventMessageId();
 		header.payloadsize = static_cast<std::uint32_t>(len);
 
 		std::vector<std::uint8_t> vdata;
@@ -137,7 +183,7 @@ namespace mulex
 		std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
 		if(!experiment.has_value())
 		{
-			LogError("[evtclient] Failed to register event. Not connected to and experiment.");
+			LogError("[evtclient] Failed to register event. Not connected to an experiment.");
 			return;
 		}
 		
@@ -146,6 +192,16 @@ namespace mulex
 		{
 			LogError("[evtclient] Failed to register event. EvtRegister() returned false.");
 		}
+
+		std::uint16_t eventid = experiment.value()->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
+		if(eventid == 0)
+		{
+			LogError("[evtclient] Failed to register event.");
+			return;
+		}
+
+		_evt_registry.emplace(event, eventid);
+		LogTrace("[evtclient] Registered event <%s> with id <%d>.", event.c_str(), eventid);
 	}
 
 	void EvtClientThread::subscribe(const std::string& event, EvtCallbackFunc callback)
@@ -154,19 +210,25 @@ namespace mulex
 		std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
 		if(!experiment.has_value())
 		{
-			LogError("[evtclient] Failed to subscribe to event. Not connected to and experiment.");
+			LogError("[evtclient] Failed to subscribe to event. Not connected to an experiment.");
 			return;
 		}
 		
 		std::uint16_t eventid = experiment.value()->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
-
 		if(eventid == 0)
 		{
 			LogError("[evtclient] Failed to subscribe to event. Event <%s> is not registered.");
 			return;
 		}
 
+		if(experiment.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_EVTSUBSCRIBE, string32(event)))
+		{
+			LogError("[evtclient] Failed to subscribe to event.");
+			return;
+		}
+
 		// Register this subscription on the rdb
+		// This is informative only and does not reflect internal state subscription
 		RdbAccess rda;
 		std::string skey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/totalcalls";
 		if(!rda[skey].exists())
@@ -188,21 +250,37 @@ namespace mulex
 		std::string rkey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/ids";
 		if(!rda[rkey].exists())
 		{
-			rda.create(rkey, RdbValueType::UINT16, nullptr, 0);
+			rda.create(rkey, RdbValueType::UINT16, nullptr, 100);
 		}
-		// This syntax simply avoids creating a std::vector copy
-		// Here it would not matter but just as a practice
-		rda[rkey].asPointer<std::uint16_t>()[count] = eventid;
-		rda[rkey].flush();
 
+		std::vector<std::uint16_t> ids = rda[rkey];
+		ids[count] = eventid;
+		rda[rkey] = ids;
+
+		auto eid_callbacks = _evt_callbacks.find(eventid);
+		if(eid_callbacks != _evt_callbacks.end())
+		{
+			LogWarning("[evtclient] Subscribing to already subscribed event. Only one callback per event is allowed. Replacing...");
+		}
 		_evt_callbacks.emplace(eventid, callback);
+
 		LogTrace("[evtclient] Subscribed to event <%s> [%d].", event.c_str(), eventid);
+	}
+
+	static void OnClientConnectMetadata(const Socket& socket, std::uint64_t cid, std::uint16_t eid, const std::uint8_t* data, std::uint64_t size)
+	{
+		LogDebug("[evtserver] Registering client <0x%llx>.", cid);
+		_evt_client_socket_pair.emplace(socket._handle, cid);
 	}
 
 	EvtServerThread::EvtServerThread()
 	{
 		_evt_thread_running.store(true);
 		_evt_thread_ready.store(false);
+
+		// Register server side event for metadata
+		EvtRegister("mxevt::getclientmeta");
+		EvtServerRegisterCallback("mxevt::getclientmeta", OnClientConnectMetadata);
 		
 		_evt_accept_thread = std::make_unique<std::thread>(
 			std::bind(&EvtServerThread::serverConnAcceptThread, this)
@@ -220,13 +298,26 @@ namespace mulex
 		_evt_thread_ready.store(false);
 	}
 
+	bool EvtServerThread::ready() const
+	{
+		return _evt_thread_ready.load();
+	}
+
+	void EvtServerThread::emit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
+	{
+	}
+
+	void EvtServerThread::emit(const std::uint16_t eventid, const std::uint64_t clientid, const std::uint8_t* data, std::uint64_t len)
+	{
+	}
+
 	void EvtServerThread::serverConnAcceptThread()
 	{
 		_server_socket = SocketInit();
 		SocketBindListen(_server_socket, EVT_PORT);
 		if(!SocketSetNonBlocking(_server_socket))
 		{
-			LogError("Failed to set listen socket to no blocking mode.");
+			LogError("Failed to set listen socket to non blocking mode.");
 			SocketClose(_server_socket);
 			return;
 		}
@@ -268,7 +359,14 @@ namespace mulex
 	{
 		std::unique_ptr<SysRecvThread> recvthread = SysStartRecvThread(socket, sizeof(EvtHeader), offsetof(EvtHeader, payloadsize));
 		SysByteStream& sbs = recvthread->_stream;
-		_evt_stream.emplace(socket, &recvthread->_stream);
+
+		{
+			std::unique_lock<std::mutex> lock(_connections_mutex);
+			_evt_stream.emplace(socket, &recvthread->_stream);
+			_evt_thread_sig.emplace(socket, true);
+		}
+		_evt_notifier.notify_one();
+
 		static constexpr std::uint64_t buffersize = SYS_RECV_THREAD_BUFFER_SIZE;
 		static std::vector<std::uint8_t> fbuffer(buffersize);
 
@@ -277,7 +375,7 @@ namespace mulex
 			// Read next event
 			std::uint64_t read = sbs.fetch(fbuffer.data(), buffersize);
 
-			if(read <= 0 && (!_evt_thread_running.load() && !_evt_thread_sig.at(socket).load()))
+			if(read <= 0 && (!_evt_thread_running.load() || !_evt_thread_sig.at(socket).load()))
 			{
 				break;
 			}
@@ -287,17 +385,40 @@ namespace mulex
 			//				  and see how it goes
 			EvtHeader header;
 			std::memcpy(&header, fbuffer.data(), sizeof(EvtHeader));
-			LogTrace("[evtclient] Got Event <%d> from <%llu>", header.eventid, header.client);
-			// TODO: For now just trace
-			
+			LogTrace("[evtserver] Got Event <%d> from <0x%llx>", header.eventid, header.client);
+
 			// Relay event to clients that are subscribed
+			{
+				std::unique_lock<std::mutex> lock(_evt_sub_lock);
+				for(const std::uint64_t cid : _evt_current_subscriptions.at(header.eventid))
+				{
+					emit(header.eventid, cid, fbuffer.data(), fbuffer.size());
+					LogTrace("[evtserver] Relaying event <%d> from <0x%llx> to <0x%llx>.", header.eventid, header.client, cid);
+				}
+			}
+
+			// Perform server side tasks (if any)
+			EvtTryRunServerCallback(header.client, header.eventid, fbuffer.data(), fbuffer.size(), socket);
 		}
-		
+
+		// On client disconnect unsubscribe from events
+		// We can run into issues if there is a crash on the client side, which we don't control
+		for(const auto& evt : _evt_current_subscriptions)
+		{
+			EvtUnsubscribe(_evt_client_socket_pair.at(socket._handle), evt.first);
+		}
+
 		recvthread->_handle.join();
 	}
 
 	void EvtServerThread::serverEmitThread(const Socket& socket)
 	{
+		{
+			// Wait for _evt_thread_sig to be populated by serverListenThread
+			std::unique_lock<std::mutex> lock(_connections_mutex);
+			_evt_notifier.wait(lock);
+		}
+
 		while(_evt_thread_running.load() && _evt_thread_sig.at(socket).load())
 		{
 			// Read next event to emit from stack
@@ -313,7 +434,7 @@ namespace mulex
 			//				  and see how it goes
 			EvtHeader header;
 			std::memcpy(&header, data.data(), sizeof(EvtHeader));
-			LogTrace("[evtclient] Emitting Event <%d> from <%llu>", header.eventid, header.client);
+			LogTrace("[evtserver] Emitting Event <%d> from <0x%llx>", header.eventid, header.client);
 			
 			SocketSendBytes(socket, data.data(), data.size());
 		}
@@ -321,6 +442,105 @@ namespace mulex
 
 	bool EvtRegister(string32 name)
 	{
+		auto evtrit = _evt_server_reg.find(name.c_str());
+		if(evtrit != _evt_server_reg.end())
+		{
+			LogError("[evtserver] Cannot register event <%s>. Already exists.", name.c_str());
+			return false;
+		}
+
+		const std::uint16_t event_id = ++_evt_server_reg_next;
+		_evt_current_subscriptions.emplace(event_id, std::set<std::uint64_t>());
+		_evt_server_reg.emplace(name.c_str(), event_id);
 		return true;
+	}
+
+	std::uint16_t EvtGetId(mulex::string32 name)
+	{
+		auto evtrit = _evt_server_reg.find(name.c_str());
+		if(evtrit != _evt_server_reg.end())
+		{
+			return evtrit->second;
+		}
+
+		LogError("[evtserver] Cannot get event id. Event <%s> is not registered.", name.c_str());
+		return 0;
+	}
+
+	bool EvtSubscribe(mulex::string32 name)
+	{
+		std::uint16_t eid = EvtGetId(name);
+		std::uint64_t cid = SysGetClientId();
+		if(eid == 0)
+		{
+			LogError("[evtserver] Cannot subscribe to event <%s>.", name.c_str());
+			return false;
+		}
+
+		if(cid == 0)
+		{
+			LogError("[evtserver] Mxserver cannot manually subscribe to events.");
+			return false;
+		}
+
+		std::unique_lock<std::mutex> lock(_evt_sub_lock);
+		_evt_current_subscriptions.at(eid).insert(cid);
+		return true;
+	}
+
+	void EvtServerRegisterCallback(
+		mulex::string32 name,
+		std::function<void(const Socket&, std::uint64_t, std::uint16_t, const std::uint8_t*, std::uint64_t)> callback
+	)
+	{
+		std::uint16_t eid = EvtGetId(name);
+		if(eid == 0)
+		{
+			return;
+		}
+		_evt_server_callbacks.emplace(eid, callback);
+	}
+
+	void EvtTryRunServerCallback(std::uint64_t clientid, std::uint16_t eventid, const std::uint8_t* data, std::uint64_t len, const Socket& socket)
+	{
+		auto eidit = _evt_server_callbacks.find(eventid);
+		if(eidit != _evt_server_callbacks.end())
+		{
+			eidit->second(socket, clientid, eventid, data, len);
+		}
+	}
+
+	void EvtUnsubscribe(mulex::string32 name)
+	{
+		std::uint16_t eid = EvtGetId(name);
+		EvtUnsubscribe(GetCurrentCallerId(), eid);
+	}
+
+	void EvtUnsubscribe(std::uint64_t clientid, std::uint16_t eventid)
+	{
+		if(clientid == 0)
+		{
+			LogError("[evtserver] Mxserver cannot manually unsubscribe from events.");
+			return;
+		}
+
+		std::unique_lock<std::mutex> lock(_evt_sub_lock);
+		auto eidit = _evt_current_subscriptions.find(eventid);
+		if(eidit == _evt_current_subscriptions.end())
+		{
+			LogError("[evtserver] Error unsubscribing. Not subscribed to event <%d>.", eventid);
+			return;
+		}
+
+		auto cidsub = eidit->second.find(clientid);
+		if(cidsub == eidit->second.end())
+		{
+			// Client is not subscribed to event
+			// Silently ignore
+			return;
+		}
+		
+		eidit->second.erase(clientid);
+		LogTrace("[evtserver] Unsubscribing client <0x%llx> from event <%d>.", clientid, eventid);
 	}
 }

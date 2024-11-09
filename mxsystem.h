@@ -18,6 +18,7 @@ namespace mulex
 {
 	struct RPCGenericType;
 	class RPCClientThread;
+	class EvtClientThread;
 }
 
 namespace mulex
@@ -129,9 +130,8 @@ namespace mulex
 	struct Experiment
 	{
 		std::string _exp_name;
-		Socket _exp_socket;
-		Socket _rpc_socket;
 		std::unique_ptr<RPCClientThread> _rpc_client;
+		std::unique_ptr<EvtClientThread> _evt_client;
 	};
 
 	static constexpr std::uint16_t EXP_DEFAULT_PORT = 5700;

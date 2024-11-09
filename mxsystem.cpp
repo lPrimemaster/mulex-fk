@@ -1,6 +1,7 @@
 #include "mxsystem.h"
 #include <signal.h>
 #include "network/rpc.h"
+#include "mxevt.h"
 #include <filesystem>
 #include <fstream>
 
@@ -267,26 +268,22 @@ namespace mulex
 
 	bool SysConnectToExperiment(const char* hostname, std::uint16_t port)
 	{
-		_sys_experiment._rpc_client = std::make_unique<RPCClientThread>(hostname, RPC_PORT);
 		_sys_experiment_connected = true;
+		_sys_experiment._rpc_client = std::make_unique<RPCClientThread>(hostname, RPC_PORT);
+		_sys_experiment._evt_client = std::make_unique<EvtClientThread>(hostname, EVT_PORT);
 		return true;
 	}
 
 	void SysDisconnectFromExperiment()
 	{
-		// if(_sys_experiment._exp_socket._handle >= 0)
-		// {
-		// 	SocketClose(_sys_experiment._exp_socket);
-		// }
-		//
-		// if(_sys_experiment._rpc_socket._handle >= 0)
-		// {
-		// 	SocketClose(_sys_experiment._rpc_socket);
-		// }
-		
 		if(_sys_experiment._rpc_client)
 		{
 			_sys_experiment._rpc_client.reset();
+		}
+
+		if(_sys_experiment._evt_client)
+		{
+			_sys_experiment._evt_client.reset();
 		}
 		
 		_sys_experiment_connected = false;

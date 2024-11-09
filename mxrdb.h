@@ -140,6 +140,7 @@ namespace mulex
 		template<typename T>
 		T* asPointer()
 		{
+			// Read to from the rdb
 			readEntry();
 			return _genvalue.asPointer<T>();
 		}
