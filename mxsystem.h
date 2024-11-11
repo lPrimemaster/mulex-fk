@@ -78,6 +78,7 @@ namespace mulex
 	private:
 		std::stack<std::vector<std::uint8_t>> _stack;
 		std::mutex _mutex;
+		std::atomic<bool> _sig_unblock = false;
 		std::condition_variable _notifier;
 	};
 
@@ -86,6 +87,8 @@ namespace mulex
 	public:
 		void push(std::vector<std::uint8_t>&& data, std::uint16_t ref);
 		std::vector<std::uint8_t> pop();
+		const std::vector<std::uint8_t>* peek();
+		void decref();
 		void requestUnblock();
 
 	private:

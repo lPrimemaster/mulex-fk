@@ -26,12 +26,15 @@ int main(void)
 
 	ect.regist("test_evt");
 
-	ect.subscribe("test_evt", [](auto* data, auto len, auto* userdata){});
+	ect.subscribe("test_evt", [](auto* data, auto len, auto* userdata){
+		LogDebug("test_evt callback");
+	});
 	
-	LogDebug("Emitting event");
-	ect.emit("test_evt", reinterpret_cast<const std::uint8_t*>("Hello From Ect"), 15);
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	ect.emit("test_evt", reinterpret_cast<const std::uint8_t*>("Hello From Ect1"), 16);
+	// std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	ect.emit("test_evt", reinterpret_cast<const std::uint8_t*>("Hello From Ect2"), 16);
+	// std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	ect.emit("test_evt", reinterpret_cast<const std::uint8_t*>("Hello From Ect3"), 16);
 
 	SysDisconnectFromExperiment();
 

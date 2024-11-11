@@ -357,8 +357,8 @@ namespace mulex
 	std::vector<std::uint8_t> SysBufferStack::pop()
 	{
 		std::unique_lock<std::mutex> lock(_mutex);
-		_notifier.wait(lock);
-		if(_stack.empty())
+		_notifier.wait(lock, [this](){ return !_stack.empty() || _sig_unblock.load(); }); // Don't wait if the stack if not empty
+		if(_sig_unblock.load())
 		{
 			return std::vector<std::uint8_t>();
 		}
@@ -369,6 +369,7 @@ namespace mulex
 
 	void SysBufferStack::requestUnblock()
 	{
+		_sig_unblock.store(true);
 		_notifier.notify_all();
 	}
 
@@ -391,14 +392,31 @@ namespace mulex
 			return std::vector<std::uint8_t>();
 		}
 		std::vector<std::uint8_t> val = _stack.top();
+
+		decref();
+
+		return val;
+	}
+
+	const std::vector<std::uint8_t>* SysRefBufferStack::peek()
+	{
+		std::unique_lock<std::mutex> lock(_mutex);
+		_notifier.wait(lock);
+		if(_stack.empty())
+		{
+			return nullptr;
+		}
+		return &_stack.top();
+	}
+
+	void SysRefBufferStack::decref()
+	{
 		_refcount--; // This is atomic
 		if(_refcount.load() == 0)
 		{
-			lock.lock();
+			std::lock_guard<std::mutex> lock(_mutex);
 			if(!_stack.empty()) _stack.pop();
-			lock.unlock();
 		}
-		return val;
 	}
 
 	void SysRefBufferStack::requestUnblock()

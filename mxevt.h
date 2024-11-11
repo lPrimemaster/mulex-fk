@@ -72,7 +72,7 @@ namespace mulex
 		bool ready() const;
 
 		void emit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
-		void emit(const std::uint16_t eventid, const std::uint64_t clientid, const std::uint8_t* data, std::uint64_t len);
+		void relay(const std::uint64_t clientid, const std::uint8_t* data, std::uint64_t len);
 		void unsub(const std::uint64_t cid);
 
 	private:
@@ -86,7 +86,8 @@ namespace mulex
 		std::map<Socket, std::unique_ptr<std::thread>> _evt_emit_thread;
 		std::map<Socket, SysByteStream*> _evt_stream;
 		std::map<Socket, std::atomic<bool>> _evt_thread_sig;
-		SysRefBufferStack _evt_emit_stack;
+		std::map<Socket, SysBufferStack> _evt_emit_stack;
+		// SysRefBufferStack _evt_emit_stack;
 		std::unique_ptr<std::thread> _evt_accept_thread;
 		std::atomic<bool> _evt_thread_running = false;
 		std::atomic<bool> _evt_thread_ready = false;

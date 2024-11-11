@@ -94,9 +94,9 @@ namespace mulex
 				_call_return_stack.push(std::move(buffer));
 			}
 
-			LogTrace("[rpcclient] Got RPC Result:");
-			LogTrace("[rpcclient] \tStatus: %d", static_cast<int>(header.status));
-			LogTrace("[rpcclient] \tPayloadsz: %lu", header.payloadsize);
+			// LogTrace("[rpcclient] Got RPC Result:");
+			// LogTrace("[rpcclient] \tStatus: %d", static_cast<int>(header.status));
+			// LogTrace("[rpcclient] \tPayloadsz: %lu", header.payloadsize);
 		}
 
 		recvthread->_handle.join();
@@ -185,11 +185,12 @@ namespace mulex
 				std::memcpy(buffer.data(), fbuffer + RPC_MESSAGE_HEADER_SIZE, header.payloadsize);
 			}
 
-			LogTrace("[rpcserver] Got RPC Header:");
-			LogTrace("[rpcserver] \tClient: %llu", header.client);
-			LogTrace("[rpcserver] \tMethodid: %d", header.procedureid);
-			LogTrace("[rpcserver] \tMsgid: %llu", header.msgid);
-			LogTrace("[rpcserver] \tPayloadsz: %lu", header.payloadsize);
+			LogTrace("[rpcserver] Got RPC Call <%d> from <0x%llx>.", header.procedureid, header.client);
+			// LogTrace("[rpcserver] Got RPC Header:");
+			// LogTrace("[rpcserver] \tClient: %llu", header.client);
+			// LogTrace("[rpcserver] \tMethodid: %d", header.procedureid);
+			// LogTrace("[rpcserver] \tMsgid: %llu", header.msgid);
+			// LogTrace("[rpcserver] \tPayloadsz: %lu", header.payloadsize);
 
 
 			// Set the current global client state

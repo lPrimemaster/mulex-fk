@@ -35,6 +35,7 @@ static std::map<int, std::uint64_t> _evt_client_socket_pair;
 #else
 static std::map<SOCKET, std::uint64_t> _evt_client_socket_pair;
 #endif
+static std::map<std::uint64_t, mulex::Socket> _evt_client_socket_pair_rev;
 
 namespace mulex
 {
@@ -92,9 +93,10 @@ namespace mulex
 			//				  and see how it goes
 			EvtHeader header;
 			std::memcpy(&header, fbuffer.data(), sizeof(EvtHeader));
-			LogTrace("[evtclient] Got Event <%d> from <0x%llx>", header.eventid, header.client);
+			LogTrace("[evtclient] Got Event <%d> from <0x%llx>.", header.eventid, header.client);
 			
-			_evt_callbacks.at(header.eventid)(fbuffer.data(), fbuffer.size(), _evt_userdata.at(header.eventid));
+			_evt_callbacks.at(header.eventid)(fbuffer.data(), fbuffer.size(), nullptr);
+			// _evt_callbacks.at(header.eventid)(fbuffer.data(), fbuffer.size(), _evt_userdata.at(header.eventid));
 		}
 		
 		recvthread->_handle.join();
@@ -117,7 +119,7 @@ namespace mulex
 			//				  and see how it goes
 			EvtHeader header;
 			std::memcpy(&header, data.data(), sizeof(EvtHeader));
-			LogTrace("[evtclient] Emitting Event <%d> from <0x%llx>", header.eventid, header.client);
+			LogTrace("[evtclient] Emitting Event <%d> from <0x%llx> [size=%llu].", header.eventid, header.client, data.size());
 			
 			SocketSendBytes(socket, data.data(), data.size());
 		}
@@ -221,7 +223,7 @@ namespace mulex
 			return;
 		}
 
-		if(experiment.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_EVTSUBSCRIBE, string32(event)))
+		if(!experiment.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_EVTSUBSCRIBE, string32(event)))
 		{
 			LogError("[evtclient] Failed to subscribe to event.");
 			return;
@@ -229,33 +231,33 @@ namespace mulex
 
 		// Register this subscription on the rdb
 		// This is informative only and does not reflect internal state subscription
-		RdbAccess rda;
-		std::string skey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/totalcalls";
-		if(!rda[skey].exists())
-		{
-			rda.create(skey, RdbValueType::UINT64, 0);
-		}
-
-		// TODO: (Cesar): Maybe come up with a syntax for rda[key]++
-		std::uint64_t calls = rda[skey];
-		rda[skey] = calls + 1;
-
-		std::string ckey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/count";
-		if(!rda[ckey].exists())
-		{
-			rda.create(ckey, RdbValueType::UINT32, 0);
-		}
-		std::uint32_t count = rda[ckey];
-		rda[ckey] = count + 1;
-		std::string rkey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/ids";
-		if(!rda[rkey].exists())
-		{
-			rda.create(rkey, RdbValueType::UINT16, nullptr, 100);
-		}
-
-		std::vector<std::uint16_t> ids = rda[rkey];
-		ids[count] = eventid;
-		rda[rkey] = ids;
+		// RdbAccess rda;
+		// std::string skey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/totalcalls";
+		// if(!rda[skey].exists())
+		// {
+		// 	rda.create(skey, RdbValueType::UINT64, 0);
+		// }
+		//
+		// // TODO: (Cesar): Maybe come up with a syntax for rda[key]++
+		// std::uint64_t calls = rda[skey];
+		// rda[skey] = calls + 1;
+		//
+		// std::string ckey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/count";
+		// if(!rda[ckey].exists())
+		// {
+		// 	rda.create(ckey, RdbValueType::UINT32, 0);
+		// }
+		// std::uint32_t count = rda[ckey];
+		// rda[ckey] = count + 1;
+		// std::string rkey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/ids";
+		// if(!rda[rkey].exists())
+		// {
+		// 	rda.create(rkey, RdbValueType::UINT16, nullptr, 100);
+		// }
+		//
+		// std::vector<std::uint16_t> ids = rda[rkey];
+		// ids[count] = eventid;
+		// rda[rkey] = ids;
 
 		auto eid_callbacks = _evt_callbacks.find(eventid);
 		if(eid_callbacks != _evt_callbacks.end())
@@ -271,6 +273,7 @@ namespace mulex
 	{
 		LogDebug("[evtserver] Registering client <0x%llx>.", cid);
 		_evt_client_socket_pair.emplace(socket._handle, cid);
+		_evt_client_socket_pair_rev.emplace(cid, socket);
 	}
 
 	EvtServerThread::EvtServerThread()
@@ -291,7 +294,7 @@ namespace mulex
 	{
 		_evt_thread_running.store(false);
 		_evt_accept_thread->join();
-		_evt_emit_stack.requestUnblock();
+		std::for_each(_evt_emit_stack.begin(), _evt_emit_stack.end(), [](auto& t){ t.second.requestUnblock(); });
 		std::for_each(_evt_stream.begin(), _evt_stream.end(), [](auto& t){ t.second->requestUnblock(); });
 		std::for_each(_evt_emit_thread.begin(), _evt_emit_thread.end(), [](auto& t){ t.second->join(); });
 		std::for_each(_evt_listen_thread.begin(), _evt_listen_thread.end(), [](auto& t){ t.second->join(); });
@@ -305,10 +308,43 @@ namespace mulex
 
 	void EvtServerThread::emit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
 	{
+		std::uint16_t eid = EvtGetId(event);
+		if(eid == 0)
+		{
+			LogError("[evtserver] Failed to find event. Emit aborted.");
+			return;
+		}
+
+		// Make header
+		EvtHeader header;
+		header.client = SysGetClientId(); // Should be 0x00
+		header.eventid = eid;
+		header.msgid = GetNextEventMessageId();
+		header.payloadsize = static_cast<std::uint32_t>(len);
+
+		std::vector<std::uint8_t> vdata;
+		vdata.resize(sizeof(EvtHeader) + len);
+
+		std::memcpy(vdata.data(), &header, sizeof(EvtHeader));
+		if(len > 0)
+		{
+			std::memcpy(vdata.data() + sizeof(EvtHeader), data, len);
+		}
+
+		auto cidit = _evt_current_subscriptions.find(eid);
+		if(cidit != _evt_current_subscriptions.end())
+		{
+			for(const auto& cid : cidit->second)
+			{
+				_evt_emit_stack.at(_evt_client_socket_pair_rev.at(cid)).push(std::move(vdata));
+			}
+		}
 	}
 
-	void EvtServerThread::emit(const std::uint16_t eventid, const std::uint64_t clientid, const std::uint8_t* data, std::uint64_t len)
+	void EvtServerThread::relay(const std::uint64_t clientid, const std::uint8_t* data, std::uint64_t len)
 	{
+		std::vector<std::uint8_t> vdata(data, data + len);
+		_evt_emit_stack.at(_evt_client_socket_pair_rev.at(clientid)).push(std::move(vdata));
 	}
 
 	void EvtServerThread::serverConnAcceptThread()
@@ -364,6 +400,7 @@ namespace mulex
 			std::unique_lock<std::mutex> lock(_connections_mutex);
 			_evt_stream.emplace(socket, &recvthread->_stream);
 			_evt_thread_sig.emplace(socket, true);
+			_evt_emit_stack.emplace(std::piecewise_construct, std::forward_as_tuple(socket), std::forward_as_tuple());
 		}
 		_evt_notifier.notify_one();
 
@@ -385,14 +422,14 @@ namespace mulex
 			//				  and see how it goes
 			EvtHeader header;
 			std::memcpy(&header, fbuffer.data(), sizeof(EvtHeader));
-			LogTrace("[evtserver] Got Event <%d> from <0x%llx>", header.eventid, header.client);
+			LogTrace("[evtserver] Got Event <%d> from <0x%llx>.", header.eventid, header.client);
 
 			// Relay event to clients that are subscribed
 			{
 				std::unique_lock<std::mutex> lock(_evt_sub_lock);
 				for(const std::uint64_t cid : _evt_current_subscriptions.at(header.eventid))
 				{
-					emit(header.eventid, cid, fbuffer.data(), fbuffer.size());
+					relay(cid, fbuffer.data(), read);
 					LogTrace("[evtserver] Relaying event <%d> from <0x%llx> to <0x%llx>.", header.eventid, header.client, cid);
 				}
 			}
@@ -422,7 +459,7 @@ namespace mulex
 		while(_evt_thread_running.load() && _evt_thread_sig.at(socket).load())
 		{
 			// Read next event to emit from stack
-			std::vector<std::uint8_t> data = _evt_emit_stack.pop();
+			std::vector<std::uint8_t> data = _evt_emit_stack.at(socket).pop();
 
 			if(data.size() == 0 && (!_evt_thread_running.load() || !_evt_thread_running.load()))
 			{
@@ -434,7 +471,7 @@ namespace mulex
 			//				  and see how it goes
 			EvtHeader header;
 			std::memcpy(&header, data.data(), sizeof(EvtHeader));
-			LogTrace("[evtserver] Emitting Event <%d> from <0x%llx>", header.eventid, header.client);
+			LogTrace("[evtserver] Emitting Event <%d> from <0x%llx>.", header.eventid, header.client);
 			
 			SocketSendBytes(socket, data.data(), data.size());
 		}

@@ -255,7 +255,6 @@ namespace mulex
 			rgt._data.resize(size);
 			std::memcpy(rgt._data.data(), payload.data() + sizeof(std::uint64_t), size);
 
-			mulex::LogTrace("Got data: %x", &rgt);
 			return rgt;
 		}
 		else
