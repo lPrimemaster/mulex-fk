@@ -95,8 +95,9 @@ namespace mulex
 			std::memcpy(&header, fbuffer.data(), sizeof(EvtHeader));
 			LogTrace("[evtclient] Got Event <%d> from <0x%llx>.", header.eventid, header.client);
 			
-			_evt_callbacks.at(header.eventid)(fbuffer.data(), fbuffer.size(), nullptr);
-			// _evt_callbacks.at(header.eventid)(fbuffer.data(), fbuffer.size(), _evt_userdata.at(header.eventid));
+			// TODO: (Cesar): Add some userdata instead of passing nullptr
+			// 				  _evt_userdata;
+			_evt_callbacks.at(header.eventid)(fbuffer.data() + sizeof(EvtHeader), header.payloadsize, nullptr);
 		}
 		
 		recvthread->_handle.join();
