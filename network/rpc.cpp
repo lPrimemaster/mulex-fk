@@ -186,12 +186,6 @@ namespace mulex
 			}
 
 			LogTrace("[rpcserver] Got RPC Call <%d> from <0x%llx>.", header.procedureid, header.client);
-			// LogTrace("[rpcserver] Got RPC Header:");
-			// LogTrace("[rpcserver] \tClient: %llu", header.client);
-			// LogTrace("[rpcserver] \tMethodid: %d", header.procedureid);
-			// LogTrace("[rpcserver] \tMsgid: %llu", header.msgid);
-			// LogTrace("[rpcserver] \tPayloadsz: %lu", header.payloadsize);
-
 
 			// Set the current global client state
 			// NOTE: (Cesar) : This wont work if we have multiple threads serving RPC requests

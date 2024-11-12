@@ -1,6 +1,10 @@
 #include "../mxhttp.h"
 #include "../mxsystem.h"
 #include "../mxlogger.h"
+#include "rpc.h"
+
+#include <rapidjson/document.h>
+
 #include <App.h>
 #include <fstream>
 #include <filesystem>
@@ -78,11 +82,52 @@ namespace mulex
 		return true;
 	}
 
+	struct WsRpcBridge
+	{
+		std::unique_ptr<RPCClientThread> _local_rct;
+	};
+
 	void HttpStartServer(std::uint16_t port)
 	{
 		_http_thread = new std::thread([port](){
 			uWS::App().get("/*", [](auto* res, auto* req) {
 				HttpServeFile(res, req);
+			}).ws<WsRpcBridge>("/*", {
+				.compression = uWS::CompressOptions(uWS::DEDICATED_COMPRESSOR_4KB | uWS::DEDICATED_COMPRESSOR),
+				.maxPayloadLength = 100 * 1024 * 1024,
+				.idleTimeout = 16,
+				.maxBackpressure = 100 * 1024 * 1024,
+				.closeOnBackpressureLimit = false,
+				.resetIdleTimeoutOnSend = false,
+				.sendPingsAutomatically = true,
+				.upgrade = nullptr,
+				
+				.open = [](auto* ws) {
+					WsRpcBridge* bridge = ws->getUserData();
+
+					// Initialize a local rpc client to push ws requests
+					// FIXME: (Cesar) This client should not have an id (?)
+					// TODO: (Cesar) We can hack into the server rpc thread stack instead of sending a socket request
+					// 				 This will however be harder to do for events I think
+					// 				 I would say it is not worth the efort / problems if the local network call
+					// 				 does not pose any performance problems in the future
+					bridge->_local_rct = std::make_unique<RPCClientThread>("localhost");
+				},
+				.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
+
+					// TODO: (Cesar)
+
+					WsRpcBridge* bridge = ws->getUserData();
+					bridge->_local_rct->call(0); // TODO: ...
+
+					// ws->send();
+				},
+				.close = [](auto* ws, int code, std::string_view message) {
+					WsRpcBridge* bridge = ws->getUserData();
+
+					// Delete the local rpc client bridge for this connection
+					bridge->_local_rct.reset();
+				}
 			}).listen(port, [port](auto* token) {
 				if(token)
 				{

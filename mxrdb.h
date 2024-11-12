@@ -123,6 +123,10 @@ namespace mulex
 	void PdbInit();
 	void PdbClose();
 
+	// TODO: (Cesar)
+	template<typename Table>
+	void PdbWriteTable(const Table& data);
+
 	class RdbProxyValue
 	{
 	public:

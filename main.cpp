@@ -1,4 +1,5 @@
 #include "network/rpc.h"
+#include "mxevt.h"
 #include "mxrdb.h"
 #include "mxhttp.h"
 
@@ -15,6 +16,7 @@ int main(int argc, char* argv[])
 	mulex::RdbInit(1024 * 1024);
 	mulex::PdbInit();
 	mulex::RPCServerThread rpcThread;
+	mulex::EvtServerThread evtThread;
 	mulex::SysRegisterSigintAction([](int s){
 		stop = s;
 	});

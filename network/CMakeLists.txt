@@ -32,6 +32,14 @@ ExternalProject_Add(uWebSockets
 add_library(libuSockets STATIC IMPORTED GLOBAL)
 set_property(TARGET libuSockets PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/uSockets.a)
 
+FetchContent_Declare(rapidjson
+	GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
+)
+
+# Disable RapidJSON testing (which collides with some of our warnings as errors)
+set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(rapidjson)
+
 add_library(mxrpc
 	rpc.cpp
 	socket.cpp
@@ -55,9 +63,10 @@ add_library(mxhttp
 find_package(ZLIB REQUIRED)
 
 add_dependencies(mxhttp uWebSockets)
-target_link_libraries(mxhttp uv libuSockets ZLIB::ZLIB)
+target_link_libraries(mxhttp uv libuSockets ZLIB::ZLIB RapidJSON)
 
 target_include_directories(mxhttp PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/uWebSockets/src
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/uWebSockets/uSockets/src
+	${rapidjson_SOURCE_DIR}/include
 )
