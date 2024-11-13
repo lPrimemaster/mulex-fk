@@ -254,6 +254,27 @@ class RPCGenerator:
             self._write_newline()
         return id_table
 
+    def _generate_name_lookup(self, idt: List[Tuple[RPCMethodDetails, int, int]]) -> None:
+            # Generate a std::map to look for the key (might be slower for less entries)
+            self._write_newline()
+            self._write_indented(0, 'namespace\n')
+            self._write_indented(0, '{\n')
+            self._write_indented(1, 'std::uint16_t RPCGetMethodId(const std::string& name)\n')
+            self._write_indented(1, '{\n')
+            self._write_indented(2, 'static const std::unordered_map<std::string, std::uint16_t> _map = {\n')
+            for mname, _, id in idt:
+                self._write_indented(3, f'{{\"{mname.fullname}\", {id}}},\n')
+            self._write_indented(2, '};\n')
+            self._write_indented(2, 'auto it = _map.find(name);\n')
+            self._write_indented(2, 'if(it != _map.end())\n')
+            self._write_indented(2, '{\n')
+            self._write_indented(3, 'return it->second;\n')
+            self._write_indented(2, '}\n')
+            self._write_indented(2, 'return static_cast<std::uint16_t>(-1);\n')
+            self._write_indented(1, '}\n')
+            self._write_indented(0, '}\n')
+            self._write_newline()
+
     def _generate_case(self, idt: Tuple[RPCMethodDetails, int, int]) -> None:
         method, mid, _ = idt
         self._write_indented(3, f'case {mid}:\n')
@@ -410,6 +431,7 @@ class RPCGenerator:
     def generate_rpc_header(self, filename: str):
         self._generate_includes()
         ids = self._generate_ids()
+        self._generate_name_lookup(ids)
         self._generate_call_lookup(ids)
         self._write_file(filename)
 

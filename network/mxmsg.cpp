@@ -8,6 +8,22 @@
 
 #include <rpcspec.inl>
 
+std::uint16_t RPCIdLookup(const std::string& name, bool* error)
+{
+	static const std::map<std::string, std::uint16_t> _map = {
+		{"RPC_CALL_MULEX_MSGWRITE", 1},
+		{"RPC_CALL_MULEX_MSGWRITE", 1}
+	};
+	auto mit = _map.find(name);
+	if(mit == _map.end())
+	{
+		if(error) *error = true;
+		return 0;
+	}
+	if(error) *error = false;
+	return mit->second;
+}
+
 namespace mulex
 {
 	MsgEmitter::MsgEmitter(const std::string& name) : _attachlog(true)

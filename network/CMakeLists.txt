@@ -37,6 +37,8 @@ FetchContent_Declare(rapidjson
 )
 
 # Disable RapidJSON testing (which collides with some of our warnings as errors)
+set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "")
+set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "")
 set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "")
 FetchContent_MakeAvailable(rapidjson)
 
@@ -66,6 +68,7 @@ add_dependencies(mxhttp uWebSockets)
 target_link_libraries(mxhttp uv libuSockets ZLIB::ZLIB RapidJSON)
 
 target_include_directories(mxhttp PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/uWebSockets/src
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/uWebSockets/uSockets/src
 	${rapidjson_SOURCE_DIR}/include

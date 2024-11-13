@@ -2,6 +2,7 @@
 #include "../mxsystem.h"
 #include "../mxlogger.h"
 #include "rpc.h"
+#include <rpcspec.inl>
 
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
@@ -112,6 +113,68 @@ namespace mulex
 		return d;
 	}
 
+	template<typename T>
+	static T HttpTryGetEntry(const rapidjson::Document& d, const std::string& key, bool* error)
+	{
+		if(error) *error = false;
+		if(d.HasMember(key.c_str()))
+		{
+			if constexpr(std::is_same_v<T, std::uint16_t>)
+			{
+				if(d[key.c_str()].GetType() != rapidjson::Type::kNumberType)
+				{
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.");
+					if(error) *error = true;
+					return T();
+				}
+				return static_cast<std::uint16_t>(d[key.c_str()].GetInt());
+			}
+			else if constexpr(std::is_same_v<T, std::uint64_t>)
+			{
+				if(d[key.c_str()].GetType() != rapidjson::Type::kNumberType)
+				{
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.");
+					if(error) *error = true;
+					return T();
+				}
+				return d[key.c_str()].GetUint64();
+			}
+			else if constexpr(std::is_same_v<T, bool>)
+			{
+				if(d[key.c_str()].GetType() != rapidjson::Type::kTrueType)
+				{
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Boolean.");
+					if(error) *error = true;
+					return T();
+				}
+				return d[key.c_str()].GetBool();
+			}
+			else if constexpr(std::is_same_v<T, std::string>)
+			{
+				if(d[key.c_str()].GetType() != rapidjson::Type::kStringType)
+				{
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected String.");
+					if(error) *error = true;
+					return T();
+				}
+				return std::string(d[key.c_str()].GetString());
+			}
+			else
+			{
+				LogError("[mxhttp] HttpTryGetEntry: Could not TryGet type. This is an implementation issue.");
+				if(error) *error = true;
+				// Assume T() is valid
+				return T();
+			}
+		}
+		else
+		{
+			LogError("[mxhttp] HttpTryGetEntry: Could not find key <%s>.", key.c_str());
+			if(error) *error = true;
+			return T();
+		}
+	}
+
 	static std::tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool> HttpParseWSMessage(std::string_view message, bool* error)
 	{
 		rapidjson::Document d;
@@ -135,11 +198,45 @@ namespace mulex
 		//				 The websocket already compresses the data
 		
 		// NOTE: (Cesar) To make it more space efficient we could send the data as uint64 instead
-		std::uint16_t procedureid = static_cast<std::uint16_t>(d["method"].GetInt());
-		std::vector<uint8_t> args = HttpByteVectorFromJsonArray(d["args"].GetArray());
-		std::uint64_t messageidws = d["messageid"].GetUint64();
-		bool 		 expectresult = d["return"].GetBool();
-		LogTrace("[mxhttp] HttpParseWSMessage: Parsed JSON message.");
+		std::string methodname = HttpTryGetEntry<std::string>(d, "method", error);
+		if(error && *error)
+		{
+			return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
+		}
+		std::uint16_t procedureid = RPCGetMethodId(methodname);
+		if(procedureid == static_cast<std::uint16_t>(-1))
+		{
+			LogError("[mxhttp] HttpParseWSMessage: Received unknown rpc method name <%s>.", methodname.c_str());
+			if(error) *error = true;
+			return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
+		}
+
+		// TryGet is not usable here
+		std::vector<uint8_t> args;
+		if(d.HasMember("args"))
+		{
+			if(d["args"].GetType() != rapidjson::Type::kArrayType)
+			{
+				LogError("[mxhttp] HttpParseWSMessage: 'args' must be an array if any args exist.", methodname.c_str());
+				if(error) *error = true;
+				return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
+			}
+			args = HttpByteVectorFromJsonArray(d["args"].GetArray());
+		}
+
+		std::uint64_t messageidws = HttpTryGetEntry<std::uint64_t>(d, "messageid", error);
+		if(error && *error)
+		{
+			return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
+		}
+
+		bool expectresult = HttpTryGetEntry<bool>(d, "return", error);
+		if(error && *error)
+		{
+			return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
+		}
+
+		LogTrace("[mxhttp] HttpParseWSMessage() OK.");
 		return std::make_tuple(procedureid, args, messageidws, expectresult);
 	}
 
@@ -160,7 +257,7 @@ namespace mulex
 
 		d.Accept(writer);
 
-		LogTrace("sent JSON string : %s", buffer.GetString());
+		LogTrace("[mxhttp] HttpMakeWSMessage: Built JSON response: <%s>.", buffer.GetString());
 
 		return buffer.GetString();
 	}
@@ -207,7 +304,12 @@ namespace mulex
 
 					// Parse the received data
 					bool parse_error;
-					auto [procedureid, args, messageidws, exresult] = HttpParseWSMessage(message, &parse_error);
+					const auto [procedureid, args, messageidws, exresult] = HttpParseWSMessage(message, &parse_error);
+					if(parse_error)
+					{
+						// Parse error, ignore this message
+						return;
+					}
 
 					if(exresult)
 					{
