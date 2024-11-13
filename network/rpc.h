@@ -175,6 +175,8 @@ namespace mulex
 		template<typename... Args>
 		inline void call(std::uint16_t procedureid, Args&&... args);
 
+		inline void callRaw(std::uint16_t procedureid, const std::vector<std::uint8_t>& data, std::vector<std::uint8_t>* retdata);
+
 	private:
 		void clientThread(const Socket& socket);
 
@@ -292,6 +294,39 @@ namespace mulex
 				mulex::LogError("CallRemoteFunction failed to send payload.");
 				return;
 			}
+		}
+	}
+
+	inline void RPCClientThread::callRaw(std::uint16_t procedureid, const std::vector<std::uint8_t>& data, std::vector<std::uint8_t>* retdata)
+	{
+		const mulex::Socket& conn = _rpc_socket;
+		mulex::RPCMessageHeader header;
+		header.client = SysGetClientId();
+		header.procedureid = procedureid;
+		header.msgid = GetNextMessageId();
+		header.payloadsize = static_cast<std::uint32_t>(data.size());
+
+		mulex::SocketResult result;
+		result = mulex::SocketSendBytes(conn, (std::uint8_t*)&header, sizeof(header));
+		if(result == mulex::SocketResult::ERROR)
+		{
+			mulex::LogError("CallRemoteFunction failed to send header data.");
+			return;
+		}
+
+		if(header.payloadsize > 0)
+		{
+			result = mulex::SocketSendBytes(conn, const_cast<std::uint8_t*>(data.data()), header.payloadsize);
+			if(result == mulex::SocketResult::ERROR)
+			{
+				mulex::LogError("CallRemoteFunction failed to send payload.");
+				return;
+			}
+		}
+
+		if(retdata)
+		{
+			*retdata = _call_return_stack.pop();
 		}
 	}
 } // namespace mulex
