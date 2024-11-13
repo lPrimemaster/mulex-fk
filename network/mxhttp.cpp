@@ -4,6 +4,8 @@
 #include "rpc.h"
 
 #include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include <App.h>
 #include <fstream>
@@ -82,6 +84,87 @@ namespace mulex
 		return true;
 	}
 
+	static std::vector<std::uint8_t> HttpByteVectorFromJsonArray(const rapidjson::Document::Array& arr)
+	{
+		std::vector<std::uint8_t> output;
+		output.reserve(arr.Size());
+		for(auto it = arr.Begin(); it != arr.End(); it++)
+		{
+			if(it->IsNull()) break;
+			LogTrace("%d", it->GetUint());
+			output.push_back(static_cast<std::uint8_t>(it->GetUint()));
+		}
+		return output;
+	}
+
+	static rapidjson::Document HttpJsonFromByteVector(const std::vector<std::uint8_t>& arr)
+	{
+		rapidjson::Document d;
+		d.SetObject();
+		rapidjson::Value output(rapidjson::kArrayType);
+
+		rapidjson::Document::AllocatorType& allocator = d.GetAllocator();
+		for(const auto& byte : arr)
+		{
+			output.PushBack(rapidjson::Value().SetInt(byte), allocator);
+		}
+		d.AddMember("return", output, allocator);
+		return d;
+	}
+
+	static std::tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool> HttpParseWSMessage(std::string_view message, bool* error)
+	{
+		rapidjson::Document d;
+		// HACK: (Cesar) This is not ideal
+		//				 However, We need to recheck how uWS handles the string_view output to, *maybe*, avoid copying
+		d.Parse(std::string(message).c_str());
+
+		if(error) *error = false;
+
+		if(d.HasParseError())
+		{
+			LogError("[mxhttp] HttpParseWSMessage: Failed to parse RPC call.");
+			if(error) *error = true;
+			return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
+		}
+
+		// If we want to use native types we should get someway of getting the RPC server side types
+		// Multiple ways come to mind. For now we generate the same data on the frontend args array
+	
+		// NOTE: (Cesar) Use array of uint8 from frontend and cast it to std::vector<std::uint8_t>
+		//				 The websocket already compresses the data
+		
+		// NOTE: (Cesar) To make it more space efficient we could send the data as uint64 instead
+		std::uint16_t procedureid = static_cast<std::uint16_t>(d["method"].GetInt());
+		std::vector<uint8_t> args = HttpByteVectorFromJsonArray(d["args"].GetArray());
+		std::uint64_t messageidws = d["messageid"].GetUint64();
+		bool 		 expectresult = d["return"].GetBool();
+		LogTrace("[mxhttp] HttpParseWSMessage: Parsed JSON message.");
+		return std::make_tuple(procedureid, args, messageidws, expectresult);
+	}
+
+	static std::string HttpMakeWSMessage(const std::vector<std::uint8_t>& ret, const std::string& status, const std::string& type, std::uint64_t messageid)
+	{
+		rapidjson::Document d;
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+
+		if(!ret.empty())
+		{
+			d = HttpJsonFromByteVector(ret);
+		}
+
+		d.AddMember("status", rapidjson::StringRef(status.c_str(), status.size()), d.GetAllocator());
+		d.AddMember("type", rapidjson::StringRef(type.c_str(), type.size()), d.GetAllocator());
+		d.AddMember("messageid", messageid, d.GetAllocator());
+
+		d.Accept(writer);
+
+		LogTrace("sent JSON string : %s", buffer.GetString());
+
+		return buffer.GetString();
+	}
+
 	struct WsRpcBridge
 	{
 		std::unique_ptr<RPCClientThread> _local_rct;
@@ -107,26 +190,47 @@ namespace mulex
 
 					// Initialize a local rpc client to push ws requests
 					// FIXME: (Cesar) This client should not have an id (?)
-					// TODO: (Cesar) We can hack into the server rpc thread stack instead of sending a socket request
+					// NOTE: (Cesar) We can hack into the server rpc thread stack instead of sending a socket request
 					// 				 This will however be harder to do for events I think
 					// 				 I would say it is not worth the efort / problems if the local network call
 					// 				 does not pose any performance problems in the future
 					bridge->_local_rct = std::make_unique<RPCClientThread>("localhost");
+					LogDebug("[mxhttp] New WS connection.");
 				},
 				.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
 
-					// TODO: (Cesar)
+					// TODO: (Cesar): Support events
 
 					WsRpcBridge* bridge = ws->getUserData();
-					bridge->_local_rct->call(0); // TODO: ...
 
-					// ws->send();
+					LogTrace("[mxhttp] Received WS message: %s", std::string(message).c_str());
+
+					// Parse the received data
+					bool parse_error;
+					auto [procedureid, args, messageidws, exresult] = HttpParseWSMessage(message, &parse_error);
+
+					if(exresult)
+					{
+						std::vector<std::uint8_t> result;
+						// NOTE: (Cesar) If this gets expensive we move the call to another thread and defer send to ws
+						// 				 Backpressure should handle this automatically via the uWS buffer
+						bridge->_local_rct->callRaw(procedureid, args, &result);
+						const std::string retmessage = HttpMakeWSMessage(result, "OK", "rpc", messageidws);
+						ws->send(retmessage);
+					}
+					else
+					{
+						bridge->_local_rct->callRaw(procedureid, args, nullptr);
+						const std::string retmessage = HttpMakeWSMessage(std::vector<std::uint8_t>(), "OK", "rpc", messageidws);
+						ws->send(retmessage);
+					}
 				},
 				.close = [](auto* ws, int code, std::string_view message) {
 					WsRpcBridge* bridge = ws->getUserData();
 
 					// Delete the local rpc client bridge for this connection
 					bridge->_local_rct.reset();
+					LogDebug("[mxhttp] Closing WS connection.");
 				}
 			}).listen(port, [port](auto* token) {
 				if(token)
