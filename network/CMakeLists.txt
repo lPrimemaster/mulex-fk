@@ -32,6 +32,14 @@ ExternalProject_Add(uWebSockets
 add_library(libuSockets STATIC IMPORTED GLOBAL)
 set_property(TARGET libuSockets PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/uSockets.a)
 
+FetchContent_Declare(aklomp_base64
+	GIT_REPOSITORY https://github.com/aklomp/base64.git
+)
+
+# Disable base64 unneeded settings
+set(BASE64_BUILD_CLI OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(aklomp_base64)
+
 FetchContent_Declare(rapidjson
 	GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
 )
@@ -65,11 +73,12 @@ add_library(mxhttp
 find_package(ZLIB REQUIRED)
 
 add_dependencies(mxhttp uWebSockets)
-target_link_libraries(mxhttp uv libuSockets ZLIB::ZLIB RapidJSON)
+target_link_libraries(mxhttp uv libuSockets ZLIB::ZLIB RapidJSON base64)
 
 target_include_directories(mxhttp PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/uWebSockets/src
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/uWebSockets/uSockets/src
 	${rapidjson_SOURCE_DIR}/include
+	${aklomp_base64_SOURCE_DIR}/include
 )

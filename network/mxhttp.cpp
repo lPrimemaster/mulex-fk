@@ -8,6 +8,8 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include <libbase64.h>
+
 #include <App.h>
 #include <fstream>
 #include <filesystem>
@@ -85,16 +87,20 @@ namespace mulex
 		return true;
 	}
 
-	static std::vector<std::uint8_t> HttpByteVectorFromJsonArray(const rapidjson::Document::Array& arr)
+	static std::vector<std::uint8_t> HttpByteVectorFromJsonB64(const char* args, std::uint64_t len)
 	{
 		std::vector<std::uint8_t> output;
-		output.reserve(arr.Size());
-		for(auto it = arr.Begin(); it != arr.End(); it++)
+		output.resize(len * 5); // 5 times the encoded string
+		std::uint64_t wlen;
+		
+		if(base64_decode(args, len, reinterpret_cast<char*>(&output.front()), &wlen, 0) < 1)
 		{
-			if(it->IsNull()) break;
-			LogTrace("%d", it->GetUint());
-			output.push_back(static_cast<std::uint8_t>(it->GetUint()));
+			LogError("[mxhttp] HttpByteVectorFromJsonB64: Failed to decode input.");
+			return std::vector<std::uint8_t>();
 		}
+
+		// Dial the size back down
+		output.resize(wlen);
 		return output;
 	}
 
@@ -109,7 +115,7 @@ namespace mulex
 		{
 			output.PushBack(rapidjson::Value().SetInt(byte), allocator);
 		}
-		d.AddMember("return", output, allocator);
+		d.AddMember("response", output, allocator);
 		return d;
 	}
 
@@ -163,7 +169,7 @@ namespace mulex
 			{
 				LogError("[mxhttp] HttpTryGetEntry: Could not TryGet type. This is an implementation issue.");
 				if(error) *error = true;
-				// Assume T() is valid
+				// HACK: (Cesar) Assume T() is valid
 				return T();
 			}
 		}
@@ -215,13 +221,19 @@ namespace mulex
 		std::vector<uint8_t> args;
 		if(d.HasMember("args"))
 		{
-			if(d["args"].GetType() != rapidjson::Type::kArrayType)
+			if(d["args"].GetType() != rapidjson::Type::kStringType)
 			{
-				LogError("[mxhttp] HttpParseWSMessage: 'args' must be an array if any args exist.", methodname.c_str());
+				LogError("[mxhttp] HttpParseWSMessage: 'args' must be a base64 encoded string if any args exist.", methodname.c_str());
 				if(error) *error = true;
 				return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
 			}
-			args = HttpByteVectorFromJsonArray(d["args"].GetArray());
+			args = HttpByteVectorFromJsonB64(d["args"].GetString(), d["args"].GetStringLength());
+			if(args.empty())
+			{
+				LogError("[mxhttp] HttpParseWSMessage: 'args' is empty. If the function call contains no arguments, omit this field.");
+				if(error) *error = true;
+				return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
+			}
 		}
 
 		std::uint64_t messageidws = HttpTryGetEntry<std::uint64_t>(d, "messageid", error);
@@ -230,7 +242,7 @@ namespace mulex
 			return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
 		}
 
-		bool expectresult = HttpTryGetEntry<bool>(d, "return", error);
+		bool expectresult = HttpTryGetEntry<bool>(d, "response", error);
 		if(error && *error)
 		{
 			return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
@@ -257,7 +269,7 @@ namespace mulex
 
 		d.Accept(writer);
 
-		LogTrace("[mxhttp] HttpMakeWSMessage: Built JSON response: <%s>.", buffer.GetString());
+		LogTrace("[mxhttp] HttpMakeWSMessage() OK.");
 
 		return buffer.GetString();
 	}
@@ -300,7 +312,7 @@ namespace mulex
 
 					WsRpcBridge* bridge = ws->getUserData();
 
-					LogTrace("[mxhttp] Received WS message: %s", std::string(message).c_str());
+					LogTrace("[mxhttp] Received WS message <%s>.", std::string(ws->getRemoteAddressAsText()).c_str());
 
 					// Parse the received data
 					bool parse_error;

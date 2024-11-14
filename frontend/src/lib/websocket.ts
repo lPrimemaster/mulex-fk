@@ -1,3 +1,5 @@
+import { MxGenericType } from './convert';
+
 export class MxWebsocket {
 	private socket: WebSocket;
 	private messageid: number;
@@ -31,12 +33,19 @@ export class MxWebsocket {
 		};
 	}
 
-	public async rpc_call(method: string, args: Array<string | number>): Promise<object> {
-		const data: string = this.make_rpc_message(method, args);
-		return new Promise<object>((resolve) => {
+	public async rpc_call(method: string, args: Array<MxGenericType> = [], response: boolean = true): Promise<Uint8Array> {
+		const data: string = this.make_rpc_message(method, args, true);
+		return new Promise<Uint8Array>((resolve) => {
 			// Send the data via websocket
 			this.socket.send(data);
-			this.deferred_p.set(this.messageid++, resolve);
+			if(response) {
+				// Defer the response
+				this.deferred_p.set(this.messageid++, resolve);
+			}
+			else {
+				// Resolve now with no response
+				resolve(new Uint8Array([]));
+			}
 		});
 	}
 
@@ -47,11 +56,19 @@ export class MxWebsocket {
 		}
 	}
 
-	private make_rpc_message(method: string, args: Array<string | number>) {
-		return JSON.stringify({'method': method, 'args': args, 'messageid': this.messageid, 'return': true});
+	private make_rpc_message(method: string, args: Array<MxGenericType>, response: boolean) {
+		const tdec = new TextDecoder();
+		// Minimize network impact with b64 encoding for the arguments
+		const rawData = btoa(tdec.decode(MxGenericType.concatData(args)));
+		if(args.length > 0) {
+			return JSON.stringify({'method': method, 'args': rawData, 'messageid': this.messageid, 'response': response});
+		}
+		else {
+			return JSON.stringify({'method': method, 'messageid': this.messageid, 'response': response});
+		}
 	}
 
-	private make_rpc_response(data: any) : any {
-		return data.return;
+	private make_rpc_response(data: any) : Uint8Array {
+		return new Uint8Array(data.response);
 	}
 };
