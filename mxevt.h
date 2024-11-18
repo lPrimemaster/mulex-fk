@@ -36,9 +36,8 @@ namespace mulex
 
 	class EvtClientThread
 	{
-	private:
-		using EvtCallbackFunc = std::function<void(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata)>;
 	public:
+		using EvtCallbackFunc = std::function<void(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata)>;
 		EvtClientThread(const std::string& hostname, std::uint16_t evtport = EVT_PORT);
 		~EvtClientThread();
 
@@ -102,4 +101,5 @@ namespace mulex
 	void EvtUnsubscribe(std::uint64_t clientid, std::uint16_t eventid);
 	void EvtServerRegisterCallback(mulex::string32 name, std::function<void(const Socket&, std::uint64_t, std::uint16_t, const std::uint8_t*, std::uint64_t)> callback);
 	void EvtTryRunServerCallback(std::uint64_t clientid, std::uint16_t eventid, const std::uint8_t* data, std::uint64_t len, const Socket& socket);
+	void EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
 } // namespace mulex

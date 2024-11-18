@@ -16,6 +16,15 @@
 
 static us_listen_socket_t* _http_listen_socket = nullptr;
 static std::thread* _http_thread;
+static uWS::Loop* _ws_loop_thread;
+
+namespace mulex
+{
+	struct WsRpcBridge;
+} // namespace mulex
+
+static std::mutex _mutex;
+static std::set<uWS::WebSocket<false, true, mulex::WsRpcBridge>*> _active_ws_connections;
 
 namespace mulex
 {
@@ -277,11 +286,13 @@ namespace mulex
 	struct WsRpcBridge
 	{
 		std::unique_ptr<RPCClientThread> _local_rct;
+		std::unique_ptr<EvtClientThread> _local_ect;
 	};
 
 	void HttpStartServer(std::uint16_t port)
 	{
 		_http_thread = new std::thread([port](){
+			_ws_loop_thread = uWS::Loop::get(); // Only read is ok
 			uWS::App().get("/*", [](auto* res, auto* req) {
 				HttpServeFile(res, req);
 			}).ws<WsRpcBridge>("/*", {
@@ -295,6 +306,11 @@ namespace mulex
 				.upgrade = nullptr,
 				
 				.open = [](auto* ws) {
+					{
+						std::lock_guard<std::mutex> lock(_mutex);
+						_active_ws_connections.insert(ws);
+					}
+
 					WsRpcBridge* bridge = ws->getUserData();
 
 					// Initialize a local rpc client to push ws requests
@@ -304,6 +320,7 @@ namespace mulex
 					// 				 I would say it is not worth the efort / problems if the local network call
 					// 				 does not pose any performance problems in the future
 					bridge->_local_rct = std::make_unique<RPCClientThread>("localhost");
+					bridge->_local_ect = std::make_unique<EvtClientThread>("localhost");
 					LogDebug("[mxhttp] New WS connection.");
 				},
 				.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
@@ -344,6 +361,7 @@ namespace mulex
 
 					// Delete the local rpc client bridge for this connection
 					bridge->_local_rct.reset();
+					bridge->_local_ect.reset();
 					LogDebug("[mxhttp] Closing WS connection.");
 				}
 			}).listen(port, [port](auto* token) {
@@ -366,6 +384,16 @@ namespace mulex
 		LogDebug("[mxhttp] Closing http server.");
 		if(_http_listen_socket)
 		{
+			// Defer close all current connections (we don't want to wait on the browser)
+			_ws_loop_thread->defer([]() {
+				std::lock_guard<std::mutex> lock(_mutex);
+				for(auto* ws : _active_ws_connections)
+				{
+					ws->close();
+				}
+				_active_ws_connections.clear();
+			});
+
 			us_listen_socket_close(0, _http_listen_socket);
 			_http_thread->join();
 			delete _http_thread;

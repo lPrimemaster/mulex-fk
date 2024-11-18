@@ -1,14 +1,23 @@
 import { MxGenericType } from './convert';
+import { showToast } from '../components/ui/toast';
 
 export class MxWebsocket {
 	private socket: WebSocket;
 	private messageid: number;
-	private deferred_p: Map<number, Function>;
+	private deferred_p: Map<number, [Function, string]>;
+	private isready: boolean;
+	private waiting_p: Array<Function>;
+	private static s_instance: MxWebsocket;
+	private address: string;
+	private on_change: Array<Function>;
 
-	public constructor(endpoint: string, port: number) {
-		this.socket = new WebSocket(`ws://${endpoint}:${port}`);
-		this.messageid = 0;
-		this.deferred_p = new Map<number, Function>();
+	private setupCallbacks() {
+		this.socket.onopen = async () => {
+			this.isready = true;
+			this.waiting_p.forEach(r => r());
+			this.waiting_p = [];
+			this.on_change.forEach(x => x(true));
+		};
 
 		this.socket.onmessage = async (message: MessageEvent) => {
 			const data = JSON.parse(await message.data.text());
@@ -21,7 +30,7 @@ export class MxWebsocket {
 				else {
 					const resolve = this.deferred_p.get(data.messageid);
 					if(resolve) {
-						resolve(this.make_rpc_response(data));
+						resolve[0](this.make_rpc_response(data, resolve[1]));
 					}
 					this.deferred_p.delete(data.messageid);
 				}
@@ -31,20 +40,78 @@ export class MxWebsocket {
 				// TODO: (Cesar)
 			}
 		};
+
+		this.socket.onclose = async () => {
+			// Reset fields
+			this.on_change.forEach(x => x(false));
+			this.messageid = 0;
+			this.deferred_p = new Map<number, [Function, string]>();
+			this.isready = false;
+			this.waiting_p = new Array<Function>();
+			// this.on_change = new Array<Function>();
+
+			// Attempt reconnect
+			setTimeout(() => {
+				// showToast({ title: "Trying to reconnect...", description: "Will background connect to <" + location.host + "> when available.", variant: "warning"});
+				this.socket = new WebSocket(`${this.address}`);
+				this.setupCallbacks();
+			}, 5000);
+		};
 	}
 
-	public async rpc_call(method: string, args: Array<MxGenericType> = [], response: boolean = true): Promise<Uint8Array> {
-		const data: string = this.make_rpc_message(method, args, true);
-		return new Promise<Uint8Array>((resolve) => {
+	private constructor(endpoint: string, port: number) {
+		this.address = `ws://${endpoint}:${port}`;
+		this.socket = new WebSocket(`${this.address}`);
+		this.messageid = 0;
+		this.deferred_p = new Map<number, [Function, string]>();
+		this.isready = false;
+		this.waiting_p = new Array<Function>();
+		this.on_change = new Array<Function>();
+
+		this.setupCallbacks();
+	}
+
+	public on_connection_change(callback: Function): void {
+		this.on_change.push(callback);
+	}
+
+	public static get instance(): MxWebsocket {
+		if(!MxWebsocket.s_instance) {
+			MxWebsocket.s_instance = new MxWebsocket(location.hostname, parseInt(location.port));
+		}
+		return MxWebsocket.s_instance;
+	}
+
+	public get status(): number {
+		return this.socket.readyState;
+	}
+
+	public async when_ready(): Promise<void> {
+		return new Promise<void>((resolve) => {
+			if(this.isready) {
+				resolve();
+			}
+			else {
+				this.waiting_p.push(resolve);
+			}
+		});
+	}
+
+	public async rpc_call(method: string, args: Array<MxGenericType> = [], response: string = 'native'): Promise<MxGenericType> {
+		const data: string = this.make_rpc_message(method, args, response !== 'none');
+		if(!this.isready) {
+			await this.when_ready();
+		}
+		return new Promise<MxGenericType>((resolve) => {
 			// Send the data via websocket
 			this.socket.send(data);
-			if(response) {
+			if(response !== 'none') {
 				// Defer the response
-				this.deferred_p.set(this.messageid++, resolve);
+				this.deferred_p.set(this.messageid++, [resolve, response]);
 			}
 			else {
 				// Resolve now with no response
-				resolve(new Uint8Array([]));
+				resolve(MxGenericType.fromData(new Uint8Array([]), response));
 			}
 		});
 	}
@@ -68,7 +135,7 @@ export class MxWebsocket {
 		}
 	}
 
-	private make_rpc_response(data: any) : Uint8Array {
-		return new Uint8Array(data.response);
+	private make_rpc_response(data: any, response: string) : MxGenericType {
+		return MxGenericType.fromData(new Uint8Array(data.response), response);
 	}
 };

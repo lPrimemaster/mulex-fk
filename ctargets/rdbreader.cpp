@@ -39,6 +39,11 @@ int main(int argc, char* argv[])
 		double fa = ra[key];
 		std::cout << fa << std::endl;
 	}
+	else if(type == "bool")
+	{
+		bool fa = ra[key];
+		std::cout << fa << std::endl;
+	}
 	else
 	{
 		mulex::LogError("Type <%s> not implemented on rdbreader or overall unrecognized.", type.c_str());

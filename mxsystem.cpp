@@ -2,6 +2,8 @@
 #include <signal.h>
 #include "network/rpc.h"
 #include "mxevt.h"
+#include "mxrdb.h"
+#include "mxhttp.h"
 #include <filesystem>
 #include <fstream>
 
@@ -17,6 +19,9 @@ static bool _sys_experiment_connected = false;
 static std::string _mxcachedir;
 static std::string _sys_expname;
 static std::string _sys_binname;
+static std::string _sys_hostname;
+static std::unique_ptr<mulex::RPCServerThread> _sys_rpc_thread;
+static std::unique_ptr<mulex::EvtServerThread> _sys_evt_thread;
 static std::map<char, std::function<void(const std::string&)>> _sys_argscmd_short;
 static std::map<char, bool> _sys_argscmd_short_reqarg;
 static std::map<std::string, std::function<void(const std::string&)>> _sys_argscmd_long;
@@ -256,6 +261,61 @@ namespace mulex
 			SysCreateNewExperiment(_sys_expname);
 		}
 
+		RdbInit(1024 * 1024);
+		PdbInit();
+
+		_sys_rpc_thread = std::make_unique<RPCServerThread>();
+		_sys_evt_thread = std::make_unique<EvtServerThread>();
+
+		while(!_sys_rpc_thread->ready())
+		{
+			std::this_thread::yield();
+		}
+
+		while(!_sys_evt_thread->ready())
+		{
+			std::this_thread::yield();
+		}
+
+		HttpStartServer(8080);
+
+		return true;
+	}
+
+	void SysCloseExperiment()
+	{
+		HttpStopServer();
+
+		_sys_rpc_thread.reset();
+		_sys_evt_thread.reset();
+
+		PdbClose();
+		RdbClose();
+	}
+
+	bool SysInitializeBackend(int argc, char* argv[])
+	{
+		if(argc < 2)
+		{
+			// Running without arguments will try to connect to localhost's RPC/EVT servers
+			return true;
+		}
+
+		std::string server_name = "localhost";
+
+		SysAddArgument("server", 's', true, [&](const std::string& server){ server_name = server; }, "Set the server to connect to.");
+
+		if(!SysParseArguments(argc, argv))
+		{
+			return false;
+		}
+
+		// Now try to connect
+		if(!SysConnectToExperiment(server_name.c_str()))
+		{
+			return false;
+		}
+
 		return true;
 	}
 
@@ -324,6 +384,7 @@ namespace mulex
 				}
 			}
 			LogTrace("SysRecvThread: Stopped.");
+			_stream.requestUnblock();
 		});
 	}
 	
@@ -587,6 +648,11 @@ namespace mulex
 		return "";
 	}
 
+	mulex::mxstring<512> SysGetExperimentName()
+	{
+		return _sys_expname.c_str();
+	}
+
 	std::string_view SysGetBinaryName()
 	{
 		if(!_sys_binname.empty())
@@ -606,8 +672,13 @@ namespace mulex
 		return _sys_binname;
 	}
 
-	std::string SysGetHostname()
+	std::string_view SysGetHostname()
 	{
+		if(!_sys_hostname.empty())
+		{
+			return _sys_hostname;
+		}
+
 		char hostname[256];
 #ifdef __linux__
 		if(::gethostname(hostname, 256) < 0)
@@ -623,7 +694,8 @@ namespace mulex
 			return "";
 		}
 #endif
-		return hostname;
+		_sys_hostname = hostname;
+		return _sys_hostname;
 	}
 
 	static std::uint64_t mmh64a(const char* key, int len)
@@ -670,18 +742,30 @@ namespace mulex
 		return h;
 	}
 
+	std::uint64_t SysStringHash64(const std::string& key)
+	{
+		return mmh64a(key.c_str(), key.size());
+	}
+
 	std::uint64_t SysGetClientId()
 	{
 		if(_sys_cid == 0x00)
 		{
 			std::string bname = std::string(SysGetBinaryName());
-			std::string hname = SysGetHostname();
+			std::string hname = std::string(SysGetHostname());
 			std::string tname = bname + "@" + hname;
 			// int size = tname.size() > 128 ? 128 : static_cast<int>(tname.size());
 			int size = tname.size();
 			_sys_cid = mmh64a(tname.c_str(), size);
 		}
 		return _sys_cid;
+	}
+
+	std::string SysI64ToHexString(std::uint64_t value)
+	{
+		std::stringstream ss;
+		ss << std::hex << value;
+		return ss.str();
 	}
 
 	std::vector<std::uint8_t> SysReadBinFile(const std::string& file)
@@ -711,5 +795,10 @@ namespace mulex
 		}
 
 		out.write(reinterpret_cast<const char*>(data.data()), data.size());
+	}
+
+	void EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
+	{
+		_sys_evt_thread->emit(event, data, len);
 	}
 } // namespace mulex

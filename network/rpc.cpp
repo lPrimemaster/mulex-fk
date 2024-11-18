@@ -16,7 +16,8 @@ static std::atomic<std::uint64_t> _client_msg_id = 0;
 // NOTE: (Cesar) In theory this could be thread unsafe
 // 				 But this practically guards vs using
 // 				 RPC calls on a local context
-static std::atomic<std::uint64_t> _client_current_caller = 0;
+// static std::atomic<std::uint64_t> _client_current_caller = 0;
+static std::map<std::thread::id, std::uint64_t> _client_current_caller;
 
 namespace mulex
 {
@@ -43,7 +44,7 @@ namespace mulex
 
 	std::uint64_t GetCurrentCallerId()
 	{
-		return _client_current_caller.load();
+		return _client_current_caller.at(std::this_thread::get_id());
 	}
 
 	RPCClientThread::RPCClientThread(const std::string& hostname, std::uint16_t rpcport)
@@ -160,6 +161,7 @@ namespace mulex
 			std::lock_guard<std::mutex> lock(_connections_mutex);
 			_rpc_stream.emplace(socket, &recvthread->_stream);
 			_rpc_thread_sig.emplace(socket, true);
+			_client_current_caller.emplace(std::this_thread::get_id(), 0x00);
 		}
 
 		static constexpr std::uint64_t buffersize = 8192;
@@ -169,7 +171,8 @@ namespace mulex
 		{
 			// Read the message
 			std::uint64_t read = sbs.fetch(fbuffer, buffersize);
-			if(read <= 0 && (!_rpc_thread_running.load() || !_rpc_thread_sig.at(socket).load()))
+			// if(read <= 0 && (!_rpc_thread_running.load() || !_rpc_thread_sig.at(socket).load()))
+			if(read <= 0)
 			{
 				break;
 			}
@@ -188,14 +191,14 @@ namespace mulex
 			LogTrace("[rpcserver] Got RPC Call <%d> from <0x%llx>.", header.procedureid, header.client);
 
 			// Set the current global client state
-			// NOTE: (Cesar) : This wont work if we have multiple threads serving RPC requests
-			_client_current_caller.store(header.client);
+			// This works if we have multiple threads serving RPC requests
+			_client_current_caller.at(std::this_thread::get_id()) = header.client;
 		
 			// Execute the request locally on the RPC thread
 			std::vector<std::uint8_t> ret = RPCCallLocally(header.procedureid, buffer.data());
 
 			// Pop the current global client state
-			_client_current_caller.store(0x00);
+			_client_current_caller.at(std::this_thread::get_id()) = 0x00;
 
 			RPCReturnValue response;
 			response.status = RPCResult::OK;
@@ -217,6 +220,11 @@ namespace mulex
 					response.payloadsize
 				);
 			}
+		}
+
+		{
+			std::lock_guard<std::mutex> lock(_connections_mutex);
+			_client_current_caller.erase(std::this_thread::get_id());
 		}
 
 		recvthread->_handle.join();

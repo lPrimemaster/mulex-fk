@@ -85,13 +85,13 @@ int main(void)
 	float fc = ra["/system/test"];
 	std::cout << fc << std::endl;
 
-	ra.create("/system/ctest", RdbValueType::INT32, 5);
+	ra["/system/ctest"].create(RdbValueType::INT32, 5);
 
 	std::cout << static_cast<int>(ra["/system/ctest"]) << std::endl;
-	ra.erase("/system/ctest");
+	ra["/system/ctest"].erase();
 	std::cout << static_cast<int>(ra["/system/ctest"]) << std::endl;
 
-	ra.create("/system/ctest2", RdbValueType::INT32, 5);
+	ra["/system/ctest2"].create(RdbValueType::INT32, 5);
 
 	SysDisconnectFromExperiment();
 

@@ -1,4 +1,6 @@
-import type { Component } from 'solid-js';
+import { Component, createSignal, Show } from 'solid-js';
+import About from './About';
+import { A } from '@solidjs/router';
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -6,29 +8,41 @@ import {
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuTrigger
-} from "~/components/ui/navigation-menu"
+} from '~/components/ui/navigation-menu';
+
+import metadata from '../lib/metadata';
 
 const Sidebar: Component = () => {
+
+	const [showAbout, setShowAbout] = createSignal(false);
+
 	return (
-		<div class="m-0 border-r-2 border-solid border-blue-200 min-h-full" style="width:10%;position:fixed!important;z-index:1;overflow:auto;">
-			<div class="flex flex-col items-center m-5">
+		<div class="m-0 border-r-2 hover:shadow-2xl shadow-lg border-solid border-black-200 min-h-full min-w-36 max-w-36" style="width:10%;position:fixed!important;z-index:1;overflow:auto;">
+			<div class="flex flex-col items-center p-5">
 				<span>
-					<h1><b>MX-FK</b></h1>
+					<Show when={!metadata.expname.loading} fallback={<h1><b>mxfk</b></h1>}>
+						<h1><b>{metadata.expname()}</b></h1>
+					</Show>
 				</span>
 				<div class="m-5">
 					<NavigationMenu orientation="vertical">
 						<NavigationMenuItem>
 							<NavigationMenuTrigger>
-								Home
+								<A href='/'>Home</A>
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
 						<NavigationMenuItem>
 							<NavigationMenuTrigger>
-								Event Viewer
+								Events
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
 						<NavigationMenuItem>
 							<NavigationMenuTrigger>
+								RDB
+							</NavigationMenuTrigger>
+						</NavigationMenuItem>
+						<NavigationMenuItem>
+							<NavigationMenuTrigger onClick={() => setShowAbout(true)}>
 								About
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
@@ -36,6 +50,7 @@ const Sidebar: Component = () => {
 				</div>
 				<footer class="p-5" style="position:fixed; bottom:0"><small>Version Centauri</small></footer>
 			</div>
+			<About show={showAbout()} setShow={setShowAbout}/>
 		</div>
 	);
 };

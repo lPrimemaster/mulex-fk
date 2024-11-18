@@ -1,5 +1,6 @@
 #include "../mxrdb.h"
 #include "../mxlogger.h"
+#include "../mxevt.h"
 #include <cmath>
 #include <cstdlib>
 #include <map>
@@ -7,6 +8,8 @@
 #include <shared_mutex>
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
+#include <set>
 #include <rpcspec.inl>
 
 static std::uint8_t* _rdb_handle = nullptr;
@@ -15,6 +18,9 @@ static std::uint64_t _rdb_size   = 0;
 
 static std::shared_mutex 					   _rdb_rw_lock;
 static std::map<std::string, mulex::RdbEntry*> _rdb_offset_map;
+
+static std::set<std::string> _rdb_watch_dirs;
+static std::shared_mutex     _rdb_watch_lock;
 
 namespace mulex
 {
@@ -87,6 +93,24 @@ namespace mulex
 		return data;
 	}
 
+	static std::uint8_t* RdbAlignedAlloc(std::uint64_t align, std::uint64_t size)
+	{
+#ifdef __unix__
+		return reinterpret_cast<std::uint8_t*>(std::aligned_alloc(align, size));
+#else
+		return reinterpret_cast<std::uint8_t*>(_aligned_malloc(size, align));
+#endif
+	}
+
+	static void RdbAlignedFree(std::uint8_t* ptr)
+	{
+#ifdef __unix__
+		std::free(ptr);
+#else
+		_aligned_free(ptr);
+#endif
+	}
+
 	static void RdbLoadFromFile(const std::string& filename)
 	{
 		// Load the existing rdb data
@@ -114,11 +138,8 @@ namespace mulex
 			rdbsize = 1024 * ((rdbsize / 1024) + 1);
 			LogTrace("[rdb] Load rdb aligned size %llu", rdbsize);
 		}
-#ifdef __unix__
-		_rdb_handle = reinterpret_cast<std::uint8_t*>(std::aligned_alloc(1024, rdbsize));
-#else
-		_rdb_handle = reinterpret_cast<std::uint8_t*>(_aligned_malloc(rdbsize, 1024));
-#endif
+
+		_rdb_handle = RdbAlignedAlloc(1024, rdbsize);
 		_rdb_size = rdbsize;
 		_rdb_offset = rdbsize_unaligned;
 
@@ -158,11 +179,8 @@ namespace mulex
 		{
 			LogWarning("[rdb] Could not find rdb cache under experiment home dir.");
 			LogWarning("[rdb] Initializing empty rdb.");
-#ifdef __unix__
-			_rdb_handle = reinterpret_cast<std::uint8_t*>(std::aligned_alloc(1024, size));
-#else
-			_rdb_handle = reinterpret_cast<std::uint8_t*>(_aligned_malloc(size, 1024));
-#endif
+
+			_rdb_handle = RdbAlignedAlloc(1024, size);
 			_rdb_size = size;
 		}
 		else
@@ -171,15 +189,10 @@ namespace mulex
 			if(_rdb_size == 0)
 			{
 				LogTrace("[rdb] File <rdb.bin> is empty. Allocating default space for rdb.");
-#ifdef __unix__
-				_rdb_handle = reinterpret_cast<std::uint8_t*>(std::aligned_alloc(1024, size));
-#else
-				_rdb_handle = reinterpret_cast<std::uint8_t*>(_aligned_malloc(size, 1024));
-#endif
+				_rdb_handle = RdbAlignedAlloc(1024, size);
 				_rdb_size = size;
 			}
 		}
-
 
 
 		if(!_rdb_handle)
@@ -210,11 +223,8 @@ namespace mulex
 			_rdb_size = 0;
 			_rdb_offset = 0;
 			_rdb_offset_map.clear();
-#ifdef __unix__
-			std::free(_rdb_handle);
-#else
-			_aligned_free(_rdb_handle);
-#endif
+
+			RdbAlignedFree(_rdb_handle);
 		}
 	}
 
@@ -238,9 +248,34 @@ namespace mulex
 		}
 		
 		// Need to grow the rdb linear memory
-		// TODO: (Cesar) Implement this
+		// Realloc won't align, so we copy the memory
+		// RDB Already locked at this point
+		std::uint8_t* temp_handle = RdbAlignedAlloc(1024, _rdb_size * 2);
+		
+		if(!temp_handle)
+		{
+			LogError("[rdb] Failed to allocate more space. Current <%llu> kB. Tried <%llu> kB.", _rdb_size / 1024, (_rdb_size * 2) / 1024);
+			return false;
+		}
 
-		return false;
+		_rdb_size *= 2;
+		
+		std::memcpy(temp_handle, _rdb_handle, _rdb_offset);
+
+		// Update the offsets based on the new handle
+		for(auto it = _rdb_offset_map.begin(); it != _rdb_offset_map.end(); it++)
+		{
+			const std::uint64_t offset = (reinterpret_cast<std::uint8_t*>(it->second) - _rdb_handle);
+			it->second = reinterpret_cast<RdbEntry*>(temp_handle + offset);
+		}
+
+		RdbAlignedFree(_rdb_handle);
+		_rdb_handle = temp_handle;
+
+		LogDebug("[rdb] RdbCheckSizeAndGrowIfNeeded() OK.");
+		LogDebug("[rdb] New size <%llu> kB.", _rdb_size / 1024);
+
+		return true;
 	}
 	
 	static std::uint64_t RdbTypeSize(const RdbValueType& type)
@@ -258,6 +293,7 @@ namespace mulex
 			case RdbValueType::FLOAT32: return sizeof(float);
 			case RdbValueType::FLOAT64: return sizeof(double);
 			case RdbValueType::STRING: return RDB_MAX_STRING_SIZE; // HACK: For now store the max size
+			case RdbValueType::BOOL: return sizeof(bool);
 		}
 		return 0;
 	}
@@ -293,6 +329,76 @@ namespace mulex
 		for(auto it = _rdb_offset_map.upper_bound(key.c_str()); it != _rdb_offset_map.end(); it++)
 		{
 			it->second = reinterpret_cast<RdbEntry*>(reinterpret_cast<std::uint8_t*>(it->second) - entry_size);
+		}
+	}
+
+	static void RdbEmitEvtCondition(const std::string& swatch, const RdbKeyName& key, const RdbEntry* entry)
+	{
+		std::string event_name = RdbMakeWatchEvent(swatch);
+		std::vector<std::uint8_t> evt_buffer;
+		std::uint64_t entry_data_size = RdbCalculateDataSize(entry->_value);
+		evt_buffer.resize(sizeof(RdbKeyName) + sizeof(std::uint64_t) + entry_data_size);
+		std::memcpy(evt_buffer.data(), &key, sizeof(RdbKeyName));
+		std::memcpy(evt_buffer.data() + sizeof(RdbKeyName), &entry_data_size, sizeof(std::uint64_t));
+		std::memcpy(evt_buffer.data() + sizeof(RdbKeyName) + sizeof(std::uint64_t), entry->_value._ptr, entry_data_size);
+		EvtEmit(event_name, evt_buffer.data(), evt_buffer.size());
+	}
+
+	// TODO: (Cesar) Move this code to on creation and add a flag for scanning
+	//				 That would make this a lot faster
+	static void RdbEmitWatchMatchCondition(const RdbKeyName& key, const RdbEntry* entry)
+	{
+		std::shared_lock<std::shared_mutex> lock_watch(_rdb_watch_lock);
+		for(const auto& watch : _rdb_watch_dirs)
+		{
+			std::string swatch = watch;
+			if(swatch.back() != '/')
+			{
+				// We watch over a single value
+				auto it = _rdb_offset_map.find(swatch);
+				if(key.c_str() == swatch)
+				{
+					// Match!
+					RdbEmitEvtCondition(swatch, key, entry);
+					LogTrace("Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
+				}
+				
+				// No match. Continue testing.
+				LogTrace("No Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
+			}
+			else
+			{
+				// Make use of the fact that rdb is linear and alphabetically ordered
+				auto lower = _rdb_offset_map.upper_bound(swatch);
+				if(lower == _rdb_offset_map.end())
+				{
+					// No match.
+					LogTrace("No Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
+					continue;
+				}
+
+				swatch.back() = '0'; // In ASCII '/' (47) -> '0' (48)
+				auto upper = _rdb_offset_map.lower_bound(swatch);
+				swatch.back() = '/';
+
+				bool condition = (entry >= lower->second);
+
+				if(upper != _rdb_offset_map.end())
+				{
+					condition &= (entry <= upper->second);
+				}
+
+				if(condition)
+				{
+					// Match!
+					RdbEmitEvtCondition(swatch, key, entry);
+					LogTrace("Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
+				}
+				else
+	  			{
+					LogTrace("No Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
+				}
+			}
 		}
 	}
 
@@ -370,6 +476,9 @@ namespace mulex
 
 		_rdb_offset += sizeof(RdbEntry) + data_total_size_bytes;
 		LogTrace("[rdb] Created new key: %s", key.c_str());
+
+		RdbEmitWatchMatchCondition(key, entry);
+
 		return entry;
 	}
 
@@ -381,6 +490,8 @@ namespace mulex
 			LogError("[rdb] Cannot delete unknown key.");
 			return false;
 		}
+
+		RdbEmitWatchMatchCondition(key, entry);
 
 		// Lock database map and handle for deletion
 		// This also locks W/R access to any key
@@ -407,6 +518,7 @@ namespace mulex
 			RdbDecrementMapKeysAddrAfter(key, entry_total_size_bytes);
 		}
 
+		LogTrace("[rdb] Deleted entry <%s>.", key.c_str());
 		return true;
 	}
 
@@ -519,7 +631,7 @@ namespace mulex
 		// Entry is read/write locked
 		if(data._data.size() != RdbCalculateDataSize(entry->_value))
 		{
-			LogError("Cannot write rdb value. Data type or length differs.");
+			LogError("[rdb] Cannot write rdb value. Data type or length differs.");
 		}
 		else
 		{
@@ -534,6 +646,8 @@ namespace mulex
 				// Sends the modified data to all subscribers
 				// RdbTriggerEvent(cid, *entry);
 			}
+			
+			RdbEmitWatchMatchCondition(keyname, entry);
 		}
 
 		RdbUnlockEntryReadWrite(*entry);
@@ -547,6 +661,27 @@ namespace mulex
 	void RdbDeleteValueDirect(mulex::RdbKeyName keyname)
 	{
 		RdbDeleteEntry(keyname);
+	}
+
+	std::string RdbMakeWatchEvent(const mulex::RdbKeyName& dir)
+	{
+		return "mxevt::rdbw-" + SysI64ToHexString(SysStringHash64(dir.c_str()));
+	}
+
+	string32 RdbWatch(mulex::RdbKeyName dir)
+	{
+		std::string event_name = RdbMakeWatchEvent(dir);
+		EvtRegister(event_name);
+		if(!EvtSubscribe(event_name))
+		{
+			LogError("[rdb] Failed to watch dir <%s>.", dir.c_str());
+			return "";
+		}
+
+		// TODO: (Cesar) Watch dirs should remove unsused dirs when a client disconnects
+		std::unique_lock<std::shared_mutex> lock(_rdb_watch_lock); // RW lock
+		_rdb_watch_dirs.insert(dir.c_str());
+		return event_name;
 	}
 
 	void RdbProxyValue::writeEntry()
@@ -577,22 +712,42 @@ namespace mulex
 		return false;
 	}
 
-	bool RdbAccess::create(const std::string& key, RdbValueType type, RPCGenericType value, std::uint64_t count)
+	bool RdbProxyValue::create(RdbValueType type, RPCGenericType value, std::uint64_t count)
 	{
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
-			return exp.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_RDBCREATEVALUEDIRECT, RdbKeyName(key), type, count, value);
+			return exp.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_RDBCREATEVALUEDIRECT, RdbKeyName(_key), type, count, value);
 		}
 		return false;
 	}
 
-	void RdbAccess::erase(const std::string& key)
+	bool RdbProxyValue::erase()
 	{
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
-			exp.value()->_rpc_client->call(RPC_CALL_MULEX_RDBDELETEVALUEDIRECT, RdbKeyName(key));
+			exp.value()->_rpc_client->call(RPC_CALL_MULEX_RDBDELETEVALUEDIRECT, RdbKeyName(_key));
+			return true;
 		}
+		return false;
+	}
+
+	void RdbProxyValue::watch(std::function<void(const RdbKeyName& key, const RPCGenericType& value)> callback)
+	{
+		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
+		if(!exp.has_value())
+		{
+			return;
+		}
+		mulex::string32 event_name = exp.value()->_rpc_client->call<mulex::string32>(RPC_CALL_MULEX_RDBWATCH, RdbKeyName(_key));
+		exp.value()->_evt_client->subscribe(event_name.c_str(), [=](const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata) {
+			RdbKeyName key = reinterpret_cast<const char*>(data);
+			RPCGenericType value = RPCGenericType::FromData(
+				data + sizeof(RdbKeyName) + sizeof(std::uint64_t),
+				*reinterpret_cast<const std::uint64_t*>(data + sizeof(RdbKeyName))
+			);
+			callback(key, value);
+		});
 	}
 }

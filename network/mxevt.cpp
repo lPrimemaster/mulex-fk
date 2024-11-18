@@ -57,7 +57,11 @@ namespace mulex
 		);
 
 		// Tell the server who we are
-		emit("mxevt::getclientmeta", nullptr, 0);
+		std::string_view bname = SysGetBinaryName();
+		std::string_view hname = SysGetHostname();
+		std::string client_name_meta = std::string(bname) + "@" + std::string(hname);
+
+		emit("mxevt::getclientmeta", reinterpret_cast<const std::uint8_t*>(client_name_meta.c_str()), client_name_meta.size() + 1);
 	}
 
 	EvtClientThread::~EvtClientThread()
@@ -83,7 +87,8 @@ namespace mulex
 			// Read next event
 			std::uint64_t read = sbs.fetch(fbuffer.data(), buffersize);
 
-			if(read <= 0 && !_evt_thread_running.load())
+			// if(read <= 0 && !_evt_thread_running.load())
+			if(read <= 0)
 			{
 				break;
 			}
@@ -265,16 +270,59 @@ namespace mulex
 		{
 			LogWarning("[evtclient] Subscribing to already subscribed event. Only one callback per event is allowed. Replacing...");
 		}
-		_evt_callbacks.emplace(eventid, callback);
+		_evt_callbacks[eventid] = callback;
 
 		LogTrace("[evtclient] Subscribed to event <%s> [%d].", event.c_str(), eventid);
+	}
+
+	static void SetRdbClientConnectionStatus(std::uint64_t cid, bool connected)
+	{
+		std::string root_key = "/system/backends/" + SysI64ToHexString(cid) + "/";
+		if(!RdbNewEntry(root_key + "connected", RdbValueType::BOOL, &connected))
+		{
+			RdbWriteValueDirect(root_key + "connected", connected);
+		}
+	}
+
+	static void RegisterClientRdb(const mxstring<512>& name, const mxstring<512>& host, std::uint64_t cid)
+	{
+		std::string root_key = "/system/backends/" + SysI64ToHexString(cid) + "/";
+
+		if(!RdbNewEntry(root_key + "name", RdbValueType::STRING, name.c_str()))
+		{
+			RdbWriteValueDirect(root_key + "name", name);
+		}
+
+		if(!RdbNewEntry(root_key + "host", RdbValueType::STRING, host.c_str()))
+		{
+			RdbWriteValueDirect(root_key + "host", host);
+		}
+
+		SetRdbClientConnectionStatus(cid, true);
 	}
 
 	static void OnClientConnectMetadata(const Socket& socket, std::uint64_t cid, std::uint16_t eid, const std::uint8_t* data, std::uint64_t size)
 	{
 		LogDebug("[evtserver] Registering client <0x%llx>.", cid);
-		_evt_client_socket_pair.emplace(socket._handle, cid);
-		_evt_client_socket_pair_rev.emplace(cid, socket);
+		_evt_client_socket_pair[socket._handle] = cid;
+		_evt_client_socket_pair_rev[cid] = socket;
+
+		LogDebug("[evtserver] New connected client <%s>.", reinterpret_cast<const char*>(data));
+		std::string name_data = reinterpret_cast<const char*>(data);
+		auto token = name_data.find_first_of("@");
+		mxstring<512> bname = name_data.substr(0, token);
+		mxstring<512> hname = name_data.substr(token + 1);
+		RegisterClientRdb(bname, hname, cid);
+	}
+
+	static void OnClientDisconnect(std::uint64_t cid)
+	{
+		for(const auto& evt : _evt_current_subscriptions)
+		{
+			EvtUnsubscribe(cid, evt.first);
+		}
+
+		SetRdbClientConnectionStatus(cid, false);
 	}
 
 	EvtServerThread::EvtServerThread()
@@ -316,6 +364,14 @@ namespace mulex
 			return;
 		}
 
+		auto cidit = _evt_current_subscriptions.find(eid);
+		if(cidit == _evt_current_subscriptions.end())
+		{
+			// Not subscribed by anyone
+			// Silently ignore
+			return;
+		}
+
 		// Make header
 		EvtHeader header;
 		header.client = SysGetClientId(); // Should be 0x00
@@ -332,13 +388,10 @@ namespace mulex
 			std::memcpy(vdata.data() + sizeof(EvtHeader), data, len);
 		}
 
-		auto cidit = _evt_current_subscriptions.find(eid);
-		if(cidit != _evt_current_subscriptions.end())
+		for(const auto& cid : cidit->second)
 		{
-			for(const auto& cid : cidit->second)
-			{
-				_evt_emit_stack.at(_evt_client_socket_pair_rev.at(cid)).push(std::move(vdata));
-			}
+			LogTrace("[evtserver] Emitting event <%d> from <0x%llx> to <0x%llx>.", header.eventid, header.client, cid);
+			_evt_emit_stack.at(_evt_client_socket_pair_rev.at(cid)).push(std::move(vdata));
 		}
 	}
 
@@ -413,7 +466,8 @@ namespace mulex
 			// Read next event
 			std::uint64_t read = sbs.fetch(fbuffer.data(), buffersize);
 
-			if(read <= 0 && (!_evt_thread_running.load() || !_evt_thread_sig.at(socket).load()))
+			// if(read <= 0 && (!_evt_thread_running.load() || !_evt_thread_sig.at(socket).load()))
+			if(read <= 0)
 			{
 				break;
 			}
@@ -430,22 +484,20 @@ namespace mulex
 				std::unique_lock<std::mutex> lock(_evt_sub_lock);
 				for(const std::uint64_t cid : _evt_current_subscriptions.at(header.eventid))
 				{
-					relay(cid, fbuffer.data(), read);
 					LogTrace("[evtserver] Relaying event <%d> from <0x%llx> to <0x%llx>.", header.eventid, header.client, cid);
+					relay(cid, fbuffer.data(), read);
 				}
 			}
 
 			// Perform server side tasks (if any)
-			EvtTryRunServerCallback(header.client, header.eventid, fbuffer.data(), fbuffer.size(), socket);
+			EvtTryRunServerCallback(header.client, header.eventid, fbuffer.data() + sizeof(EvtHeader), header.payloadsize, socket);
 		}
 
 		// On client disconnect unsubscribe from events
 		// We can run into issues if there is a crash on the client side, which we don't control
-		for(const auto& evt : _evt_current_subscriptions)
-		{
-			EvtUnsubscribe(_evt_client_socket_pair.at(socket._handle), evt.first);
-		}
+		OnClientDisconnect(_evt_client_socket_pair.at(socket._handle));
 
+		_evt_emit_stack.at(socket).requestUnblock();
 		recvthread->_handle.join();
 	}
 
@@ -462,7 +514,8 @@ namespace mulex
 			// Read next event to emit from stack
 			std::vector<std::uint8_t> data = _evt_emit_stack.at(socket).pop();
 
-			if(data.size() == 0 && (!_evt_thread_running.load() || !_evt_thread_running.load()))
+			// if(data.size() == 0 && (!_evt_thread_running.load() || ! _evt_thread_sig.at(socket).load()))
+			if(data.size() == 0)
 			{
 				break;
 			}
@@ -490,6 +543,7 @@ namespace mulex
 		const std::uint16_t event_id = ++_evt_server_reg_next;
 		_evt_current_subscriptions.emplace(event_id, std::set<std::uint64_t>());
 		_evt_server_reg.emplace(name.c_str(), event_id);
+		LogTrace("[evtserver] Registered event <%s> [id=%d].", name.c_str(), event_id);
 		return true;
 	}
 
@@ -508,7 +562,7 @@ namespace mulex
 	bool EvtSubscribe(mulex::string32 name)
 	{
 		std::uint16_t eid = EvtGetId(name);
-		std::uint64_t cid = SysGetClientId();
+		std::uint64_t cid = GetCurrentCallerId();
 		if(eid == 0)
 		{
 			LogError("[evtserver] Cannot subscribe to event <%s>.", name.c_str());
@@ -523,6 +577,7 @@ namespace mulex
 
 		std::unique_lock<std::mutex> lock(_evt_sub_lock);
 		_evt_current_subscriptions.at(eid).insert(cid);
+		LogTrace("[evtserver] Subscribed <0x%llx> to event <%s> [id=%d].", cid, name.c_str(), eid);
 		return true;
 	}
 

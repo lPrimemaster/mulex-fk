@@ -102,6 +102,7 @@ export class MxGenericType
 		}
 
 		const data = new Uint8Array(this.data.buffer, offset);
+		const view = new DataView(this.data.buffer, offset);
 
 		// TODO: (Cesar) Check the length of data (should be superfluous...)
 
@@ -126,6 +127,18 @@ export class MxGenericType
 			}
 			else {
 				return Array.from(f64arr);
+			}
+		}
+		else if(type === 'int32') {
+			return view.getUint32(0, true);
+			console.log(data);
+			const i32arr = new Int32Array(data.buffer);
+			console.log(i32arr);
+			if(i32arr.length === 1) {
+				return i32arr[0];
+			}
+			else {
+				return Array.from(i32arr);
 			}
 		}
 		else if(type === 'bool') {

@@ -28,7 +28,8 @@ namespace mulex
 		UINT64,
 		FLOAT32,
 		FLOAT64,
-		STRING
+		STRING,
+		BOOL
 	};
 
 	struct RdbValue
@@ -111,7 +112,9 @@ namespace mulex
 	MX_RPC_METHOD bool RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data);
 	MX_RPC_METHOD void RdbDeleteValueDirect(mulex::RdbKeyName keyname);
 	MX_RPC_METHOD bool RdbValueExists(mulex::RdbKeyName keyname);
+	MX_RPC_METHOD mulex::string32 RdbWatch(mulex::RdbKeyName dir);
 
+	std::string RdbMakeWatchEvent(const mulex::RdbKeyName& dir);
 	void RdbTriggerEvent(std::uint64_t clientid, const RdbEntry& entry);
 
 	void RdbLockEntryRead(const RdbEntry& entry);
@@ -171,6 +174,9 @@ namespace mulex
 		}
 
 		bool exists();
+		bool create(RdbValueType type, RPCGenericType value, std::uint64_t count = 0);
+		bool erase();
+		void watch(std::function<void(const RdbKeyName& key, const RPCGenericType& value)> callback);
 
 	private:
 		void writeEntry();
@@ -190,9 +196,6 @@ namespace mulex
 		{
 			return RdbProxyValue(_rootkey + key);
 		}
-
-		bool create(const std::string& key, RdbValueType type, RPCGenericType value, std::uint64_t count = 0);
-		void erase(const std::string& key);
 
 	private:
 		std::string _rootkey;

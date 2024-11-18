@@ -8,6 +8,7 @@
 #include <shared_mutex>
 #include <functional>
 #include "network/socket.h"
+#include "mxtypes.h"
 // #include "network/rpc.h"
 
 #ifdef __linux__
@@ -148,15 +149,21 @@ namespace mulex
 
 	bool SysDaemonize();
 	bool SysInitializeExperiment(int argc, char* argv[]);
+	void SysCloseExperiment();
+	bool SysInitializeBackend(int argc, char* argv[]);
 	void SysAddArgument(const std::string& longname, const char shortname, bool needvalue, std::function<void(const std::string&)> action, const std::string& helptxt = "");
 	bool SysParseArguments(int argc, char* argv[]);
 	std::int64_t SysGetCurrentTime();
 	std::string_view SysGetCacheDir();
 	bool SysCreateNewExperiment(const std::string& expname);
 	std::string SysGetExperimentHome();
+	MX_RPC_METHOD mulex::mxstring<512> SysGetExperimentName();
 	std::string_view SysGetBinaryName();
-	std::string SysGetHostname();
+	std::string_view SysGetHostname();
 	std::uint64_t SysGetClientId();
+	std::string SysI64ToHexString(std::uint64_t value);
 	std::vector<std::uint8_t> SysReadBinFile(const std::string& file);
 	void SysWriteBinFile(const std::string& file, const std::vector<std::uint8_t>& data);
+
+	std::uint64_t SysStringHash64(const std::string& key);
 } // namespace mulex
