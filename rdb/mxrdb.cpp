@@ -351,53 +351,10 @@ namespace mulex
 		std::shared_lock<std::shared_mutex> lock_watch(_rdb_watch_lock);
 		for(const auto& watch : _rdb_watch_dirs)
 		{
-			std::string swatch = watch;
-			if(swatch.back() != '/')
+			if(SysMatchPattern(watch, key.c_str()))
 			{
-				// We watch over a single value
-				auto it = _rdb_offset_map.find(swatch);
-				if(key.c_str() == swatch)
-				{
-					// Match!
-					RdbEmitEvtCondition(swatch, key, entry);
-					LogTrace("Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
-				}
-				
-				// No match. Continue testing.
-				LogTrace("No Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
-			}
-			else
-			{
-				// Make use of the fact that rdb is linear and alphabetically ordered
-				auto lower = _rdb_offset_map.upper_bound(swatch);
-				if(lower == _rdb_offset_map.end())
-				{
-					// No match.
-					LogTrace("No Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
-					continue;
-				}
-
-				swatch.back() = '0'; // In ASCII '/' (47) -> '0' (48)
-				auto upper = _rdb_offset_map.lower_bound(swatch);
-				swatch.back() = '/';
-
-				bool condition = (entry >= lower->second);
-
-				if(upper != _rdb_offset_map.end())
-				{
-					condition &= (entry <= upper->second);
-				}
-
-				if(condition)
-				{
-					// Match!
-					RdbEmitEvtCondition(swatch, key, entry);
-					LogTrace("Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
-				}
-				else
-	  			{
-					LogTrace("No Match: <%s> -> <%s>.", swatch.c_str(), key.c_str());
-				}
+				RdbEmitEvtCondition(watch, key, entry);
+				LogTrace("Match: <%s> -> <%s>.", watch.c_str(), key.c_str());
 			}
 		}
 	}

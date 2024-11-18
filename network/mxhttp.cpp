@@ -359,7 +359,7 @@ namespace mulex
 				.close = [](auto* ws, int code, std::string_view message) {
 					WsRpcBridge* bridge = ws->getUserData();
 
-					// Delete the local rpc client bridge for this connection
+					// Delete the local rpc/ect client bridges for this connection
 					bridge->_local_rct.reset();
 					bridge->_local_ect.reset();
 					LogDebug("[mxhttp] Closing WS connection.");
@@ -386,7 +386,7 @@ namespace mulex
 		{
 			// Defer close all current connections (we don't want to wait on the browser)
 			_ws_loop_thread->defer([]() {
-				std::lock_guard<std::mutex> lock(_mutex);
+				std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
 				for(auto* ws : _active_ws_connections)
 				{
 					ws->close();

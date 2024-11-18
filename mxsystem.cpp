@@ -801,4 +801,61 @@ namespace mulex
 	{
 		_sys_evt_thread->emit(event, data, len);
 	}
+
+	bool SysMatchPattern(const std::string& pattern, const std::string& target)
+	{
+		// Pattern examples (only Kleene Star is available) (this is a shortcut to be fast with our rdb key cases)
+		// /system/backends/*/connected
+		// /system/*/intermediate/*/value
+		// /*/intermediate/*/value
+		// * could match nothing
+		// stuff like /*/*/value is not allowed use /*/value instead
+		
+		// LogTrace("Initial state [p, t]: [%s, %s]", pattern.c_str(), target.c_str());
+
+		// Match anything
+		if(pattern == "/*")
+		{
+			return true;
+		}
+	
+		auto ks_pos = pattern.find_first_of('*');
+		if(ks_pos == std::string::npos)
+		{
+			return (pattern == target);
+		}
+
+		if(ks_pos > 1)
+		{
+			std::string prefix = pattern.substr(0, ks_pos);
+			// LogTrace("Mode: prefix [%s]", prefix.c_str());
+			if(target.find(prefix) != 0)
+			{
+				return false;
+			}
+
+			return SysMatchPattern(pattern.substr(ks_pos - 1), target.substr(ks_pos - 1));
+		}
+		else if(ks_pos == 1)
+		{
+			std::string suffix = pattern.substr(ks_pos + 1);
+			// LogTrace("Mode: suffix [%s]", suffix.c_str());
+			auto next_ks = suffix.find_first_of('*');
+			if(next_ks != std::string::npos)
+			{
+				std::string midfix = pattern.substr(ks_pos + 1, next_ks - ks_pos + 1);
+				// LogTrace("Midfix: %s", midfix.c_str());
+				auto next_target_pos = target.find(midfix);
+				if(next_target_pos == std::string::npos)
+				{
+					return false;
+				}
+				return SysMatchPattern(pattern.substr(next_ks + 1), target.substr(next_target_pos + midfix.size()));
+			}
+			return (target.find(suffix) == (target.size() - suffix.size()));
+		}
+
+		// ks is not in a valid position
+		return false;	
+	}
 } // namespace mulex

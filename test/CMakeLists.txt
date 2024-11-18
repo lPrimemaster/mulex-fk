@@ -106,3 +106,13 @@ target_include_directories(test_bck PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
 add_test(test_bck test_bck)
+
+add_executable(test_ksmatch ksmatch.cpp ../mxsystem.cpp)
+
+if(WIN32)
+	target_link_libraries(test_ksmatch wsock32 ws2_32 Shlwapi)
+endif()
+
+target_link_libraries(test_ksmatch mxrdb mxhttp mxrpc)
+
+add_test(test_ksmatch test_ksmatch)

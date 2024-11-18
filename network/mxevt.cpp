@@ -390,7 +390,6 @@ namespace mulex
 
 		for(const auto& cid : cidit->second)
 		{
-			LogTrace("[evtserver] Emitting event <%d> from <0x%llx> to <0x%llx>.", header.eventid, header.client, cid);
 			_evt_emit_stack.at(_evt_client_socket_pair_rev.at(cid)).push(std::move(vdata));
 		}
 	}

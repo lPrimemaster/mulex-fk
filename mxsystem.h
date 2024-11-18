@@ -166,4 +166,5 @@ namespace mulex
 	void SysWriteBinFile(const std::string& file, const std::vector<std::uint8_t>& data);
 
 	std::uint64_t SysStringHash64(const std::string& key);
+	bool SysMatchPattern(const std::string& pattern, const std::string& target);
 } // namespace mulex

@@ -30,7 +30,7 @@ public:
 		});
 
 		RdbAccess roota;
-		roota["/system/test"].watch([](const RdbKeyName& key, const RPCGenericType& value){
+		roota["/system/*/test"].watch([](const RdbKeyName& key, const RPCGenericType& value){
 			LogTrace("%s changed.", key.c_str());
 			LogTrace("value = %d.", value.asType<std::int32_t>());
 		});
@@ -38,8 +38,11 @@ public:
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-		roota["/system/test"].erase();
-		roota["/system/test"].create(RdbValueType::INT32, 3);
+		roota["/system/nested/test"].erase();
+		roota["/system/nested/test"].create(RdbValueType::INT32, 3);
+
+		roota["/system/nested/failtest"].erase();
+		roota["/system/nested/failtest"].create(RdbValueType::INT32, 4);
 	}
 
 	virtual void periodic() override
