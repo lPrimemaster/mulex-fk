@@ -810,6 +810,7 @@ namespace mulex
 		// /*/intermediate/*/value
 		// * could match nothing
 		// stuff like /*/*/value is not allowed use /*/value instead
+		// this has limitations but is faster than a DP table
 		
 		// LogTrace("Initial state [p, t]: [%s, %s]", pattern.c_str(), target.c_str());
 

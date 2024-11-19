@@ -314,13 +314,15 @@ namespace mulex
 					WsRpcBridge* bridge = ws->getUserData();
 
 					// Initialize a local rpc client to push ws requests
-					// FIXME: (Cesar) This client should not have an id (?)
-					// NOTE: (Cesar) We can hack into the server rpc thread stack instead of sending a socket request
+					// NOTE: (Cesar) We can hack into the server rpc/evt threads stack instead of sending a socket request
 					// 				 This will however be harder to do for events I think
 					// 				 I would say it is not worth the efort / problems if the local network call
-					// 				 does not pose any performance problems in the future
+					// 				 does not pose any performance / latency problems in the future
 					bridge->_local_rct = std::make_unique<RPCClientThread>("localhost");
-					bridge->_local_ect = std::make_unique<EvtClientThread>("localhost");
+					// BUG: (Cesar) This fails for mxevt::getclientmeta
+					// 				This is not a "real" client
+					// 				So we should handle this next
+					// bridge->_local_ect = std::make_unique<EvtClientThread>("localhost");
 					LogDebug("[mxhttp] New WS connection.");
 				},
 				.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
