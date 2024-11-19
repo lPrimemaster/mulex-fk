@@ -102,4 +102,17 @@ namespace mulex
 	void EvtServerRegisterCallback(mulex::string32 name, std::function<void(const Socket&, std::uint64_t, std::uint16_t, const std::uint8_t*, std::uint64_t)> callback);
 	void EvtTryRunServerCallback(std::uint64_t clientid, std::uint16_t eventid, const std::uint8_t* data, std::uint64_t len, const Socket& socket);
 	void EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
+
+	template <typename T>
+	inline std::uint64_t EvtDataAppend(std::uint64_t offset, std::vector<std::uint8_t>* buffer, const T& value)
+	{
+		std::memcpy(buffer->data() + offset, &value, sizeof(T));
+		return offset + sizeof(T);
+	}
+
+	inline std::uint64_t EvtDataAppend(std::uint64_t offset, std::vector<std::uint8_t>* buffer, const std::uint8_t* value, std::uint64_t len)
+	{
+		std::memcpy(buffer->data() + offset, value, len);
+		return offset + len;
+	}
 } // namespace mulex

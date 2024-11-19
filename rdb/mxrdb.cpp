@@ -338,9 +338,9 @@ namespace mulex
 		std::vector<std::uint8_t> evt_buffer;
 		std::uint64_t entry_data_size = RdbCalculateDataSize(entry->_value);
 		evt_buffer.resize(sizeof(RdbKeyName) + sizeof(std::uint64_t) + entry_data_size);
-		std::memcpy(evt_buffer.data(), &key, sizeof(RdbKeyName));
-		std::memcpy(evt_buffer.data() + sizeof(RdbKeyName), &entry_data_size, sizeof(std::uint64_t));
-		std::memcpy(evt_buffer.data() + sizeof(RdbKeyName) + sizeof(std::uint64_t), entry->_value._ptr, entry_data_size);
+		std::uint64_t offset = EvtDataAppend(0, &evt_buffer, &key);
+		offset = EvtDataAppend(offset, &evt_buffer, &entry_data_size);
+		offset = EvtDataAppend(offset, &evt_buffer, entry->_value._ptr, entry_data_size);
 		EvtEmit(event_name, evt_buffer.data(), evt_buffer.size());
 	}
 
