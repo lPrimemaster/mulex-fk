@@ -48,9 +48,9 @@ public:
 	virtual void periodic() override
 	{
 		std::cout << "Loop" << std::endl;
-		// RdbAccess config = getConfigRdbRoot();
-		// static std::int32_t s = 0;
-		// config["period_ms"] = s++;
+		RdbAccess config = getConfigRdbRoot();
+		static std::int32_t s = 0;
+		config["period_ms"] = s++;
 		// dispatchEvent("TestBackend::data", reinterpret_cast<const std::uint8_t*>("DATA"), 4);
 	}
 };

@@ -38,7 +38,7 @@ const Home: Component = () => {
 					</Card>
 					<Card title="Backends"/>
 					<Card title="Dummy"/>
-					<Card title="Dummy"/>
+					<Card title="Clients"/>
 				</div>
 			</div>
 		</div>

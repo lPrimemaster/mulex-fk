@@ -23,11 +23,18 @@ namespace mulex
 	struct WsRpcBridge;
 } // namespace mulex
 
+using UWSType = uWS::WebSocket<false, true, mulex::WsRpcBridge>;
 static std::mutex _mutex;
-static std::set<uWS::WebSocket<false, true, mulex::WsRpcBridge>*> _active_ws_connections;
+static std::set<UWSType*> _active_ws_connections;
+static std::unordered_map<std::string, std::set<UWSType*>> _active_ws_subscriptions;
 
 namespace mulex
 {
+	struct WsRpcBridge
+	{
+		Experiment _local_experiment;
+	};
+
 	static std::string HttpReadFileFromDisk(const std::string& filepath)
 	{
 		std::ifstream file(filepath, std::ios::binary);
@@ -190,7 +197,7 @@ namespace mulex
 		}
 	}
 
-	static std::tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool> HttpParseWSMessage(std::string_view message, bool* error)
+	static rapidjson::Document HttpParseWSMessage(std::string_view message, bool* error)
 	{
 		rapidjson::Document d;
 		// HACK: (Cesar) This is not ideal
@@ -203,11 +210,38 @@ namespace mulex
 		{
 			LogError("[mxhttp] HttpParseWSMessage: Failed to parse RPC call.");
 			if(error) *error = true;
-			return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
+			return d;
 		}
 
+		return d;
+	}
+
+	// tuple -> (opcode, eventname)
+	static std::tuple<std::uint8_t, std::string> HttpGetEVTMessage(const rapidjson::Document& d, bool* error)
+	{
+		if(error) *error = false;
+
+		std::string eventname = HttpTryGetEntry<std::string>(d, "event", error);
+		if(error && *error)
+		{
+			return std::make_tuple<std::uint8_t, std::string>(0, {});
+		}
+
+		std::uint8_t opcode = HttpTryGetEntry<std::uint8_t>(d, "opcode", error);
+		if(error && *error)
+		{
+			return std::make_tuple<std::uint8_t, std::string>(0, {});
+		}
+
+		return std::make_tuple(opcode, eventname);
+	}
+
+	static std::tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool> HttpGetRPCMessage(const rapidjson::Document& d, bool* error)
+	{
 		// If we want to use native types we should get someway of getting the RPC server side types
 		// Multiple ways come to mind. For now we generate the same data on the frontend args array
+		
+		if(error) *error = false;
 	
 		// NOTE: (Cesar) Use array of uint8 from frontend and cast it to std::vector<std::uint8_t>
 		//				 The websocket already compresses the data
@@ -261,7 +295,7 @@ namespace mulex
 		return std::make_tuple(procedureid, args, messageidws, expectresult);
 	}
 
-	static std::string HttpMakeWSMessage(const std::vector<std::uint8_t>& ret, const std::string& status, const std::string& type, std::uint64_t messageid)
+	static std::string HttpMakeWSRPCMessage(const std::vector<std::uint8_t>& ret, const std::string& status, std::uint64_t messageid)
 	{
 		rapidjson::Document d;
 		rapidjson::StringBuffer buffer;
@@ -273,20 +307,144 @@ namespace mulex
 		}
 
 		d.AddMember("status", rapidjson::StringRef(status.c_str(), status.size()), d.GetAllocator());
-		d.AddMember("type", rapidjson::StringRef(type.c_str(), type.size()), d.GetAllocator());
+		d.AddMember("type", rapidjson::StringRef("rpc"), d.GetAllocator());
 		d.AddMember("messageid", messageid, d.GetAllocator());
 
 		d.Accept(writer);
 
-		LogTrace("[mxhttp] HttpMakeWSMessage() OK.");
+		LogTrace("[mxhttp] HttpMakeWSRPCMessage() OK.");
 
 		return buffer.GetString();
 	}
 
-	struct WsRpcBridge
+	static std::string HttpMakeWSEVTMessage(const std::vector<std::uint8_t>& ret, const std::string& eventname)
 	{
-		Experiment _local_experiment;
-	};
+		rapidjson::Document d;
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+
+		if(!ret.empty())
+		{
+			d = HttpJsonFromByteVector(ret);
+		}
+
+		d.AddMember("event", rapidjson::StringRef(eventname.c_str(), eventname.size()), d.GetAllocator());
+		d.AddMember("type", rapidjson::StringRef("evt"), d.GetAllocator());
+
+		d.Accept(writer);
+
+		LogTrace("[mxhttp] HttpMakeWSEVTMessage() OK.");
+
+		return buffer.GetString();
+	}
+
+	static void HttpDeferCall(decltype(_active_ws_connections)::key_type ws, std::function<void(decltype(_active_ws_connections)::key_type)> func)
+	{
+		_ws_loop_thread->defer([&ws, &func]() {
+			func(ws);
+		});
+	}
+
+	static void HttpDeferCallAll(std::function<void(decltype(_active_ws_connections)::key_type)> func)
+	{
+		_ws_loop_thread->defer([&func]() {
+			std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
+			for(auto* ws : _active_ws_connections)
+			{
+				func(ws);
+			}
+		});
+	}
+
+	// uWS already supports publishing/subscribing from topics
+	// Maybe we switch to this eventually??
+	static void HttpSendEvent(const std::string& event, const std::uint8_t* data, std::uint64_t len)
+	{
+		std::vector<std::uint8_t> data_vector;
+
+		auto eventws = _active_ws_subscriptions.find(event);
+
+		if(eventws == _active_ws_subscriptions.end())
+		{
+			LogError("[mxhttp] Cannot send event. No WS subscribed.");
+			LogError("[mxhttp] This is a bug.");
+			return;
+		}
+
+		if(eventws->second.empty())
+		{
+			return;
+		}
+
+		data_vector.resize(len);
+		std::memcpy(data_vector.data(), data, len);
+
+		// Move the data vector to the uWS loop thread
+		HttpDeferCall(nullptr, [eventws, dv = std::move(data_vector), event](auto*) {
+			for(auto* ws : eventws->second)
+			{
+				const std::string message = HttpMakeWSEVTMessage(dv, event);
+				ws->send(message);
+			}
+		});
+	}
+
+	static void HttpSubscribeEvent(UWSType* ws, const std::string& event)
+	{
+		// See if this event exists
+		WsRpcBridge* bridge = ws->getUserData();
+		auto& evtclient = bridge->_local_experiment._evt_client;
+		std::uint16_t eid = evtclient->findEvent(event);
+		if(eid == 0)
+		{
+			LogError("[mxhttp] Failed to subscribe to event. IPC event <%s> does not exist.", event.c_str());
+			return;
+		}
+
+		evtclient->subscribe(event, [event](auto* data, auto len, auto* userdata) {
+			HttpSendEvent(event, data, len);
+		});
+
+		LogTrace("[mxhttp] HttpSubscribeEvent() OK.");
+		auto eventws = _active_ws_subscriptions.find(event);
+		if(eventws == _active_ws_subscriptions.end())
+		{
+			_active_ws_subscriptions.emplace(event, std::set<UWSType*>{ws});
+			return;
+		}
+		eventws->second.insert(ws);
+	}
+
+	static void HttpUnsubscribeEvent(UWSType* ws, const std::string& event)
+	{
+		auto eventws = _active_ws_subscriptions.find(event);
+		if(eventws == _active_ws_subscriptions.end())
+		{
+			LogError("[mxhttp] Cannot unsubscribe to event <%s>. Not subscribed.", event.c_str());
+			return;
+		}
+		auto wsit = eventws->second.find(ws);
+		if(wsit == eventws->second.end())
+		{
+			LogError("[mxhttp] Cannot unsubscribe to event <%s>. Not subscribed.", event.c_str());
+			return;
+		}
+
+		LogTrace("[mxhttp] HttpUnsubscribeEvent() OK.");
+		eventws->second.erase(wsit);
+	}
+
+	static void HttpUnsubscribeEventAll(UWSType* ws)
+	{
+		for(auto it = _active_ws_subscriptions.begin(); it != _active_ws_subscriptions.end(); it++)
+		{
+			auto wsit = it->second.find(ws);
+			if(wsit != it->second.end())
+			{
+				it->second.erase(wsit);
+			}
+		}
+	}
 
 	void HttpStartServer(std::uint16_t port)
 	{
@@ -318,9 +476,7 @@ namespace mulex
 					// 				 I would say it is not worth the efort / problems if the local network call
 					// 				 does not pose any performance / latency problems in the future
 					bridge->_local_experiment._rpc_client = std::make_unique<RPCClientThread>("localhost");
-					// BUG: (Cesar) This fails for mxevt::getclientmeta
-					// 				This is not a "real" client
-					// 				So we should handle this next
+
 					// Ghost client
 					bridge->_local_experiment._evt_client = std::make_unique<EvtClientThread>("localhost", &bridge->_local_experiment, EVT_PORT, true);
 					LogDebug("[mxhttp] New WS connection.");
@@ -335,31 +491,72 @@ namespace mulex
 
 					// Parse the received data
 					bool parse_error;
-					const auto [procedureid, args, messageidws, exresult] = HttpParseWSMessage(message, &parse_error);
+					rapidjson::Document doc = HttpParseWSMessage(message, &parse_error);
+
+
+					std::uint16_t type = HttpTryGetEntry<std::uint16_t>(doc, "type", &parse_error);
 					if(parse_error)
 					{
-						// Parse error, ignore this message
 						return;
 					}
-
-					if(exresult)
+					
+					if(type == 0) // RPC call
 					{
-						std::vector<std::uint8_t> result;
-						// NOTE: (Cesar) If this gets expensive we move the call to another thread and defer send to ws
-						// 				 Backpressure should handle this automatically via the uWS buffer
-						bridge->_local_experiment._rpc_client->callRaw(procedureid, args, &result);
-						const std::string retmessage = HttpMakeWSMessage(result, "OK", "rpc", messageidws);
-						ws->send(retmessage);
+						const auto [procedureid, args, messageidws, exresult] = HttpGetRPCMessage(doc, &parse_error);
+						if(parse_error)
+						{
+							// Parse error, ignore this message
+							return;
+						}
+
+						if(exresult)
+						{
+							std::vector<std::uint8_t> result;
+							// NOTE: (Cesar) If this gets expensive we move the call to another thread and defer send to ws
+							// 				 Backpressure should handle this automatically via the uWS buffer
+							bridge->_local_experiment._rpc_client->callRaw(procedureid, args, &result);
+							const std::string retmessage = HttpMakeWSRPCMessage(result, "OK", messageidws);
+							ws->send(retmessage);
+						}
+						else
+						{
+							bridge->_local_experiment._rpc_client->callRaw(procedureid, args, nullptr);
+							const std::string retmessage = HttpMakeWSRPCMessage(std::vector<std::uint8_t>(), "OK", messageidws);
+							ws->send(retmessage);
+						}
+					}
+					else if(type == 1) // Evt subscription/unsubscription
+					{
+						const auto [opcode, event] = HttpGetEVTMessage(doc, &parse_error);
+						if(parse_error)
+						{
+							// Parse error, ignore this message
+							return;
+						}
+
+						if(opcode == 0) // subscribe
+						{
+							HttpSubscribeEvent(ws, event);
+						}
+						else if(opcode == 1) // unsubscribe
+						{
+							HttpUnsubscribeEvent(ws, event);
+						}
+						else
+						{
+							LogError("[mxhttp] Urecognized event opcode <%d>.", opcode);
+						}
 					}
 					else
 					{
-						bridge->_local_experiment._rpc_client->callRaw(procedureid, args, nullptr);
-						const std::string retmessage = HttpMakeWSMessage(std::vector<std::uint8_t>(), "OK", "rpc", messageidws);
-						ws->send(retmessage);
+						LogError("[mxhttp] Urecognized message type <%d>.", type);
 					}
 				},
 				.close = [](auto* ws, int code, std::string_view message) {
 					WsRpcBridge* bridge = ws->getUserData();
+
+					// Unsubscribe from all events on this client if any
+					HttpUnsubscribeEventAll(ws);
 
 					// Delete the local rpc/ect client bridges for this connection
 					bridge->_local_experiment._rpc_client.reset();
@@ -387,13 +584,8 @@ namespace mulex
 		if(_http_listen_socket)
 		{
 			// Defer close all current connections (we don't want to wait on the browser)
-			_ws_loop_thread->defer([]() {
-				std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
-				for(auto* ws : _active_ws_connections)
-				{
-					ws->close();
-				}
-				_active_ws_connections.clear();
+			HttpDeferCallAll([](auto* ws) {
+				ws->close();
 			});
 
 			us_listen_socket_close(0, _http_listen_socket);

@@ -1,5 +1,4 @@
 import { MxGenericType } from './convert';
-import { showToast } from '../components/ui/toast';
 
 export class MxWebsocket {
 	private socket: WebSocket;
@@ -10,6 +9,7 @@ export class MxWebsocket {
 	private static s_instance: MxWebsocket;
 	private address: string;
 	private on_change: Array<Function>;
+	private event_subscriptions: Map<string, Function>;
 
 	private setupCallbacks() {
 		this.socket.onopen = async () => {
@@ -37,7 +37,11 @@ export class MxWebsocket {
 			}
 			else if(data.type === "evt") {
 				// Push to subscribed events queue
-				// TODO: (Cesar)
+				const callback = this.event_subscriptions.get(data.event);
+				if(callback) {
+					// Events could have raw data (just pass it like so)
+					callback(data.response);
+				}
 			}
 		};
 
@@ -67,6 +71,7 @@ export class MxWebsocket {
 		this.isready = false;
 		this.waiting_p = new Array<Function>();
 		this.on_change = new Array<Function>();
+		this.event_subscriptions = new Map<string, Function>();
 
 		this.setupCallbacks();
 	}
@@ -116,6 +121,39 @@ export class MxWebsocket {
 		});
 	}
 
+	public async subscribe(event: string, callback: Function) {
+		const data: string = this.make_evt_message(event, 0);
+		if(!this.isready) {
+			await this.when_ready();
+		}
+		return new Promise<MxGenericType>((resolve) => {
+			// Send the data via websocket
+			this.socket.send(data);
+			// Set event on map
+			this.event_subscriptions.set(event, callback);
+			// Resolve now with no response
+			resolve(MxGenericType.fromData(new Uint8Array([])));
+		});
+	}
+
+	public async unsubscribe(event: string) {
+		const data: string = this.make_evt_message(event, 1);
+		if(!this.isready) {
+			await this.when_ready();
+		}
+		return new Promise<MxGenericType>((resolve) => {
+			// Send the data via websocket
+			this.socket.send(data);
+			// Remove event from map
+			this.event_subscriptions.delete(event);
+			// Resolve now with no response
+			resolve(MxGenericType.fromData(new Uint8Array([])));
+		});
+	}
+
+	// TODO: (Cesar) Handle unsubscribing on the server-side
+	// public async unsubscribe(event: string)
+
 	// Close the connection if the ws is alive
 	public close() {
 		if(this.socket.readyState === WebSocket.OPEN) {
@@ -128,14 +166,18 @@ export class MxWebsocket {
 		// Minimize network impact with b64 encoding for the arguments
 		const rawData = btoa(tdec.decode(MxGenericType.concatData(args)));
 		if(args.length > 0) {
-			return JSON.stringify({'method': method, 'args': rawData, 'messageid': this.messageid, 'response': response});
+			return JSON.stringify({'type': 0, 'method': method, 'args': rawData, 'messageid': this.messageid, 'response': response});
 		}
 		else {
-			return JSON.stringify({'method': method, 'messageid': this.messageid, 'response': response});
+			return JSON.stringify({'type': 0, 'method': method, 'messageid': this.messageid, 'response': response});
 		}
 	}
 
 	private make_rpc_response(data: any, response: string) : MxGenericType {
 		return MxGenericType.fromData(new Uint8Array(data.response), response);
+	}
+
+	private make_evt_message(event: string, opcode: number) {
+		return JSON.stringify({'type': 1, 'op': opcode, 'event': event});
 	}
 };
