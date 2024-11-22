@@ -17,21 +17,6 @@ if(mxrpcret EQUAL "1")
 	message(FATAL_ERROR "mxrpcgen failed")
 endif()
 
-# ExternalProject_Add(uWebSockets
-# 	GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
-# 	GIT_SHALLOW 1
-# 	UPDATE_COMMAND ""
-# 	SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets
-# 	BUILD_IN_SOURCE 1
-# 	CONFIGURE_COMMAND ""
-# 	BUILD_COMMAND make -C uSockets -j8 # We only support make tools here (repo restriction) (windows or linux)
-# 	BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/uSockets.a
-# 	INSTALL_COMMAND ""
-# )
-#
-# add_library(libuSockets STATIC IMPORTED GLOBAL)
-# set_property(TARGET libuSockets PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/uSockets.a)
-
 # Don't use uSockets built-in makefile (does not work on windows - unless we are on MSYS2)
 FetchContent_Declare(uWebSockets_cont
 	GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
@@ -43,6 +28,7 @@ message(STATUS ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets)
 file(GLOB_RECURSE uWS_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src/*.c)
 add_library(uSockets ${uWS_SOURCES})
 target_include_directories(uSockets PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src)
+target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
 
 FetchContent_Declare(aklomp_base64
 	GIT_REPOSITORY https://github.com/aklomp/base64.git
@@ -84,7 +70,6 @@ add_library(mxhttp
 
 find_package(ZLIB REQUIRED)
 
-# add_dependencies(mxhttp uWebSockets)
 target_link_libraries(mxhttp uv uSockets ZLIB::ZLIB RapidJSON base64)
 
 target_include_directories(mxhttp PRIVATE

@@ -330,7 +330,7 @@ namespace mulex
 	{
 		_sys_experiment_connected = true;
 		_sys_experiment._rpc_client = std::make_unique<RPCClientThread>(hostname, RPC_PORT);
-		_sys_experiment._evt_client = std::make_unique<EvtClientThread>(hostname, EVT_PORT);
+		_sys_experiment._evt_client = std::make_unique<EvtClientThread>(hostname, nullptr, EVT_PORT);
 		return true;
 	}
 

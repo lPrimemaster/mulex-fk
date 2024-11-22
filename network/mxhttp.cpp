@@ -285,8 +285,7 @@ namespace mulex
 
 	struct WsRpcBridge
 	{
-		std::unique_ptr<RPCClientThread> _local_rct;
-		std::unique_ptr<EvtClientThread> _local_ect;
+		Experiment _local_experiment;
 	};
 
 	void HttpStartServer(std::uint16_t port)
@@ -318,11 +317,12 @@ namespace mulex
 					// 				 This will however be harder to do for events I think
 					// 				 I would say it is not worth the efort / problems if the local network call
 					// 				 does not pose any performance / latency problems in the future
-					bridge->_local_rct = std::make_unique<RPCClientThread>("localhost");
+					bridge->_local_experiment._rpc_client = std::make_unique<RPCClientThread>("localhost");
 					// BUG: (Cesar) This fails for mxevt::getclientmeta
 					// 				This is not a "real" client
 					// 				So we should handle this next
-					// bridge->_local_ect = std::make_unique<EvtClientThread>("localhost");
+					// Ghost client
+					bridge->_local_experiment._evt_client = std::make_unique<EvtClientThread>("localhost", &bridge->_local_experiment, EVT_PORT, true);
 					LogDebug("[mxhttp] New WS connection.");
 				},
 				.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
@@ -347,13 +347,13 @@ namespace mulex
 						std::vector<std::uint8_t> result;
 						// NOTE: (Cesar) If this gets expensive we move the call to another thread and defer send to ws
 						// 				 Backpressure should handle this automatically via the uWS buffer
-						bridge->_local_rct->callRaw(procedureid, args, &result);
+						bridge->_local_experiment._rpc_client->callRaw(procedureid, args, &result);
 						const std::string retmessage = HttpMakeWSMessage(result, "OK", "rpc", messageidws);
 						ws->send(retmessage);
 					}
 					else
 					{
-						bridge->_local_rct->callRaw(procedureid, args, nullptr);
+						bridge->_local_experiment._rpc_client->callRaw(procedureid, args, nullptr);
 						const std::string retmessage = HttpMakeWSMessage(std::vector<std::uint8_t>(), "OK", "rpc", messageidws);
 						ws->send(retmessage);
 					}
@@ -362,8 +362,8 @@ namespace mulex
 					WsRpcBridge* bridge = ws->getUserData();
 
 					// Delete the local rpc/ect client bridges for this connection
-					bridge->_local_rct.reset();
-					bridge->_local_ect.reset();
+					bridge->_local_experiment._rpc_client.reset();
+					bridge->_local_experiment._evt_client.reset();
 					LogDebug("[mxhttp] Closing WS connection.");
 				}
 			}).listen(port, [port](auto* token) {

@@ -44,8 +44,14 @@ namespace mulex
 		return _client_msg_id++;
 	}
 
-	EvtClientThread::EvtClientThread(const std::string& hostname, std::uint16_t evtport)
+	EvtClientThread::EvtClientThread(const std::string& hostname, const Experiment* exp, std::uint16_t evtport, bool ghost)
 	{
+		_exp = exp;
+		if(_exp)
+		{
+			LogTrace("[evtclient] Passed in custom experiment dependency.");
+		}
+
 		_evt_socket = SocketInit();
 		SocketConnect(_evt_socket, hostname, evtport);
 		_evt_thread_running.store(true);
@@ -56,12 +62,19 @@ namespace mulex
 			std::bind(&EvtClientThread::clientEmitThread, this, _evt_socket)
 		);
 
-		// Tell the server who we are
-		std::string_view bname = SysGetBinaryName();
-		std::string_view hname = SysGetHostname();
-		std::string client_name_meta = std::string(bname) + "@" + std::string(hname);
+		if(ghost)
+		{
+			emit("mxevt::getclientmeta", nullptr, 0);
+		}
+		else
+		{
+			// Tell the server who we are
+			std::string_view bname = SysGetBinaryName();
+			std::string_view hname = SysGetHostname();
+			std::string client_name_meta = std::string(bname) + "@" + std::string(hname);
 
-		emit("mxevt::getclientmeta", reinterpret_cast<const std::uint8_t*>(client_name_meta.c_str()), client_name_meta.size() + 1);
+			emit("mxevt::getclientmeta", reinterpret_cast<const std::uint8_t*>(client_name_meta.c_str()), client_name_meta.size() + 1);
+		}
 	}
 
 	EvtClientThread::~EvtClientThread()
@@ -139,14 +152,23 @@ namespace mulex
 		{
 			LogDebug("[evtclient] Could not find event <%s> in local registry.", event.c_str());
 			LogDebug("[evtclient] Looking in server for <%s>.", event.c_str());
-			std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
-			if(!experiment.has_value())
-			{
-				LogError("[evtclient] Failed to emit event. Not connected to an experiment.");
-				return 0;
-			}
+			std::uint16_t eid = 0;
 
-			std::uint16_t eid = experiment.value()->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
+			if(_exp)
+			{
+				eid = _exp->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
+			}
+			else
+			{
+				std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
+				if(!experiment.has_value())
+				{
+					LogError("[evtclient] Failed to emit event. Not connected to an experiment.");
+					return 0;
+				}
+
+				eid = experiment.value()->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
+			}
 			if(eid != 0)
 			{
 				// Cache it
@@ -188,20 +210,29 @@ namespace mulex
 	void EvtClientThread::regist(const std::string& event)
 	{
 		// Ask server to register event via RPC
-		std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
-		if(!experiment.has_value())
+		const Experiment* exp;
+		if(_exp)
 		{
-			LogError("[evtclient] Failed to register event. Not connected to an experiment.");
-			return;
+			exp = _exp;
+		}
+		else
+		{
+			std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
+			if(!experiment.has_value())
+			{
+				LogError("[evtclient] Failed to register event. Not connected to an experiment.");
+				return;
+			}
+			exp = experiment.value();
 		}
 		
-		bool reg = experiment.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_EVTREGISTER, string32(event));
+		bool reg = exp->_rpc_client->call<bool>(RPC_CALL_MULEX_EVTREGISTER, string32(event));
 		if(!reg)
 		{
 			LogError("[evtclient] Failed to register event. EvtRegister() returned false.");
 		}
 
-		std::uint16_t eventid = experiment.value()->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
+		std::uint16_t eventid = exp->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
 		if(eventid == 0)
 		{
 			LogError("[evtclient] Failed to register event.");
@@ -215,21 +246,30 @@ namespace mulex
 	void EvtClientThread::subscribe(const std::string& event, EvtCallbackFunc callback)
 	{
 		// Ask server for the event id via RPC
-		std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
-		if(!experiment.has_value())
+		const Experiment* exp;
+		if(_exp)
 		{
-			LogError("[evtclient] Failed to subscribe to event. Not connected to an experiment.");
-			return;
+			exp = _exp;
+		}
+		else
+		{
+			std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
+			if(!experiment.has_value())
+			{
+				LogError("[evtclient] Failed to subscribe to event. Not connected to an experiment.");
+				return;
+			}
+			exp = experiment.value();
 		}
 		
-		std::uint16_t eventid = experiment.value()->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
+		std::uint16_t eventid = exp->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
 		if(eventid == 0)
 		{
 			LogError("[evtclient] Failed to subscribe to event. Event <%s> is not registered.");
 			return;
 		}
 
-		if(!experiment.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_EVTSUBSCRIBE, string32(event)))
+		if(!exp->_rpc_client->call<bool>(RPC_CALL_MULEX_EVTSUBSCRIBE, string32(event)))
 		{
 			LogError("[evtclient] Failed to subscribe to event.");
 			return;
@@ -306,6 +346,13 @@ namespace mulex
 		LogDebug("[evtserver] Registering client <0x%llx>.", cid);
 		_evt_client_socket_pair[socket._handle] = cid;
 		_evt_client_socket_pair_rev[cid] = socket;
+
+		if(size == 0)
+		{
+			// This is a "ghost" client
+			// Not registered on the rdb
+			return;
+		}
 
 		LogDebug("[evtserver] New connected client <%s>.", reinterpret_cast<const char*>(data));
 		std::string name_data = reinterpret_cast<const char*>(data);
