@@ -36,6 +36,7 @@ static std::map<int, std::uint64_t> _evt_client_socket_pair;
 static std::map<SOCKET, std::uint64_t> _evt_client_socket_pair;
 #endif
 static std::map<std::uint64_t, mulex::Socket> _evt_client_socket_pair_rev;
+static std::set<std::uint16_t> _evt_client_ghost;
 
 namespace mulex
 {
@@ -341,6 +342,11 @@ namespace mulex
 		SetRdbClientConnectionStatus(cid, true);
 	}
 
+	static bool ClientIsGhost(std::uint16_t cid)
+	{
+		return (_evt_client_ghost.find(cid) != _evt_client_ghost.end());
+	}
+
 	static void OnClientConnectMetadata(const Socket& socket, std::uint64_t cid, std::uint16_t eid, const std::uint8_t* data, std::uint64_t size)
 	{
 		LogDebug("[evtserver] Registering client <0x%llx>.", cid);
@@ -351,6 +357,7 @@ namespace mulex
 		{
 			// This is a "ghost" client
 			// Not registered on the rdb
+			_evt_client_ghost.insert(cid);
 			return;
 		}
 
@@ -367,6 +374,12 @@ namespace mulex
 		for(const auto& evt : _evt_current_subscriptions)
 		{
 			EvtUnsubscribe(cid, evt.first);
+		}
+
+		if(ClientIsGhost(cid))
+		{
+			_evt_client_ghost.erase(cid);
+			return; // Don't set the status
 		}
 
 		SetRdbClientConnectionStatus(cid, false);

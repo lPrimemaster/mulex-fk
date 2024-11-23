@@ -641,6 +641,19 @@ namespace mulex
 		return event_name;
 	}
 
+	mulex::RPCGenericType RdbListKeys()
+	{
+		std::vector<RdbKeyName> keys;
+		keys.reserve(_rdb_offset_map.size());
+		for(const auto& key : _rdb_offset_map)
+		{
+			RdbLockEntryRead(*key.second);
+			keys.push_back(key.second->_key._name);
+			RdbUnlockEntryRead(*key.second);
+		}
+		return keys;
+	}
+
 	void RdbProxyValue::writeEntry()
 	{
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();

@@ -15,23 +15,23 @@ export class MxGenericType
 
 	// Shorthands for fromValue
 	static str32(value: string, intype: string = 'native') : MxGenericType {
-		return MxGenericType.fromValue(value, 'string32', intype)
+		return MxGenericType.fromValue(value, 'string32', intype);
 	}
 
 	static str512(value: string, intype: string = 'native') : MxGenericType {
-		return MxGenericType.fromValue(value, 'string512', intype)
+		return MxGenericType.fromValue(value, 'string512', intype);
 	}
 
 	static f32(value: string, intype: string = 'native') : MxGenericType {
-		return MxGenericType.fromValue(value, 'float32', intype)
+		return MxGenericType.fromValue(value, 'float32', intype);
 	}
 
 	static f64(value: string, intype: string = 'native') : MxGenericType {
-		return MxGenericType.fromValue(value, 'float64', intype)
+		return MxGenericType.fromValue(value, 'float64', intype);
 	}
 
 	static bool(value: boolean, intype: string = 'native') : MxGenericType {
-		return MxGenericType.fromValue(value, 'bool', intype)
+		return MxGenericType.fromValue(value, 'bool', intype);
 	}
 
 	static fromValue(value: any, type: string, intype: string = 'native') : MxGenericType {
@@ -90,6 +90,16 @@ export class MxGenericType
 		return mdata;
 	}
 
+	private splitChunks(args: Uint8Array, chunksize: number) : Array<Uint8Array> {
+		const chunks = new Array<Uint8Array>();
+
+		for(let i = 0; i < args.length; i += chunksize) {
+			chunks.push(args.slice(i, i + chunksize));
+		}
+
+		return chunks;
+	}
+
 	public astype(type: string) : any {
 		if(this.data.byteLength === 0) {
 			return null;
@@ -102,7 +112,6 @@ export class MxGenericType
 		}
 
 		const data = new Uint8Array(this.data.buffer, offset);
-		const view = new DataView(this.data.buffer, offset);
 
 		// TODO: (Cesar) Check the length of data (should be superfluous...)
 
@@ -111,8 +120,24 @@ export class MxGenericType
 			const decoder = new TextDecoder();
 			return decoder.decode(data).split('\0').shift(); // Null terminate the string
 		}
+		else if(type === 'stringarray') {
+			const decoder = new TextDecoder();
+
+			const array: Array<Uint8Array> = this.splitChunks(data, 512);
+			const out = new Array<string>();
+			for(let i = 0; i < array.length; i++) {
+				let element = decoder.decode(array[i]).split('\0').shift();
+				if(element) {
+					out.push(element);
+				}
+			}
+			return out;
+
+			// Strings are all null terminated on the backend so we can instead do:
+			// return decoder.decode(data).split('\0');
+		}
 		else if(type === 'float32') {
-			const f32arr = new Float32Array(data);
+			const f32arr = new Float32Array(data.buffer);
 			if(f32arr.length === 1) {
 				return f32arr[0];
 			}
@@ -121,7 +146,7 @@ export class MxGenericType
 			}
 		}
 		else if(type === 'float64') {
-			const f64arr = new Float64Array(data);
+			const f64arr = new Float64Array(data.buffer);
 			if(f64arr.length === 1) {
 				return f64arr[0];
 			}
@@ -130,10 +155,10 @@ export class MxGenericType
 			}
 		}
 		else if(type === 'int32') {
-			return view.getUint32(0, true);
-			console.log(data);
+			// return view.getUint32(0, true);
+			// console.log(data);
 			const i32arr = new Int32Array(data.buffer);
-			console.log(i32arr);
+			// console.log(i32arr);
 			if(i32arr.length === 1) {
 				return i32arr[0];
 			}

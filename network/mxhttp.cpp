@@ -141,7 +141,17 @@ namespace mulex
 		if(error) *error = false;
 		if(d.HasMember(key.c_str()))
 		{
-			if constexpr(std::is_same_v<T, std::uint16_t>)
+			if constexpr(std::is_same_v<T, std::uint8_t>)
+			{
+				if(d[key.c_str()].GetType() != rapidjson::Type::kNumberType)
+				{
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.");
+					if(error) *error = true;
+					return T();
+				}
+				return static_cast<std::uint8_t>(d[key.c_str()].GetInt());
+			}
+			else if constexpr(std::is_same_v<T, std::uint16_t>)
 			{
 				if(d[key.c_str()].GetType() != rapidjson::Type::kNumberType)
 				{
@@ -340,7 +350,7 @@ namespace mulex
 
 	static void HttpDeferCall(decltype(_active_ws_connections)::key_type ws, std::function<void(decltype(_active_ws_connections)::key_type)> func)
 	{
-		_ws_loop_thread->defer([&ws, &func]() {
+		_ws_loop_thread->defer([&ws, func]() {
 			func(ws);
 		});
 	}
@@ -384,6 +394,7 @@ namespace mulex
 			for(auto* ws : eventws->second)
 			{
 				const std::string message = HttpMakeWSEVTMessage(dv, event);
+				LogTrace("[mxhttp] Sending event message <%s>.", message.c_str());
 				ws->send(message);
 			}
 		});

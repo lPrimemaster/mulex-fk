@@ -40,7 +40,7 @@ export class MxWebsocket {
 				const callback = this.event_subscriptions.get(data.event);
 				if(callback) {
 					// Events could have raw data (just pass it like so)
-					callback(data.response);
+					callback(new Uint8Array(data.response));
 				}
 			}
 		};
@@ -178,6 +178,6 @@ export class MxWebsocket {
 	}
 
 	private make_evt_message(event: string, opcode: number) {
-		return JSON.stringify({'type': 1, 'op': opcode, 'event': event});
+		return JSON.stringify({'type': 1, 'opcode': opcode, 'event': event});
 	}
 };

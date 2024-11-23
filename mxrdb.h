@@ -113,6 +113,7 @@ namespace mulex
 	MX_RPC_METHOD void RdbDeleteValueDirect(mulex::RdbKeyName keyname);
 	MX_RPC_METHOD bool RdbValueExists(mulex::RdbKeyName keyname);
 	MX_RPC_METHOD mulex::string32 RdbWatch(mulex::RdbKeyName dir);
+	MX_RPC_METHOD mulex::RPCGenericType RdbListKeys();
 
 	std::string RdbMakeWatchEvent(const mulex::RdbKeyName& dir);
 	void RdbTriggerEvent(std::uint64_t clientid, const RdbEntry& entry);
