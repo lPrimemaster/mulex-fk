@@ -394,7 +394,7 @@ namespace mulex
 			for(auto* ws : eventws->second)
 			{
 				const std::string message = HttpMakeWSEVTMessage(dv, event);
-				LogTrace("[mxhttp] Sending event message <%s>.", message.c_str());
+				LogTrace("[mxhttp] Sending event message to ws.");
 				ws->send(message);
 			}
 		});

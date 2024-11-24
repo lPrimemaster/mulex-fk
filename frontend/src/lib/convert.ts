@@ -111,7 +111,7 @@ export class MxGenericType
 			offset = 8; // 64-bit uint with size first
 		}
 
-		const data = new Uint8Array(this.data.buffer, offset);
+		const data = new Uint8Array(this.data.buffer, offset + this.data.byteOffset);
 
 		// TODO: (Cesar) Check the length of data (should be superfluous...)
 

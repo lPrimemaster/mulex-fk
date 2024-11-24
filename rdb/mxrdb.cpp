@@ -338,8 +338,8 @@ namespace mulex
 		std::vector<std::uint8_t> evt_buffer;
 		std::uint64_t entry_data_size = RdbCalculateDataSize(entry->_value);
 		evt_buffer.resize(sizeof(RdbKeyName) + sizeof(std::uint64_t) + entry_data_size);
-		std::uint64_t offset = EvtDataAppend(0, &evt_buffer, &key);
-		offset = EvtDataAppend(offset, &evt_buffer, &entry_data_size);
+		std::uint64_t offset = EvtDataAppend(0, &evt_buffer, key);
+		offset = EvtDataAppend(offset, &evt_buffer, entry_data_size);
 		offset = EvtDataAppend(offset, &evt_buffer, entry->_value._ptr, entry_data_size);
 		EvtEmit(event_name, evt_buffer.data(), evt_buffer.size());
 	}
@@ -649,6 +649,58 @@ namespace mulex
 		{
 			RdbLockEntryRead(*key.second);
 			keys.push_back(key.second->_key._name);
+			RdbUnlockEntryRead(*key.second);
+		}
+		return keys;
+	}
+
+	static std::vector<RdbKeyName> RdbFindSubkeys(std::string prefix)
+	{
+		std::vector<RdbKeyName> subkeys;
+
+		if(prefix.back() != '/')
+		{
+			LogError("[rdb] RdbFindSubkeys needs a prefix (subkey ending with '/').");
+			return subkeys;
+		}
+
+		const auto it_low = _rdb_offset_map.lower_bound(prefix);
+
+		prefix.back()++;
+		const auto it_high = _rdb_offset_map.lower_bound(prefix);
+
+		// TODO: (Cesar) Iterator aritmetic
+		// subkeys.reserve(it_high - it_low);
+
+		for(auto it = it_low; it != it_high; it++)
+		{
+			subkeys.push_back(it->second->_key._name);
+		}
+		return subkeys;
+	}
+
+	mulex::RPCGenericType RdbListSubkeys(mulex::RdbKeyName dir)
+	{
+		std::string sdir = dir.c_str();
+		if(sdir.find('*') == std::string::npos)
+		{
+			// This is just a prefix
+			return RdbFindSubkeys(sdir);
+		}
+
+		std::vector<RdbKeyName> keys;
+
+		// This is a prefix with the kleene star operator
+		for(const auto& key : _rdb_offset_map)
+		{
+			RdbLockEntryRead(*key.second);
+
+			const RdbKeyName& name = key.second->_key._name;
+			if(SysMatchPattern(sdir, name.c_str()))
+			{
+				keys.push_back(key.second->_key._name);
+			}
+
 			RdbUnlockEntryRead(*key.second);
 		}
 		return keys;

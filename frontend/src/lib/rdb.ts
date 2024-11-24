@@ -12,9 +12,8 @@ export class MxRdb {
 		const tkey = this.root + key;
 		MxWebsocket.instance.rpc_call('mulex::RdbWatch', [MxGenericType.str512(tkey)]).then((response) => {
 			MxWebsocket.instance.subscribe(response.astype('string'), (data: Uint8Array) => {
-				console.log(data);
 				const key = MxGenericType.fromData(data).astype('string');
-				const value = MxGenericType.fromData(data.subarray(512));
+				const value = MxGenericType.fromData(data.subarray(512), 'generic');
 				callback(key, value);
 			});
 		});
