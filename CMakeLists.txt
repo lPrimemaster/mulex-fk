@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 include(FetchContent)
+include(cmake/InternetConnection.cmake)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -15,6 +16,15 @@ endif()
 
 if(USB_SUPPORT)
 	add_definitions(-DUSB_SUPPORT)
+endif()
+
+# Check internet connection
+check_network_connection()
+if(NOT NETWORK_STATUS)
+	set(FETCHCONTENT_FULLY_DISCONNECTED ON)
+	message(WARNING "FetchContent offline mode. '_deps' need to be available and populated.")
+else()
+	set(FETCHCONTENT_FULLY_DISCONNECTED OFF)
 endif()
 
 # SQLite3
