@@ -29,6 +29,11 @@ int main(int argc, char* argv[])
 		std::int32_t fa = ra[key];
 		std::cout << fa << std::endl;
 	}
+	else if(type == "uint")
+	{
+		std::uint32_t fa = ra[key];
+		std::cout << fa << std::endl;
+	}
 	else if(type == "float")
 	{
 		float fa = ra[key];

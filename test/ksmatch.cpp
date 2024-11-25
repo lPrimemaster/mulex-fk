@@ -32,12 +32,16 @@ int main(void)
 
 	MakePrintCase("/system/*/intermediate/*/value", "/system/key0/intermediate/key1/value", true);
 	MakePrintCase("/system/*/intermediate/*/value", "/system/key0/intermediate0/key1/value", false);
-	MakePrintCase("/system/*/intermediate/*/value", "/system/intermediate/value", true);
+	MakePrintCase("/system/*/intermediate/*/value", "/system/intermediate/value", false);
 
 	MakePrintCase("/system/*/k1/*/k3/*/value", "/system/k0/k1/k2/k3/k4/value", true);
 
 	MakePrintCase("/system/*", "/system/value0", true);
 	MakePrintCase("/system/*", "/system/value1", true);
+
+	MakePrintCase("/system/backends/*/statistics/event/read", "/system/backends/42e11f9cce1400c/host", false);
+	MakePrintCase("/system/backends/*/statistics/event/*", "/system/backends/42e11f9cce1400c/statistics/event/read", true);
+	MakePrintCase("/system/backends/*/statistics/event/*", "/system/backends/42e11f9cce1400c/statistics/event/write", true);
 
 	return 0;
 }

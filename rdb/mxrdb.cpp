@@ -341,6 +341,7 @@ namespace mulex
 		std::uint64_t offset = EvtDataAppend(0, &evt_buffer, key);
 		offset = EvtDataAppend(offset, &evt_buffer, entry_data_size);
 		offset = EvtDataAppend(offset, &evt_buffer, entry->_value._ptr, entry_data_size);
+		LogTrace("Emit watch event <%s> from swatch: <%s>.", event_name.c_str(), swatch.c_str());
 		EvtEmit(event_name, evt_buffer.data(), evt_buffer.size());
 	}
 

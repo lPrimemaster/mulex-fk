@@ -111,7 +111,9 @@ export class MxGenericType
 			offset = 8; // 64-bit uint with size first
 		}
 
-		const data = new Uint8Array(this.data.buffer, offset + this.data.byteOffset);
+		offset += this.data.byteOffset;
+
+		const data = new Uint8Array(this.data.buffer, offset);
 
 		// TODO: (Cesar) Check the length of data (should be superfluous...)
 
@@ -164,6 +166,18 @@ export class MxGenericType
 			}
 			else {
 				return Array.from(i32arr);
+			}
+		}
+		else if(type === 'uint32') {
+			// return view.getUint32(0, true);
+			// console.log(data);
+			const ui32arr = new Uint32Array(data.buffer, offset);
+			// console.log(ui32arr);
+			if(ui32arr.length === 1) {
+				return ui32arr[0];
+			}
+			else {
+				return Array.from(ui32arr);
 			}
 		}
 		else if(type === 'bool') {

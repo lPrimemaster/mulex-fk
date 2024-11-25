@@ -840,7 +840,7 @@ namespace mulex
 		else if(ks_pos == 1)
 		{
 			std::string suffix = pattern.substr(ks_pos + 1);
-			// LogTrace("Mode: suffix [%s]", suffix.c_str());
+			// LogTrace("Mode: suffix [%s] [tgt: %s]", suffix.c_str(), target.c_str());
 			auto next_ks = suffix.find_first_of('*');
 			if(next_ks != std::string::npos)
 			{
@@ -853,7 +853,8 @@ namespace mulex
 				}
 				return SysMatchPattern(pattern.substr(next_ks + 1), target.substr(next_target_pos + midfix.size()));
 			}
-			return (target.find(suffix) == (target.size() - suffix.size()));
+			std::int64_t match_sz = target.size() - suffix.size();
+			return match_sz >= 0 ? (target.find(suffix) == match_sz) : false;
 		}
 
 		// ks is not in a valid position

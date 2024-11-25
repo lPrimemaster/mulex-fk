@@ -17,7 +17,7 @@ public:
 
 		// _period_ms = config["period_ms"];
 		// config["period_ms"] = 3;
-		_period_ms = 1000;
+		_period_ms = 500;
 
 		registerEvent("TestBackend::data");
 		LogTrace("Backend name: %s", std::string(SysGetBinaryName()).c_str());
@@ -51,7 +51,7 @@ public:
 		RdbAccess config = getConfigRdbRoot();
 		static std::int32_t s = 0;
 		config["period_ms"] = s++;
-		// dispatchEvent("TestBackend::data", reinterpret_cast<const std::uint8_t*>("DATA"), 4);
+		dispatchEvent("TestBackend::data", reinterpret_cast<const std::uint8_t*>("DATA"), 4);
 	}
 };
 

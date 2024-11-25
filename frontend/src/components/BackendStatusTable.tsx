@@ -2,18 +2,21 @@ import { Component, For } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { MxWebsocket } from '../lib/websocket';
 import { MxRdb } from '../lib/rdb';
-import { MxRdbTree } from '../lib/rdbtree';
 import { MxGenericType } from '../lib/convert';
 
 class BackendStatus {
 	name: string;
 	host: string;
 	connected: boolean;
+	evt_upload_speed: number;
+	evt_download_speed: number;
 
 	constructor(name: string, host: string, connected: boolean) {
 		this.name = name;
 		this.host = host;
 		this.connected = connected;
+		this.evt_upload_speed = 0;
+		this.evt_download_speed = 0;
 	}
 };
 
@@ -58,10 +61,30 @@ const BackendStatusTable: Component = () => {
 			});
 
 			const rdb = new MxRdb();
-			rdb.watch('/system/backends/*/connected', (key: string) => {
+
+			// Connection status
+			rdb.watch('/system/backends/*/connected', (key: string, value: MxGenericType) => {
 				const cid = extract_backend_name(key);
-				create_client_status(cid).then((status: BackendStatus) => {
-					setBackends(cid, () => status);
+				let prev = { ...backends[cid] };
+				prev.connected = value.astype('bool');
+				setBackends(cid, () => prev);
+			});
+
+			// Connection metrics
+			rdb.watch('/system/backends/*/statistics/event/*', (key: string) => {
+				MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(key)], 'generic').then((res: MxGenericType) => {
+					if(key.endsWith('read')) {
+						const cid = extract_backend_name(key);
+						let prev = { ...backends[cid] };
+						prev.evt_download_speed = res.astype('uint32');
+						setBackends(cid, () => prev);
+					}
+					else if(key.endsWith('write')) {
+						const cid = extract_backend_name(key);
+						let prev = { ...backends[cid] };
+						prev.evt_upload_speed = res.astype('uint32');
+						setBackends(cid, () => prev);
+					}
 				});
 			});
 		}
@@ -71,7 +94,7 @@ const BackendStatusTable: Component = () => {
 		<div>
 			<ul>
 				<For each={Object.keys(backends)}>{(clientid: string) =>
-					<li>{clientid}</li>
+					<li>{clientid} - {backends[clientid].name} - {backends[clientid].connected ? 'Connected' : 'Disconnected'} - Up: {backends[clientid].evt_upload_speed*8} bps - Down: {backends[clientid].evt_download_speed*8} bps</li>
 				}</For>
 			</ul>
 		</div>
