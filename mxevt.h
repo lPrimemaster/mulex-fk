@@ -79,6 +79,7 @@ namespace mulex
 		void serverConnAcceptThread();
 		void serverListenThread(const Socket& socket);
 		void serverEmitThread(const Socket& socket);
+		void clientStatisticsThread();
 
 	private:
 		Socket _server_socket;
@@ -89,6 +90,7 @@ namespace mulex
 		std::map<Socket, SysBufferStack> _evt_emit_stack;
 		// SysRefBufferStack _evt_emit_stack;
 		std::unique_ptr<std::thread> _evt_accept_thread;
+		std::unique_ptr<std::thread> _evt_stats_thread;
 		std::atomic<bool> _evt_thread_running = false;
 		std::atomic<bool> _evt_thread_ready = false;
 		std::mutex _connections_mutex;
@@ -103,6 +105,7 @@ namespace mulex
 	void EvtServerRegisterCallback(mulex::string32 name, std::function<void(const Socket&, std::uint64_t, std::uint16_t, const std::uint8_t*, std::uint64_t)> callback);
 	void EvtTryRunServerCallback(std::uint64_t clientid, std::uint16_t eventid, const std::uint8_t* data, std::uint64_t len, const Socket& socket);
 	void EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
+	void EvtAccumulateClientStatistics(std::uint64_t clientid, std::uint64_t framebytes);
 
 	template <typename T>
 	inline std::uint64_t EvtDataAppend(std::uint64_t offset, std::vector<std::uint8_t>* buffer, const T& value)

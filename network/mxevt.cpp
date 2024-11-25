@@ -38,6 +38,10 @@ static std::map<SOCKET, std::uint64_t> _evt_client_socket_pair;
 static std::map<std::uint64_t, mulex::Socket> _evt_client_socket_pair_rev;
 static std::set<std::uint16_t> _evt_client_ghost;
 
+// TODO: (Cesar) Update this map value type as required
+static std::map<std::uint64_t, std::atomic<std::uint64_t>> _evt_client_stats;
+static std::mutex _evt_client_stats_lock;
+
 namespace mulex
 {
 	std::uint64_t GetNextEventMessageId()
@@ -116,7 +120,11 @@ namespace mulex
 			
 			// TODO: (Cesar): Add some userdata instead of passing nullptr
 			// 				  _evt_userdata;
-			_evt_callbacks.at(header.eventid)(fbuffer.data() + sizeof(EvtHeader), header.payloadsize, nullptr);
+			auto callback = _evt_callbacks.find(header.eventid);
+			if(callback != _evt_callbacks.end())
+			{
+				callback->second(fbuffer.data() + sizeof(EvtHeader), header.payloadsize, nullptr);
+			}
 		}
 		
 		recvthread->_handle.join();
@@ -339,6 +347,9 @@ namespace mulex
 			RdbWriteValueDirect(root_key + "host", host);
 		}
 
+		RdbNewEntry(root_key + "statistics/event/read" , RdbValueType::UINT32, 0);
+		RdbNewEntry(root_key + "statistics/event/write", RdbValueType::UINT32, 0);
+
 		SetRdbClientConnectionStatus(cid, true);
 	}
 
@@ -359,6 +370,11 @@ namespace mulex
 			// Not registered on the rdb
 			_evt_client_ghost.insert(cid);
 			return;
+		}
+
+		{
+			std::unique_lock<std::mutex> lock(_evt_client_stats_lock);
+			_evt_client_stats[cid] = 0;
 		}
 
 		LogDebug("[evtserver] New connected client <%s>.", reinterpret_cast<const char*>(data));
@@ -383,6 +399,13 @@ namespace mulex
 		}
 
 		SetRdbClientConnectionStatus(cid, false);
+
+		{
+			std::unique_lock<std::mutex> lock(_evt_client_stats_lock);
+			_evt_client_stats.erase(cid);
+			RdbWriteValueDirect("/system/backends/" + SysI64ToHexString(cid) + "/statistics/event/read" , 0);
+			RdbWriteValueDirect("/system/backends/" + SysI64ToHexString(cid) + "/statistics/event/write", 0);
+		}
 	}
 
 	EvtServerThread::EvtServerThread()
@@ -397,12 +420,17 @@ namespace mulex
 		_evt_accept_thread = std::make_unique<std::thread>(
 			std::bind(&EvtServerThread::serverConnAcceptThread, this)
 		);
+
+		_evt_stats_thread = std::make_unique<std::thread>(
+			std::bind(&EvtServerThread::clientStatisticsThread, this)
+		);
 	}
 
 	EvtServerThread::~EvtServerThread()
 	{
 		_evt_thread_running.store(false);
 		_evt_accept_thread->join();
+		_evt_stats_thread->join();
 		std::for_each(_evt_emit_stack.begin(), _evt_emit_stack.end(), [](auto& t){ t.second.requestUnblock(); });
 		std::for_each(_evt_stream.begin(), _evt_stream.end(), [](auto& t){ t.second->requestUnblock(); });
 		std::for_each(_evt_emit_thread.begin(), _evt_emit_thread.end(), [](auto& t){ t.second->join(); });
@@ -550,6 +578,13 @@ namespace mulex
 
 			// Perform server side tasks (if any)
 			EvtTryRunServerCallback(header.client, header.eventid, fbuffer.data() + sizeof(EvtHeader), header.payloadsize, socket);
+
+			if(!ClientIsGhost(header.client))
+			{
+				// Write statistics
+				std::uint64_t upload = sizeof(EvtHeader) + header.payloadsize;
+				EvtAccumulateClientStatistics(header.client, upload & 0xFFFFFFFF); // Lo DWORD
+			}
 		}
 
 		// On client disconnect unsubscribe from events
@@ -587,6 +622,13 @@ namespace mulex
 			LogTrace("[evtserver] Emitting Event <%d> from <0x%llx>.", header.eventid, header.client);
 			
 			SocketSendBytes(socket, data.data(), data.size());
+
+			if(!ClientIsGhost(header.client))
+			{
+				// Write statistics
+				std::uint64_t download = sizeof(EvtHeader) + header.payloadsize;
+				EvtAccumulateClientStatistics(header.client, (download & 0xFFFFFFFF) << 32); // Hi DWORD
+			}
 		}
 	}
 
@@ -660,6 +702,42 @@ namespace mulex
 		{
 			eidit->second(socket, clientid, eventid, data, len);
 		}
+	}
+
+	void EvtServerThread::clientStatisticsThread()
+	{
+		// Loop
+		while(_evt_thread_running.load())
+		{
+			std::int64_t start = SysGetCurrentTime();
+
+			{
+				std::unique_lock<std::mutex> lock(_evt_client_stats_lock);
+				for(auto it = _evt_client_stats.begin(); it != _evt_client_stats.end(); it++)
+				{
+					std::uint64_t stats = it->second.exchange(0);
+					std::uint32_t upload = static_cast<std::uint32_t>(stats & 0xFFFFFFFF);
+					std::uint32_t download = static_cast<std::uint32_t>(stats >> 32);
+
+					std::string key = "/system/backends/";
+					key += SysI64ToHexString(it->first);
+					key += "/statistics/event";
+
+					// TODO: (Cesar) Entry is always valid here (skip checks)
+					//				 Have some write unsafe kind of function
+					RdbWriteValueDirect(key + "/read", download);
+					RdbWriteValueDirect(key + "/write", upload);
+				}
+			}
+
+			// Every second
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000 - ((SysGetCurrentTime() - start))));
+		}
+	}
+
+	void EvtAccumulateClientStatistics(std::uint64_t clientid, std::uint64_t framebytes)
+	{
+		_evt_client_stats[clientid] += framebytes; // Atomic op
 	}
 
 	void EvtUnsubscribe(mulex::string32 name)
