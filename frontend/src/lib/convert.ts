@@ -180,6 +180,14 @@ export class MxGenericType
 				return Array.from(ui32arr);
 			}
 		}
+		else if(type === 'int64') {
+			const view = new DataView(data.buffer, offset);
+			return view.getBigInt64(0, true);
+		}
+		else if(type === 'uint64') {
+			const view = new DataView(data.buffer, offset);
+			return view.getBigUint64(0, true);
+		}
 		else if(type === 'bool') {
 			if(data.length === 1) {
 				return (data[0] === 1);

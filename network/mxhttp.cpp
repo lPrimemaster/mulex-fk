@@ -428,6 +428,7 @@ namespace mulex
 
 	static void HttpUnsubscribeEvent(UWSType* ws, const std::string& event)
 	{
+		WsRpcBridge* bridge = ws->getUserData();
 		auto eventws = _active_ws_subscriptions.find(event);
 		if(eventws == _active_ws_subscriptions.end())
 		{
@@ -441,17 +442,21 @@ namespace mulex
 			return;
 		}
 
+		bridge->_local_experiment._evt_client->unsubscribe(event);
+
 		LogTrace("[mxhttp] HttpUnsubscribeEvent() OK.");
 		eventws->second.erase(wsit);
 	}
 
 	static void HttpUnsubscribeEventAll(UWSType* ws)
 	{
+		WsRpcBridge* bridge = ws->getUserData();
 		for(auto it = _active_ws_subscriptions.begin(); it != _active_ws_subscriptions.end(); it++)
 		{
 			auto wsit = it->second.find(ws);
 			if(wsit != it->second.end())
 			{
+				// bridge->_local_experiment._evt_client->unsubscribe(it->first);
 				it->second.erase(wsit);
 			}
 		}

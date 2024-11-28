@@ -203,6 +203,10 @@ namespace mulex
 			return;
 		}
 
+		// Register events for rdb
+		EvtRegister("mxrdb::keycreated"); // Rdb key created
+		EvtRegister("mxrdb::keydeleted"); // Rdb key deleted
+
 		LogDebug("[rdb] Init() OK. Allocated: %llu kb.", _rdb_size / 1024);
 	}
 
@@ -437,6 +441,8 @@ namespace mulex
 
 		RdbEmitWatchMatchCondition(key, entry);
 
+		EvtEmit("mxrdb::keycreated", reinterpret_cast<const std::uint8_t*>(key.c_str()), sizeof(RdbKeyName));
+
 		return entry;
 	}
 
@@ -475,6 +481,8 @@ namespace mulex
 			_rdb_offset_map.erase(key.c_str());
 			RdbDecrementMapKeysAddrAfter(key, entry_total_size_bytes);
 		}
+
+		EvtEmit("mxrdb::keydeleted", reinterpret_cast<const std::uint8_t*>(key.c_str()), sizeof(RdbKeyName));
 
 		LogTrace("[rdb] Deleted entry <%s>.", key.c_str());
 		return true;
@@ -630,16 +638,30 @@ namespace mulex
 	{
 		std::string event_name = RdbMakeWatchEvent(dir);
 		EvtRegister(event_name);
-		if(!EvtSubscribe(event_name))
-		{
-			LogError("[rdb] Failed to watch dir <%s>.", dir.c_str());
-			return "";
-		}
+		// if(!EvtSubscribe(event_name))
+		// {
+		// 	LogError("[rdb] Failed to watch dir <%s>.", dir.c_str());
+		// 	return "";
+		// }
 
 		// TODO: (Cesar) Watch dirs should remove unsused dirs when a client disconnects
 		std::unique_lock<std::shared_mutex> lock(_rdb_watch_lock); // RW lock
 		_rdb_watch_dirs.insert(dir.c_str());
 		return event_name;
+	}
+
+	string32 RdbUnwatch(mulex::RdbKeyName dir)
+	{
+		// TODO: (Cesar) Watch dirs should remove unsused dirs when a client disconnects
+		std::unique_lock<std::shared_mutex> lock(_rdb_watch_lock); // RW lock
+		auto wit = _rdb_watch_dirs.find(dir.c_str());
+		if(wit == _rdb_watch_dirs.end())
+		{
+			LogError("[rdb] Failed to unwatch dir <%s>.", dir.c_str());
+			return "";
+		}
+		_rdb_watch_dirs.erase(wit);
+		return RdbMakeWatchEvent(dir);
 	}
 
 	mulex::RPCGenericType RdbListKeys()
@@ -772,5 +794,23 @@ namespace mulex
 			);
 			callback(key, value);
 		});
+	}
+
+	void RdbProxyValue::unwatch()
+	{
+		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
+		if(!exp.has_value())
+		{
+			return;
+		}
+		mulex::string32 event_name = exp.value()->_rpc_client->call<mulex::string32>(RPC_CALL_MULEX_RDBUNWATCH, RdbKeyName(_key));
+		// exp.value()->_evt_client->subscribe(event_name.c_str(), [=](const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata) {
+		// 	RdbKeyName key = reinterpret_cast<const char*>(data);
+		// 	RPCGenericType value = RPCGenericType::FromData(
+		// 		data + sizeof(RdbKeyName) + sizeof(std::uint64_t),
+		// 		*reinterpret_cast<const std::uint64_t*>(data + sizeof(RdbKeyName))
+		// 	);
+		// 	callback(key, value);
+		// });
 	}
 }

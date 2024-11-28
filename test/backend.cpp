@@ -17,16 +17,16 @@ public:
 
 		// _period_ms = config["period_ms"];
 		// config["period_ms"] = 3;
-		_period_ms = 500;
+		_period_ms = 10;
 
 		registerEvent("TestBackend::data");
 		LogTrace("Backend name: %s", std::string(SysGetBinaryName()).c_str());
 
 		subscribeEvent("TestBackend::data", [](auto* data, auto len, auto* udata){
-			char datac[5];
-			datac[4] = 0;
-			memcpy(datac, data, len);
-			LogTrace("Got event with data: %s", datac);
+			// char datac[33];
+			// datac[4] = 0;
+			// memcpy(datac, data, len);
+			// LogTrace("Got event with data: %s", datac);
 		});
 
 		RdbAccess roota;
@@ -51,7 +51,8 @@ public:
 		RdbAccess config = getConfigRdbRoot();
 		static std::int32_t s = 0;
 		config["period_ms"] = s++;
-		dispatchEvent("TestBackend::data", reinterpret_cast<const std::uint8_t*>("DATA"), 4);
+		static std::vector<std::uint8_t> buffer(1000000);
+		dispatchEvent("TestBackend::data", buffer.data(), buffer.size());
 	}
 };
 

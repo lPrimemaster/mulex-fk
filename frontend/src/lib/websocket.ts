@@ -151,9 +151,6 @@ export class MxWebsocket {
 		});
 	}
 
-	// TODO: (Cesar) Handle unsubscribing on the server-side
-	// public async unsubscribe(event: string)
-
 	// Close the connection if the ws is alive
 	public close() {
 		if(this.socket.readyState === WebSocket.OPEN) {

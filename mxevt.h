@@ -44,6 +44,7 @@ namespace mulex
 		void emit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
 		void regist(const std::string& event);
 		void subscribe(const std::string& event, EvtCallbackFunc callback);
+		void unsubscribe(const std::string& event);
 		std::uint16_t findEvent(const std::string& event);
 
 	private:

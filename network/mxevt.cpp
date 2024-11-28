@@ -324,6 +324,49 @@ namespace mulex
 		LogTrace("[evtclient] Subscribed to event <%s> [%d].", event.c_str(), eventid);
 	}
 
+	void EvtClientThread::unsubscribe(const std::string& event)
+	{
+		// Ask server for the event id via RPC
+		const Experiment* exp;
+		if(_exp)
+		{
+			exp = _exp;
+		}
+		else
+		{
+			std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
+			if(!experiment.has_value())
+			{
+				LogError("[evtclient] Failed to unsubscribe to event. Not connected to an experiment.");
+				return;
+			}
+			exp = experiment.value();
+		}
+		
+		std::uint16_t eventid = exp->_rpc_client->call<std::uint16_t>(RPC_CALL_MULEX_EVTGETID, string32(event));
+		if(eventid == 0)
+		{
+			LogError("[evtclient] Failed to unsubscribe to event. Event <%s> is not registered.");
+			return;
+		}
+
+		if(!exp->_rpc_client->call<bool>(RPC_CALL_MULEX_EVTUNSUBSCRIBE, string32(event)))
+		{
+			LogError("[evtclient] Failed to unsubscribe to event.");
+			return;
+		}
+
+		auto eid_callbacks = _evt_callbacks.find(eventid);
+		if(eid_callbacks == _evt_callbacks.end())
+		{
+			LogError("[evtclient] Failed to unsubscribe to event.");
+			return;
+		}
+		_evt_callbacks.erase(eid_callbacks);
+
+		LogTrace("[evtclient] Unsubscribed to event <%s> [%d].", event.c_str(), eventid);
+	}
+
 	static void SetRdbClientConnectionStatus(std::uint64_t cid, bool connected)
 	{
 		std::string root_key = "/system/backends/" + SysI64ToHexString(cid) + "/";
@@ -345,6 +388,12 @@ namespace mulex
 		if(!RdbNewEntry(root_key + "host", RdbValueType::STRING, host.c_str()))
 		{
 			RdbWriteValueDirect(root_key + "host", host);
+		}
+
+		std::int64_t time = SysGetCurrentTime();
+		if(!RdbNewEntry(root_key + "last_connect_time", RdbValueType::INT64, &time))
+		{
+			RdbWriteValueDirect(root_key + "last_connect_time", time);
 		}
 
 		RdbNewEntry(root_key + "statistics/event/read" , RdbValueType::UINT32, 0);
@@ -408,14 +457,19 @@ namespace mulex
 		}
 	}
 
+	static void RegisterServerSideEvents()
+	{
+		// Register server side event for metadata
+		EvtRegister("mxevt::getclientmeta");
+		EvtServerRegisterCallback("mxevt::getclientmeta", OnClientConnectMetadata);
+	}
+
 	EvtServerThread::EvtServerThread()
 	{
 		_evt_thread_running.store(true);
 		_evt_thread_ready.store(false);
 
-		// Register server side event for metadata
-		EvtRegister("mxevt::getclientmeta");
-		EvtServerRegisterCallback("mxevt::getclientmeta", OnClientConnectMetadata);
+		RegisterServerSideEvents();
 		
 		_evt_accept_thread = std::make_unique<std::thread>(
 			std::bind(&EvtServerThread::serverConnAcceptThread, this)

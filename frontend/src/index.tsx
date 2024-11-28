@@ -5,6 +5,7 @@ import { Toaster } from '~/components/ui/toast';
 
 import './index.css';
 import Home from './Home';
+import { RdbViewer } from './RdbViewer';
 
 const root = document.getElementById('root');
 
@@ -18,6 +19,7 @@ render(() => (
 		<>
 			<Router>
 				<Route path='/' component={Home}/>
+				<Route path='/rdb' component={RdbViewer}/>
 			</Router>
 			<Toaster/>
 		</>
