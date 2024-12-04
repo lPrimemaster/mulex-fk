@@ -797,9 +797,9 @@ namespace mulex
 		out.write(reinterpret_cast<const char*>(data.data()), data.size());
 	}
 
-	void EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
+	bool EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
 	{
-		_sys_evt_thread->emit(event, data, len);
+		return _sys_evt_thread->emit(event, data, len);
 	}
 
 	bool SysMatchPattern(const std::string& pattern, const std::string& target)
