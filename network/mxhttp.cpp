@@ -145,7 +145,7 @@ namespace mulex
 			{
 				if(d[key.c_str()].GetType() != rapidjson::Type::kNumberType)
 				{
-					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.");
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.", key.c_str());
 					if(error) *error = true;
 					return T();
 				}
@@ -155,7 +155,7 @@ namespace mulex
 			{
 				if(d[key.c_str()].GetType() != rapidjson::Type::kNumberType)
 				{
-					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.");
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.", key.c_str());
 					if(error) *error = true;
 					return T();
 				}
@@ -165,7 +165,7 @@ namespace mulex
 			{
 				if(d[key.c_str()].GetType() != rapidjson::Type::kNumberType)
 				{
-					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.");
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.", key.c_str());
 					if(error) *error = true;
 					return T();
 				}
@@ -173,9 +173,9 @@ namespace mulex
 			}
 			else if constexpr(std::is_same_v<T, bool>)
 			{
-				if(d[key.c_str()].GetType() != rapidjson::Type::kTrueType)
+				if(d[key.c_str()].GetType() != rapidjson::Type::kTrueType && d[key.c_str()].GetType() != rapidjson::Type::kFalseType)
 				{
-					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Boolean.");
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Boolean.", key.c_str());
 					if(error) *error = true;
 					return T();
 				}
@@ -315,6 +315,10 @@ namespace mulex
 		{
 			d = HttpJsonFromByteVector(ret);
 		}
+		else
+		{
+			d.SetObject();
+		}
 
 		d.AddMember("status", rapidjson::StringRef(status.c_str(), status.size()), d.GetAllocator());
 		d.AddMember("type", rapidjson::StringRef("rpc"), d.GetAllocator());
@@ -451,15 +455,19 @@ namespace mulex
 	static void HttpUnsubscribeEventAll(UWSType* ws)
 	{
 		WsRpcBridge* bridge = ws->getUserData();
-		for(auto it = _active_ws_subscriptions.begin(); it != _active_ws_subscriptions.end(); it++)
+		for(const auto& event : _active_ws_subscriptions)
 		{
-			auto wsit = it->second.find(ws);
-			if(wsit != it->second.end())
-			{
-				// bridge->_local_experiment._evt_client->unsubscribe(it->first);
-				it->second.erase(wsit);
-			}
+			HttpUnsubscribeEvent(ws, event.first);
 		}
+		// for(auto it = _active_ws_subscriptions.begin(); it != _active_ws_subscriptions.end(); it++)
+		// {
+		// 	auto wsit = it->second.find(ws);
+		// 	if(wsit != it->second.end())
+		// 	{
+		// 		// bridge->_local_experiment._evt_client->unsubscribe(it->first);
+		// 		it->second.erase(wsit);
+		// 	}
+		// }
 	}
 
 	void HttpStartServer(std::uint16_t port)
