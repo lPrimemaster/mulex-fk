@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <vector>
 #include <sstream>
+#include <fstream>
 
 namespace mulex
 {
@@ -24,6 +25,7 @@ namespace mulex
 		if constexpr(std::is_same_v<Policy, detail::LogTracePolicy>) return;
 #endif
 		constexpr bool kLogToStdOut = true;
+		constexpr bool kLogToFile = true;
 
 		va_list vargs, vargscpy;
 		va_start(vargs, fmt);
@@ -46,6 +48,12 @@ namespace mulex
 		if constexpr(kLogToStdOut)
 		{
 			std::cout << output << std::flush;
+		}
+
+		if constexpr(kLogToFile)
+		{
+			static std::ofstream file("log.log");
+			file << output << std::flush;
 		}
 	}
 
