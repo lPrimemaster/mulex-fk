@@ -22,6 +22,20 @@ static std::map<std::string, mulex::RdbEntry*> _rdb_offset_map;
 static std::set<std::string> _rdb_watch_dirs;
 static std::shared_mutex     _rdb_watch_lock;
 
+struct RdbStatistics
+{
+	std::atomic<std::uint32_t> _read_ops;
+	std::atomic<std::uint32_t> _write_ops;
+	std::atomic<std::uint64_t> _total_keys;
+	std::atomic<std::uint64_t> _rdb_allocated;
+	std::atomic<std::uint64_t> _rdb_size;
+};
+
+static constexpr std::int64_t RDB_STATISTICS_INTERVAL = 1000;
+static RdbStatistics                _rdb_statistics;
+static std::unique_ptr<std::thread> _rdb_statistics_thread;
+static std::atomic<bool> 			_rdb_statistics_flag;
+
 namespace mulex
 {
 	std::uint64_t operator& (std::uint64_t a, RdbEntryFlag b)
@@ -95,6 +109,7 @@ namespace mulex
 
 	static std::uint8_t* RdbAlignedAlloc(std::uint64_t align, std::uint64_t size)
 	{
+		_rdb_statistics._rdb_allocated.store(size);
 #ifdef __unix__
 		return reinterpret_cast<std::uint8_t*>(std::aligned_alloc(align, size));
 #else
@@ -164,6 +179,33 @@ namespace mulex
 		SysWriteBinFile(filename, output);
 	}
 
+	static void RdbStatisticsThread()
+	{
+		static const std::string root_key = "/system/rdb/statistics/";
+		static std::uint32_t initializer32 = 0;
+		static std::uint64_t initializer64 = 0;
+
+		RdbNewEntry(root_key + "read", RdbValueType::UINT32, &initializer32);
+		RdbNewEntry(root_key + "write", RdbValueType::UINT32, &initializer32);
+		RdbNewEntry(root_key + "nkeys", RdbValueType::UINT64, &initializer64);
+		RdbNewEntry(root_key + "allocated", RdbValueType::UINT64, &initializer64);
+		RdbNewEntry(root_key + "size", RdbValueType::UINT64, &initializer64);
+
+		while(_rdb_statistics_flag.load())
+		{
+			std::int64_t start = SysGetCurrentTime();
+
+			RdbWriteValueDirect(root_key + "read", _rdb_statistics._read_ops.exchange(0));
+			RdbWriteValueDirect(root_key + "write", _rdb_statistics._write_ops.exchange(0));
+			RdbWriteValueDirect(root_key + "nkeys", _rdb_statistics._total_keys.load());
+			RdbWriteValueDirect(root_key + "allocated", _rdb_statistics._rdb_allocated.load());
+			RdbWriteValueDirect(root_key + "size", _rdb_statistics._rdb_size.load());
+
+			// Every second
+			std::this_thread::sleep_for(std::chrono::milliseconds(RDB_STATISTICS_INTERVAL - ((SysGetCurrentTime() - start))));
+		}
+	}
+
 	void RdbInit(std::uint64_t size)
 	{
 		std::unique_lock lock(_rdb_rw_lock);
@@ -206,14 +248,27 @@ namespace mulex
 		// Register events for rdb
 		EvtRegister("mxrdb::keycreated"); // Rdb key created
 		EvtRegister("mxrdb::keydeleted"); // Rdb key deleted
+	
+		_rdb_statistics._rdb_size.store(_rdb_offset);
+		_rdb_statistics._total_keys.store(_rdb_offset_map.size());
+		_rdb_statistics._read_ops.store(0);
+		_rdb_statistics._write_ops.store(0);
+
+		_rdb_statistics_flag.store(true);
+		_rdb_statistics_thread = std::make_unique<std::thread>(RdbStatisticsThread);
 
 		LogDebug("[rdb] Init() OK. Allocated: %llu kb.", _rdb_size / 1024);
 	}
 
 	void RdbClose()
 	{
-		std::unique_lock lock(_rdb_rw_lock);
 		LogDebug("[rdb] Closing rdb.");
+
+		_rdb_statistics_flag.store(false);
+		_rdb_statistics_thread->join();
+		_rdb_statistics_thread.reset();
+
+		std::unique_lock lock(_rdb_rw_lock);
 
 		if(_rdb_handle)
 		{
@@ -346,7 +401,15 @@ namespace mulex
 		offset = EvtDataAppend(offset, &evt_buffer, entry_data_size);
 		offset = EvtDataAppend(offset, &evt_buffer, entry->_value._ptr, entry_data_size);
 		LogTrace("Emit watch event <%s> from swatch: <%s>.", event_name.c_str(), swatch.c_str());
-		EvtEmit(event_name, evt_buffer.data(), evt_buffer.size());
+		if(!EvtEmit(event_name, evt_buffer.data(), evt_buffer.size()))
+		{
+			// This watch is not subscribed by anyone, remove it
+			// Defer RdbUnwatch due to unique_lock
+			std::thread([=]() {
+				RdbUnwatch(swatch);
+				LogTrace("[rdb] swatch <%s> was dangling. Removed.", swatch.c_str());
+			}).detach();
+		}
 	}
 
 	// TODO: (Cesar) Move this code to on creation and add a flag for scanning
@@ -359,7 +422,7 @@ namespace mulex
 			if(SysMatchPattern(watch, key.c_str()))
 			{
 				RdbEmitEvtCondition(watch, key, entry);
-				LogTrace("Match: <%s> -> <%s>.", watch.c_str(), key.c_str());
+				LogTrace("[rdb] Match: <%s> -> <%s>.", watch.c_str(), key.c_str());
 			}
 		}
 	}
@@ -437,12 +500,13 @@ namespace mulex
 		_rdb_offset_map.emplace(key.c_str(), entry);
 
 		_rdb_offset += sizeof(RdbEntry) + data_total_size_bytes;
-		LogTrace("[rdb] Created new key: %s", key.c_str());
 
 		RdbEmitWatchMatchCondition(key, entry);
-
 		EvtEmit("mxrdb::keycreated", reinterpret_cast<const std::uint8_t*>(key.c_str()), sizeof(RdbKeyName));
+		_rdb_statistics._write_ops.fetch_add(1);
+		_rdb_statistics._total_keys.fetch_add(1);
 
+		LogTrace("[rdb] Created new key: %s", key.c_str());
 		return entry;
 	}
 
@@ -483,6 +547,8 @@ namespace mulex
 		}
 
 		EvtEmit("mxrdb::keydeleted", reinterpret_cast<const std::uint8_t*>(key.c_str()), sizeof(RdbKeyName));
+		_rdb_statistics._write_ops.fetch_add(1);
+		_rdb_statistics._total_keys.fetch_sub(1);
 
 		LogTrace("[rdb] Deleted entry <%s>.", key.c_str());
 		return true;
@@ -575,6 +641,8 @@ namespace mulex
 
 		RdbUnlockEntryRead(*entry);
 
+		_rdb_statistics._read_ops.fetch_add(1);
+
 		return RPCGenericType::FromData(buffer);
 	}
 
@@ -582,6 +650,26 @@ namespace mulex
 	{
 		const RdbEntry* entry = RdbFindEntryByName(keyname);
 		return entry != nullptr;
+	}
+
+	RPCGenericType RdbReadKeyMetadata(RdbKeyName keyname)
+	{
+		const RdbEntry* entry = RdbFindEntryByName(keyname);
+		if(!entry)
+		{
+			return std::vector<std::uint8_t>();
+		}
+
+		RdbLockEntryRead(*entry);
+
+		// Entry is read locked
+		RdbValueType type = entry->_value._type;
+
+		RdbUnlockEntryRead(*entry);
+
+		_rdb_statistics._read_ops.fetch_add(1);
+
+		return type;
 	}
 
 	void RdbWriteValueDirect(mulex::RdbKeyName keyname, RPCGenericType data)
@@ -614,6 +702,7 @@ namespace mulex
 			}
 			
 			RdbEmitWatchMatchCondition(keyname, entry);
+			_rdb_statistics._write_ops.fetch_add(1);
 		}
 
 		RdbUnlockEntryReadWrite(*entry);
@@ -638,13 +727,7 @@ namespace mulex
 	{
 		std::string event_name = RdbMakeWatchEvent(dir);
 		EvtRegister(event_name);
-		// if(!EvtSubscribe(event_name))
-		// {
-		// 	LogError("[rdb] Failed to watch dir <%s>.", dir.c_str());
-		// 	return "";
-		// }
 
-		// TODO: (Cesar) Watch dirs should remove unsused dirs when a client disconnects
 		std::unique_lock<std::shared_mutex> lock(_rdb_watch_lock); // RW lock
 		_rdb_watch_dirs.insert(dir.c_str());
 		return event_name;
@@ -652,7 +735,6 @@ namespace mulex
 
 	string32 RdbUnwatch(mulex::RdbKeyName dir)
 	{
-		// TODO: (Cesar) Watch dirs should remove unsused dirs when a client disconnects
 		std::unique_lock<std::shared_mutex> lock(_rdb_watch_lock); // RW lock
 		auto wit = _rdb_watch_dirs.find(dir.c_str());
 		if(wit == _rdb_watch_dirs.end())
