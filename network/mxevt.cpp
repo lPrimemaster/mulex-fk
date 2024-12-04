@@ -497,21 +497,29 @@ namespace mulex
 		return _evt_thread_ready.load();
 	}
 
-	void EvtServerThread::emit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
+	bool EvtServerThread::emit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
 	{
 		std::uint16_t eid = EvtGetId(event);
 		if(eid == 0)
 		{
 			LogError("[evtserver] Failed to find event. Emit aborted.");
-			return;
+			return false;
 		}
 
 		auto cidit = _evt_current_subscriptions.find(eid);
 		if(cidit == _evt_current_subscriptions.end())
 		{
-			// Not subscribed by anyone
+			// Not in registry
 			// Silently ignore
-			return;
+			return false;
+		}
+
+		if(cidit->second.empty())
+		{
+			// Dangling event with no subscriptions
+			// Silently ignore
+			LogTrace("Dangling event <%s>.", event.c_str());
+			return false;
 		}
 
 		// Make header
@@ -534,6 +542,7 @@ namespace mulex
 		{
 			_evt_emit_stack.at(_evt_client_socket_pair_rev.at(cid)).push(std::move(vdata));
 		}
+		return true;
 	}
 
 	void EvtServerThread::relay(const std::uint64_t clientid, const std::uint8_t* data, std::uint64_t len)
@@ -794,18 +803,18 @@ namespace mulex
 		_evt_client_stats[clientid] += framebytes; // Atomic op
 	}
 
-	void EvtUnsubscribe(mulex::string32 name)
+	bool EvtUnsubscribe(mulex::string32 name)
 	{
 		std::uint16_t eid = EvtGetId(name);
-		EvtUnsubscribe(GetCurrentCallerId(), eid);
+		return EvtUnsubscribe(GetCurrentCallerId(), eid);
 	}
 
-	void EvtUnsubscribe(std::uint64_t clientid, std::uint16_t eventid)
+	bool EvtUnsubscribe(std::uint64_t clientid, std::uint16_t eventid)
 	{
 		if(clientid == 0)
 		{
 			LogError("[evtserver] Mxserver cannot manually unsubscribe from events.");
-			return;
+			return false;
 		}
 
 		std::unique_lock<std::mutex> lock(_evt_sub_lock);
@@ -813,7 +822,7 @@ namespace mulex
 		if(eidit == _evt_current_subscriptions.end())
 		{
 			LogError("[evtserver] Error unsubscribing. Not subscribed to event <%d>.", eventid);
-			return;
+			return false;
 		}
 
 		auto cidsub = eidit->second.find(clientid);
@@ -821,10 +830,11 @@ namespace mulex
 		{
 			// Client is not subscribed to event
 			// Silently ignore
-			return;
+			return false;
 		}
 		
 		eidit->second.erase(clientid);
 		LogTrace("[evtserver] Unsubscribing client <0x%llx> from event <%d>.", clientid, eventid);
+		return true;
 	}
 }

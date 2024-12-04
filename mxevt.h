@@ -72,7 +72,7 @@ namespace mulex
 		~EvtServerThread();
 		bool ready() const;
 
-		void emit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
+		bool emit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
 		void relay(const std::uint64_t clientid, const std::uint8_t* data, std::uint64_t len);
 		void unsub(const std::uint64_t cid);
 
@@ -101,11 +101,11 @@ namespace mulex
 	MX_RPC_METHOD bool EvtRegister(mulex::string32 name);
 	MX_RPC_METHOD std::uint16_t EvtGetId(mulex::string32 name);
 	MX_RPC_METHOD bool EvtSubscribe(mulex::string32 name);
-	MX_RPC_METHOD void EvtUnsubscribe(mulex::string32 name);
-	void EvtUnsubscribe(std::uint64_t clientid, std::uint16_t eventid);
+	MX_RPC_METHOD bool EvtUnsubscribe(mulex::string32 name);
+	bool EvtUnsubscribe(std::uint64_t clientid, std::uint16_t eventid);
 	void EvtServerRegisterCallback(mulex::string32 name, std::function<void(const Socket&, std::uint64_t, std::uint16_t, const std::uint8_t*, std::uint64_t)> callback);
 	void EvtTryRunServerCallback(std::uint64_t clientid, std::uint16_t eventid, const std::uint8_t* data, std::uint64_t len, const Socket& socket);
-	void EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
+	bool EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
 	void EvtAccumulateClientStatistics(std::uint64_t clientid, std::uint64_t framebytes);
 
 	template <typename T>
