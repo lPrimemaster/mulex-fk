@@ -164,6 +164,7 @@ export class MxWebsocket {
 		// Minimize network impact with b64 encoding for the arguments
 		const rawData = btoa(tdec.decode(MxGenericType.concatData(args)));
 		if(args.length > 0) {
+			console.log(MxGenericType.concatData(args));
 			return [JSON.stringify({'type': 0, 'method': method, 'args': rawData, 'messageid': id, 'response': response}), id];
 		}
 		else {

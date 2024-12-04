@@ -12,9 +12,14 @@ public:
 	TestBackend(int argc, char* argv[]) : MxBackend(argc, argv)
 	{
 		// Decide wether the user can set their arguments or just prefer using config files / rdb / pdb entries
-		std::string ekey = "/system/backends/" + std::string(SysGetBinaryName()) + "/config/period_ms";
-		RdbAccess config = getConfigRdbRoot();
+		std::string ekey = "/user/" + std::string(SysGetBinaryName()) + "/config/";
+		RdbAccess config(ekey);
+		// RdbAccess config = getConfigRdbRoot();
 
+		std::int32_t value = config["period_ms"];
+		std::cout << value << std::endl;
+		config["period_ms"].erase();
+		config["period_ms"].create(RdbValueType::INT32, std::int32_t(89));
 		// _period_ms = config["period_ms"];
 		// config["period_ms"] = 3;
 		_period_ms = 10;
@@ -47,10 +52,9 @@ public:
 
 	virtual void periodic() override
 	{
-		std::cout << "Loop" << std::endl;
-		RdbAccess config = getConfigRdbRoot();
-		static std::int32_t s = 0;
-		config["period_ms"] = s++;
+		// RdbAccess config = getConfigRdbRoot();
+		// static std::int32_t s = 0;
+		// config["period_ms"] = s++;
 		static std::vector<std::uint8_t> buffer(1000000);
 		dispatchEvent("TestBackend::data", buffer.data(), buffer.size());
 	}

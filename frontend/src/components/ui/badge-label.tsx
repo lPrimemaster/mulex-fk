@@ -12,12 +12,13 @@ const badgeDeltaVariants = cva("", {
     variant: {
       success: "bg-success text-success-foreground hover:bg-success",
       warning: "bg-warning text-warning-foreground hover:bg-warning",
-      error: "bg-error text-error-foreground hover:bg-error"
+      error: "bg-error text-error-foreground hover:bg-error",
+      display: "bg-gray-500 hover:bg-gray-500"
     }
   }
 });
 
-type BadgeType = "success" | "warning" | "error" | null | undefined;
+type BadgeType = "success" | "warning" | "error" | "display" | null | undefined;
 type BadgeLabelProps = Omit<BadgeProps, "variant"> & {
   type: BadgeType ;
 };

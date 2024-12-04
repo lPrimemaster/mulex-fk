@@ -6,8 +6,6 @@ import BackendStatusTable from './components/BackendStatusTable';
 import { MxWebsocket } from './lib/websocket';
 import { showToast } from './components/ui/toast';
 import { MxRdbTree } from './lib/rdbtree';
-import { MxRdb } from './lib/rdb';
-import { MxGenericType } from './lib/convert';
 
 const [socketStatus, setSocketStatus] = createSignal(false);
 

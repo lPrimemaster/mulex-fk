@@ -21,7 +21,7 @@ export class MxRdb {
 
 	public unwatch(key: string) {
 		const tkey = this.root + key;
-		MxWebsocket.instance.rpc_call('mulex::RdbUnwatch', [MxGenericType.str512(tkey)]).then((response) => {
+		MxWebsocket.instance.rpc_call('mulex::RdbWatch', [MxGenericType.str512(tkey)]).then((response) => {
 			MxWebsocket.instance.unsubscribe(response.astype('string'));
 		});
 	}

@@ -22,11 +22,15 @@ export class MxGenericType
 		return MxGenericType.fromValue(value, 'string512', intype);
 	}
 
-	static f32(value: string, intype: string = 'native') : MxGenericType {
+	static int32(value: number, intype: string = 'native') : MxGenericType {
+		return MxGenericType.fromValue(value, 'int32', intype);
+	}
+
+	static f32(value: number, intype: string = 'native') : MxGenericType {
 		return MxGenericType.fromValue(value, 'float32', intype);
 	}
 
-	static f64(value: string, intype: string = 'native') : MxGenericType {
+	static f64(value: number, intype: string = 'native') : MxGenericType {
 		return MxGenericType.fromValue(value, 'float64', intype);
 	}
 
@@ -45,6 +49,30 @@ export class MxGenericType
 			const encoder = new TextEncoder();
 			data = new Uint8Array(512);
 			data.set(encoder.encode(value + '\0'), 0);
+		}
+		else if(type === 'int8') {
+			data = new Uint8Array((new Int8Array([value])).buffer);
+		}
+		else if(type === 'int16') {
+			data = new Uint8Array((new Int16Array([value])).buffer);
+		}
+		else if(type === 'int32') {
+			data = new Uint8Array((new Int32Array([value])).buffer);
+		}
+		else if(type === 'int64') {
+			data = new Uint8Array((new BigInt64Array([value])).buffer);
+		}
+		else if(type === 'uint8') {
+			data = new Uint8Array([value]);
+		}
+		else if(type === 'uint16') {
+			data = new Uint8Array((new Uint16Array([value])).buffer);
+		}
+		else if(type === 'uint32') {
+			data = new Uint8Array((new Uint32Array([value])).buffer);
+		}
+		else if(type === 'uint64') {
+			data = new Uint8Array((new BigUint64Array([value])).buffer);
 		}
 		else if(type === 'float32') {
 			data = new Uint8Array((new Float32Array([value])).buffer);
@@ -67,6 +95,7 @@ export class MxGenericType
 			let sdata = new BigUint64Array([BigInt(data.length)]);
 			ndata.set(new Uint8Array(sdata.buffer), 0);
 			ndata.set(data, 8);
+			console.log('ndata: ', ndata);
 			return new MxGenericType(ndata, intype);
 		}
 
@@ -98,6 +127,37 @@ export class MxGenericType
 		}
 
 		return chunks;
+	}
+
+	static typeFromTypeid(id: number): string {
+		switch(id) {
+			case  0: { return 'int8'; }
+			case  1: { return 'int16'; }
+			case  2: { return 'int32'; }
+			case  3: { return 'int64'; }
+			case  4: { return 'uint8'; }
+			case  5: { return 'uint16'; }
+			case  6: { return 'uint32'; }
+			case  7: { return 'uint64'; }
+			case  8: { return 'float32'; }
+			case  9: { return 'float64'; }
+			case 10: { return 'string'; }
+			case 11: { return 'bool'; }
+		}
+		return '';
+	}
+
+	public hexdump() : Array<string> {
+		if(this.data.byteLength === 0) {
+			return [];
+		}
+
+		let offset = 0;
+		if(this.intype === 'generic' && this.data.byteLength > 8) {
+			offset = 8; // 64-bit uint with size first
+		}
+
+		return Array.from(this.data.slice(offset)).map((b) => '0x' + b.toString(16).padStart(2, '0')).reverse();
 	}
 
 	public astype(type: string) : any {
@@ -139,7 +199,7 @@ export class MxGenericType
 			// return decoder.decode(data).split('\0');
 		}
 		else if(type === 'float32') {
-			const f32arr = new Float32Array(data.buffer);
+			const f32arr = new Float32Array(data.buffer, offset);
 			if(f32arr.length === 1) {
 				return f32arr[0];
 			}
@@ -148,7 +208,7 @@ export class MxGenericType
 			}
 		}
 		else if(type === 'float64') {
-			const f64arr = new Float64Array(data.buffer);
+			const f64arr = new Float64Array(data.buffer, offset);
 			if(f64arr.length === 1) {
 				return f64arr[0];
 			}
@@ -156,10 +216,28 @@ export class MxGenericType
 				return Array.from(f64arr);
 			}
 		}
+		else if(type === 'int8') {
+			const i8arr = new Int8Array(data.buffer, offset);
+			if(i8arr.length === 1) {
+				return i8arr[0];
+			}
+			else {
+				return Array.from(i8arr);
+			}
+		}
+		else if(type === 'uint8') {
+			const u8arr = new Int8Array(data.buffer, offset);
+			if(u8arr.length === 1) {
+				return u8arr[0];
+			}
+			else {
+				return Array.from(u8arr);
+			}
+		}
 		else if(type === 'int32') {
 			// return view.getUint32(0, true);
 			// console.log(data);
-			const i32arr = new Int32Array(data.buffer);
+			const i32arr = new Int32Array(data.buffer, offset);
 			// console.log(i32arr);
 			if(i32arr.length === 1) {
 				return i32arr[0];
