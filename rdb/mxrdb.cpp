@@ -22,8 +22,6 @@ static std::map<std::string, mulex::RdbEntry*> _rdb_offset_map;
 static std::set<std::string> _rdb_watch_dirs;
 static std::shared_mutex     _rdb_watch_lock;
 
-static std::shared_mutex _rdb_allocation_lock;
-
 struct RdbStatistics
 {
 	std::atomic<std::uint32_t> _read_ops;
@@ -299,19 +297,8 @@ namespace mulex
 		return sizeof(RdbEntry) + RdbCalculateDataSize(entry._value);
 	}
 
-	static void RdbLockAllocations()
-	{
-		_rdb_allocation_lock.lock_shared();
-	}
-
-	static void RdbUnlockAllocations()
-	{
-		_rdb_allocation_lock.unlock_shared();
-	}
-
 	static bool RdbCheckSizeAndGrowIfNeeded(std::uint64_t data_size)
 	{
-		std::unique_lock<std::shared_mutex> lock(_rdb_allocation_lock);
 		std::uint64_t available_size = _rdb_size - _rdb_offset;
 
 		if(available_size >= data_size + sizeof(RdbEntry))
@@ -456,6 +443,9 @@ namespace mulex
 			return nullptr;
 		}
 
+		// LogTrace("LOCK! NE");
+		// std::unique_lock lock_al(_rdb_allocation_lock);
+
 		// Lock database map and handle for creation
 		const std::uint64_t data_size = RdbTypeSize(type);
 		const std::uint64_t data_total_size_bytes = count > 0 ? count * data_size : data_size;
@@ -508,7 +498,6 @@ namespace mulex
 		{
 			std::memset(ptr, 0, data_total_size_bytes);
 		}
-		
 
 		// Finally put the key on the map
 		_rdb_offset_map.emplace(key.c_str(), entry);
@@ -536,6 +525,9 @@ namespace mulex
 			LogError("[rdb] Cannot delete unknown key.");
 			return false;
 		}
+
+		// LogTrace("LOCK! DE");
+		// std::unique_lock lock_al(_rdb_allocation_lock);
 
 		RdbEmitWatchMatchCondition(key, entry);
 
@@ -618,36 +610,43 @@ namespace mulex
 		
 	}
 
-	void RdbLockEntryRead(const RdbEntry& entry)
+	void RdbLockMemOps()
 	{
 		_rdb_rw_lock.lock_shared();
+	}
+
+	void RdbUnlockMemOps()
+	{
+		_rdb_rw_lock.unlock_shared();
+	}
+
+	void RdbLockEntryRead(const RdbEntry& entry)
+	{
 		entry._rw_lock.lock_shared();
 	}
 
 	void RdbLockEntryReadWrite(const RdbEntry& entry)
 	{
-		_rdb_rw_lock.lock_shared();
 		entry._rw_lock.lock();
 	}
 
 	void RdbUnlockEntryRead(const RdbEntry& entry)
 	{
-		_rdb_rw_lock.unlock_shared();
 		entry._rw_lock.unlock_shared();
 	}
 
 	void RdbUnlockEntryReadWrite(const RdbEntry& entry)
 	{
-		_rdb_rw_lock.unlock_shared();
 		entry._rw_lock.unlock();
 	}
 
 	RPCGenericType RdbReadValueDirect(RdbKeyName keyname)
 	{
-		RdbLockAllocations();
-		const RdbEntry* entry = RdbFindEntryByName(keyname);
+		RdbLockMemOps();
+		const RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
 		if(!entry)
 		{
+			RdbUnlockMemOps();
 			return std::vector<std::uint8_t>();
 		}
 
@@ -659,7 +658,7 @@ namespace mulex
 		std::memcpy(buffer.data(), entry->_value._ptr, size);
 
 		RdbUnlockEntryRead(*entry);
-		RdbUnlockAllocations();
+		RdbUnlockMemOps();
 
 		_rdb_statistics._read_ops.fetch_add(1);
 
@@ -674,10 +673,11 @@ namespace mulex
 
 	RPCGenericType RdbReadKeyMetadata(RdbKeyName keyname)
 	{
-		RdbLockAllocations();
-		const RdbEntry* entry = RdbFindEntryByName(keyname);
+		RdbLockMemOps();
+		const RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
 		if(!entry)
 		{
+			RdbUnlockMemOps();
 			return std::vector<std::uint8_t>();
 		}
 
@@ -687,7 +687,7 @@ namespace mulex
 		RdbValueType type = entry->_value._type;
 
 		RdbUnlockEntryRead(*entry);
-		RdbUnlockAllocations();
+		RdbUnlockMemOps();
 
 		_rdb_statistics._read_ops.fetch_add(1);
 
@@ -696,10 +696,11 @@ namespace mulex
 
 	void RdbWriteValueDirect(mulex::RdbKeyName keyname, RPCGenericType data)
 	{
-		RdbLockAllocations();
-		RdbEntry* entry = RdbFindEntryByName(keyname);
+		RdbLockMemOps();
+		RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
 		if(!entry)
 		{
+			RdbUnlockMemOps();
 			return;
 		}
 
@@ -729,7 +730,7 @@ namespace mulex
 		}
 
 		RdbUnlockEntryReadWrite(*entry);
-		RdbUnlockAllocations();
+		RdbUnlockMemOps();
 	}
 
 	bool RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data)

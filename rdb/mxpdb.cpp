@@ -22,9 +22,7 @@ namespace mulex
 		}
 		else
 		{
-			RdbLockEntryRead(*pdb);
-			pdb_loc = pdb->_value.as<mxstring<512>>().c_str();
-			RdbUnlockEntryRead(*pdb);
+			pdb_loc = RdbReadValueDirect("/system/pdbloc").asType<mxstring<512>>().c_str();
 		}
 
 		LogTrace("[pdb] Got pdb location: %s", pdb_loc.c_str());

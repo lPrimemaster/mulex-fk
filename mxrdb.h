@@ -123,6 +123,8 @@ namespace mulex
 	std::string RdbMakeWatchEvent(const mulex::RdbKeyName& dir);
 	void RdbTriggerEvent(std::uint64_t clientid, const RdbEntry& entry);
 
+	void RdbLockMemOps();
+	void RdbUnlockMemOps();
 	void RdbLockEntryRead(const RdbEntry& entry);
 	void RdbLockEntryReadWrite(const RdbEntry& entry);
 	void RdbUnlockEntryRead(const RdbEntry& entry);
