@@ -106,6 +106,7 @@ namespace mulex
 	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, const void* data, std::uint64_t count = 0);
 	bool RdbDeleteEntry(const RdbKeyName& key);
 	RdbEntry* RdbFindEntryByName(const RdbKeyName& key);
+	RdbEntry* RdbFindEntryByNameUnlocked(const RdbKeyName& key);
 
 	MX_RPC_METHOD mulex::RPCGenericType RdbReadValueDirect(mulex::RdbKeyName keyname);
 	MX_RPC_METHOD void RdbWriteValueDirect(mulex::RdbKeyName keyname, mulex::RPCGenericType data);
@@ -116,6 +117,7 @@ namespace mulex
 	MX_RPC_METHOD mulex::string32 RdbWatch(mulex::RdbKeyName dir);
 	MX_RPC_METHOD mulex::string32 RdbUnwatch(mulex::RdbKeyName dir);
 	MX_RPC_METHOD mulex::RPCGenericType RdbListKeys();
+	MX_RPC_METHOD mulex::RPCGenericType RdbListKeyTypes();
 	MX_RPC_METHOD mulex::RPCGenericType RdbListSubkeys(mulex::RdbKeyName dir);
 
 	std::string RdbMakeWatchEvent(const mulex::RdbKeyName& dir);

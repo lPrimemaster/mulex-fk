@@ -22,6 +22,8 @@ static std::map<std::string, mulex::RdbEntry*> _rdb_offset_map;
 static std::set<std::string> _rdb_watch_dirs;
 static std::shared_mutex     _rdb_watch_lock;
 
+static std::shared_mutex _rdb_allocation_lock;
+
 struct RdbStatistics
 {
 	std::atomic<std::uint32_t> _read_ops;
@@ -297,8 +299,19 @@ namespace mulex
 		return sizeof(RdbEntry) + RdbCalculateDataSize(entry._value);
 	}
 
+	static void RdbLockAllocations()
+	{
+		_rdb_allocation_lock.lock_shared();
+	}
+
+	static void RdbUnlockAllocations()
+	{
+		_rdb_allocation_lock.unlock_shared();
+	}
+
 	static bool RdbCheckSizeAndGrowIfNeeded(std::uint64_t data_size)
 	{
+		std::unique_lock<std::shared_mutex> lock(_rdb_allocation_lock);
 		std::uint64_t available_size = _rdb_size - _rdb_offset;
 
 		if(available_size >= data_size + sizeof(RdbEntry))
@@ -429,20 +442,21 @@ namespace mulex
 
 	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, const void* data, std::uint64_t count)
 	{
-		// NOTE: (Cesar) Needs to be before the lock
-		if(RdbFindEntryByName(key))
-		{
-			LogError("[rdb] Cannot create already existing key");
-			return nullptr;
-		}
-
-		// Lock database map and handle for creation
 		// HACK: (Cesar) For simplicity this also
 		//				 blocks W/R on the rdb
 		//				 However this does not
 		//				 invalidate RdbEntry pointers
 		//				 Well it might due to realloc...
 		std::unique_lock lock(_rdb_rw_lock);
+
+		// NOTE: (Cesar) Needs to be before the lock
+		if(RdbFindEntryByNameUnlocked(key))
+		{
+			LogError("[rdb] Cannot create already existing key");
+			return nullptr;
+		}
+
+		// Lock database map and handle for creation
 		const std::uint64_t data_size = RdbTypeSize(type);
 		const std::uint64_t data_total_size_bytes = count > 0 ? count * data_size : data_size;
 
@@ -512,7 +526,11 @@ namespace mulex
 
 	bool RdbDeleteEntry(const RdbKeyName& key)
 	{
-		RdbEntry* entry = RdbFindEntryByName(key);
+		// Lock database map and handle for deletion
+		// This also locks W/R access to any key
+		std::unique_lock lock(_rdb_rw_lock);
+
+		RdbEntry* entry = RdbFindEntryByNameUnlocked(key);
 		if(!entry)
 		{
 			LogError("[rdb] Cannot delete unknown key.");
@@ -520,10 +538,6 @@ namespace mulex
 		}
 
 		RdbEmitWatchMatchCondition(key, entry);
-
-		// Lock database map and handle for deletion
-		// This also locks W/R access to any key
-		std::unique_lock lock(_rdb_rw_lock);
 
 		// If we are at the end just move the offset
 		const std::uint64_t entry_total_size_bytes = RdbCalculateEntryTotalSize(*entry);
@@ -554,11 +568,8 @@ namespace mulex
 		return true;
 	}
 
-	RdbEntry* RdbFindEntryByName(const RdbKeyName& key)
+	RdbEntry* RdbFindEntryByNameUnlocked(const RdbKeyName& key)
 	{
-		// Reading is ok to share the lock
-		std::shared_lock lock(_rdb_rw_lock);
-
 		auto it = _rdb_offset_map.find(key.c_str());
 		if(it == _rdb_offset_map.end())
 		{
@@ -567,6 +578,13 @@ namespace mulex
 		}
 		
 		return it->second;
+	}
+
+	RdbEntry* RdbFindEntryByName(const RdbKeyName& key)
+	{
+		// Reading is ok to share the lock
+		std::shared_lock lock(_rdb_rw_lock);
+		return RdbFindEntryByNameUnlocked(key);
 	}
 
 	void RdbDumpMetadata(const std::string& filename)
@@ -626,6 +644,7 @@ namespace mulex
 
 	RPCGenericType RdbReadValueDirect(RdbKeyName keyname)
 	{
+		RdbLockAllocations();
 		const RdbEntry* entry = RdbFindEntryByName(keyname);
 		if(!entry)
 		{
@@ -640,6 +659,7 @@ namespace mulex
 		std::memcpy(buffer.data(), entry->_value._ptr, size);
 
 		RdbUnlockEntryRead(*entry);
+		RdbUnlockAllocations();
 
 		_rdb_statistics._read_ops.fetch_add(1);
 
@@ -654,6 +674,7 @@ namespace mulex
 
 	RPCGenericType RdbReadKeyMetadata(RdbKeyName keyname)
 	{
+		RdbLockAllocations();
 		const RdbEntry* entry = RdbFindEntryByName(keyname);
 		if(!entry)
 		{
@@ -666,6 +687,7 @@ namespace mulex
 		RdbValueType type = entry->_value._type;
 
 		RdbUnlockEntryRead(*entry);
+		RdbUnlockAllocations();
 
 		_rdb_statistics._read_ops.fetch_add(1);
 
@@ -674,6 +696,7 @@ namespace mulex
 
 	void RdbWriteValueDirect(mulex::RdbKeyName keyname, RPCGenericType data)
 	{
+		RdbLockAllocations();
 		RdbEntry* entry = RdbFindEntryByName(keyname);
 		if(!entry)
 		{
@@ -706,6 +729,7 @@ namespace mulex
 		}
 
 		RdbUnlockEntryReadWrite(*entry);
+		RdbUnlockAllocations();
 	}
 
 	bool RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data)
@@ -757,6 +781,19 @@ namespace mulex
 			RdbUnlockEntryRead(*key.second);
 		}
 		return keys;
+	}
+
+	mulex::RPCGenericType RdbListKeyTypes()
+	{
+		std::vector<std::uint8_t> types;
+		types.reserve(_rdb_offset_map.size());
+		for(const auto& key : _rdb_offset_map)
+		{
+			RdbLockEntryRead(*key.second);
+			types.push_back(static_cast<std::underlying_type_t<RdbValueType>>(key.second->_value._type));
+			RdbUnlockEntryRead(*key.second);
+		}
+		return types;
 	}
 
 	static std::vector<RdbKeyName> RdbFindSubkeys(std::string prefix)
