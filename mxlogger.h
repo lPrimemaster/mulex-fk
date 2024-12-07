@@ -5,6 +5,7 @@
 #include <vector>
 #include <sstream>
 #include <fstream>
+#include <chrono>
 
 namespace mulex
 {
@@ -15,6 +16,14 @@ namespace mulex
 		struct LogMessagePolicy { constexpr static std::string_view Prefix() { return   "[MSG]"; } };
 		struct LogDebugPolicy   { constexpr static std::string_view Prefix() { return "[DEBUG]"; } };
 		struct LogTracePolicy   { constexpr static std::string_view Prefix() { return "[TRACE]"; } };
+	}
+
+	static std::string GetTimeString()
+	{
+		std::time_t time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+		char time_buf[64];
+		std::strftime(time_buf, 64, "%d.%m.%Y %H:%M:%S", std::localtime(&time));
+		return time_buf;
 	}
 
 	template<typename Policy>
@@ -42,7 +51,7 @@ namespace mulex
 		// This avoids the need to use a mutex to print
 		// Making the logger natively thread-safe
 		std::stringstream ss;
-		ss << Policy::Prefix() << " " << buffer.data() << '\n';
+		ss << "[" << GetTimeString() << "]" << Policy::Prefix() << " " << buffer.data() << '\n';
 		std::string output = ss.str();
 		
 		if constexpr(kLogToStdOut)
