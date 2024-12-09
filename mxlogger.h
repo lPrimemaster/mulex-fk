@@ -61,8 +61,8 @@ namespace mulex
 
 		if constexpr(kLogToFile)
 		{
-			static std::ofstream file("log.log");
-			file << output << std::flush;
+			static std::ofstream file("log.txt");
+			file << output;
 		}
 	}
 
