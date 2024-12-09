@@ -1,3 +1,7 @@
+// Brief  : MxRDBv2 this experimental version of the rdb does not move blocks on creation on the pool
+// Author : César Godinho
+// Date   : 08/12/24
+
 #include "../mxrdb.h"
 #include "../mxlogger.h"
 #include "../mxevt.h"
@@ -21,6 +25,10 @@ static std::map<std::string, mulex::RdbEntry*> _rdb_offset_map;
 
 static std::set<std::string> _rdb_watch_dirs;
 static std::shared_mutex     _rdb_watch_lock;
+static std::map<std::string, std::int64_t> _rdb_watch_last_trigger;
+
+static std::unordered_map<std::string, mulex::RdbEntry> _rdb_map;
+static std::vector<std::pair<std::uint64_t, std::uint64_t>> _rdb_free_blocks;
 
 struct RdbStatistics
 {
@@ -31,7 +39,7 @@ struct RdbStatistics
 	std::atomic<std::uint64_t> _rdb_size;
 };
 
-static constexpr std::int64_t RDB_STATISTICS_INTERVAL = 1000;
+static constexpr std::int64_t RDB_STATISTICS_INTERVAL = 5000;
 static RdbStatistics                _rdb_statistics;
 static std::unique_ptr<std::thread> _rdb_statistics_thread;
 static std::atomic<bool> 			_rdb_statistics_flag;
@@ -133,12 +141,12 @@ namespace mulex
 
 		// Extract map size from the raw data
 		std::uint64_t mapsize = *reinterpret_cast<std::uint64_t*>(data.data());
-		LogTrace("[rdb] Load mapsize %llu", mapsize);
+		LogTrace("[rdb] Load mapsize: %llu kb.", mapsize / 1024);
 
 		// Extract rdb size from the raw data
 		std::uint64_t rdbsize = *reinterpret_cast<std::uint64_t*>(data.data() + sizeof(std::uint64_t));
 		std::uint64_t rdbsize_unaligned = rdbsize;
-		LogTrace("[rdb] Load rdb true size %llu", rdbsize);
+		LogTrace("[rdb] Load rdb true size %llu kb.", rdbsize / 1024);
 
 		if(rdbsize == 0)
 		{
@@ -151,7 +159,7 @@ namespace mulex
 		if(rdbsize % 1024 != 0)
 		{
 			rdbsize = 1024 * ((rdbsize / 1024) + 1);
-			LogTrace("[rdb] Load rdb aligned size %llu", rdbsize);
+			LogTrace("[rdb] Load rdb aligned size %llu kb.", rdbsize / 1024);
 		}
 
 		_rdb_handle = RdbAlignedAlloc(1024, rdbsize);
@@ -201,7 +209,7 @@ namespace mulex
 			RdbWriteValueDirect(root_key + "allocated", _rdb_statistics._rdb_allocated.load());
 			RdbWriteValueDirect(root_key + "size", _rdb_statistics._rdb_size.load());
 
-			// Every second
+			// Every 5 seconds
 			std::this_thread::sleep_for(std::chrono::milliseconds(RDB_STATISTICS_INTERVAL - ((SysGetCurrentTime() - start))));
 		}
 	}
@@ -255,7 +263,7 @@ namespace mulex
 		_rdb_statistics._write_ops.store(0);
 
 		_rdb_statistics_flag.store(true);
-		_rdb_statistics_thread = std::make_unique<std::thread>(RdbStatisticsThread);
+		// _rdb_statistics_thread = std::make_unique<std::thread>(RdbStatisticsThread);
 
 		LogDebug("[rdb] Init() OK. Allocated: %llu kb.", _rdb_size / 1024);
 	}
@@ -265,8 +273,10 @@ namespace mulex
 		LogDebug("[rdb] Closing rdb.");
 
 		_rdb_statistics_flag.store(false);
-		_rdb_statistics_thread->join();
-		_rdb_statistics_thread.reset();
+		// _rdb_statistics_thread->join();
+		// _rdb_statistics_thread.reset();
+
+		RdbDumpMetadata("rdb_dump.txt");
 
 		std::unique_lock lock(_rdb_rw_lock);
 
@@ -287,28 +297,18 @@ namespace mulex
 		}
 	}
 
-	static std::uint64_t RdbCalculateDataSize(const RdbValue& value)
+	static std::uint64_t RdbCalculateDataSize(const RdbEntry* entry)
 	{
-		return value._count > 0 ? value._count * value._size : value._size;
+		return entry->_count > 0 ? entry->_count * entry->_size : entry->_size;
 	}
 
-	static std::uint64_t RdbCalculateEntryTotalSize(const RdbEntry& entry)
+	static std::uint64_t RdbCalculateEntryTotalSize(const RdbEntry* entry)
 	{
-		return sizeof(RdbEntry) + RdbCalculateDataSize(entry._value);
+		return sizeof(RdbEntry) + RdbCalculateDataSize(entry);
 	}
 
-	static bool RdbCheckSizeAndGrowIfNeeded(std::uint64_t data_size)
+	static bool RdbGrow()
 	{
-		std::uint64_t available_size = _rdb_size - _rdb_offset;
-
-		if(available_size >= data_size + sizeof(RdbEntry))
-		{
-			return true;
-		}
-		
-		// Need to grow the rdb linear memory
-		// Realloc won't align, so we copy the memory
-		// RDB Already locked at this point
 		std::uint8_t* temp_handle = RdbAlignedAlloc(1024, _rdb_size * 2);
 		
 		if(!temp_handle)
@@ -357,58 +357,33 @@ namespace mulex
 		return 0;
 	}
 
-	static std::uint64_t RdbFindEmplaceOffset(const RdbKeyName& key)
-	{
-		auto lb = _rdb_offset_map.lower_bound(key.c_str());
-		if(lb != _rdb_offset_map.cbegin())
-		{
-			// Emplace at the end of some entry
-			RdbEntry* const entry = (--lb)->second;
-			return (reinterpret_cast<std::uint8_t*>(entry) - _rdb_handle) + RdbCalculateEntryTotalSize(*entry);
-		}
-		else
-		{
-			// Emplace at the beginning (no left neighbour)
-			return 0;
-		}
-	}
-
-	static void RdbIncrementMapKeysAddrAfter(const RdbKeyName& key, std::uint64_t entry_size)
-	{
-		LogTrace("[rdb] Incrementing all keys after [%s]", key.c_str());
-		for(auto it = _rdb_offset_map.upper_bound(key.c_str()); it != _rdb_offset_map.end(); it++)
-		{
-			it->second = reinterpret_cast<RdbEntry*>(reinterpret_cast<std::uint8_t*>(it->second) + entry_size);
-		}
-	}
-
-	static void RdbDecrementMapKeysAddrAfter(const RdbKeyName& key, std::uint64_t entry_size)
-	{
-		LogTrace("[rdb] Decrementing all keys after [%s]", key.c_str());
-		for(auto it = _rdb_offset_map.upper_bound(key.c_str()); it != _rdb_offset_map.end(); it++)
-		{
-			it->second = reinterpret_cast<RdbEntry*>(reinterpret_cast<std::uint8_t*>(it->second) - entry_size);
-		}
-	}
-
 	static void RdbEmitEvtCondition(const std::string& swatch, const RdbKeyName& key, const RdbEntry* entry)
 	{
 		std::string event_name = RdbMakeWatchEvent(swatch);
 		std::vector<std::uint8_t> evt_buffer;
-		std::uint64_t entry_data_size = RdbCalculateDataSize(entry->_value);
+		std::uint64_t entry_data_size = RdbCalculateDataSize(entry);
 		evt_buffer.resize(sizeof(RdbKeyName) + sizeof(std::uint64_t) + entry_data_size);
 		std::uint64_t offset = EvtDataAppend(0, &evt_buffer, key);
 		offset = EvtDataAppend(offset, &evt_buffer, entry_data_size);
-		offset = EvtDataAppend(offset, &evt_buffer, entry->_value._ptr, entry_data_size);
+		offset = EvtDataAppend(offset, &evt_buffer, entry->_ptr, entry_data_size);
 		LogTrace("Emit watch event <%s> from swatch: <%s>.", event_name.c_str(), swatch.c_str());
+
 		if(!EvtEmit(event_name, evt_buffer.data(), evt_buffer.size()))
 		{
-			// This watch is not subscribed by anyone, remove it
+			// This watch is not subscribed by anyone and was not triggered for 5 seconds, remove it
 			// Defer RdbUnwatch due to unique_lock
-			std::thread([=]() {
-				RdbUnwatch(swatch);
-				LogTrace("[rdb] swatch <%s> was dangling. Removed.", swatch.c_str());
-			}).detach();
+			if(SysGetCurrentTime() - _rdb_watch_last_trigger[swatch] > 5000)
+			{
+				std::thread([=]() {
+					RdbUnwatch(swatch);
+					LogTrace("[rdb] swatch <%s> was dangling for more than 5 seconds. Removed.", swatch.c_str());
+				}).detach();
+			}
+		}
+		else
+		{
+			// Event triggered OK, set last trigger
+			_rdb_watch_last_trigger[swatch] = SysGetCurrentTime();
 		}
 	}
 
@@ -427,89 +402,119 @@ namespace mulex
 		}
 	}
 
-	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, const void* data, std::uint64_t count)
+	static std::uint64_t RdbCalculateEntryOffset(RdbEntry* entry)
 	{
-		// HACK: (Cesar) For simplicity this also
-		//				 blocks W/R on the rdb
-		//				 However this does not
-		//				 invalidate RdbEntry pointers
-		//				 Well it might due to realloc...
-		std::unique_lock lock(_rdb_rw_lock);
+		return (reinterpret_cast<std::uint8_t*>(entry) - _rdb_handle);
+	}
 
-		// NOTE: (Cesar) Needs to be before the lock
-		if(RdbFindEntryByNameUnlocked(key))
+	RdbEntry* RdbAllocate(std::uint64_t size)
+	{
+		const std::uint64_t total_size = sizeof(RdbEntry) + size;
+
+		// Check for free blocks
+		for(auto it = _rdb_free_blocks.begin(); it != _rdb_free_blocks.end(); it++)
 		{
-			LogError("[rdb] Cannot create already existing key");
-			return nullptr;
+			auto& [offset, free_size] = *it;
+
+			if(free_size >= total_size)
+			{
+				RdbEntry* out = reinterpret_cast<RdbEntry*>(_rdb_handle + offset);
+				offset += total_size;
+				free_size -= total_size;
+				_rdb_offset += total_size;
+
+				if(free_size == 0)
+				{
+					_rdb_free_blocks.erase(it);
+				}
+
+				return out;
+			}
 		}
 
-		// LogTrace("LOCK! NE");
-		// std::unique_lock lock_al(_rdb_allocation_lock);
+		// No free blocks so we put it at the end
+		
+		// No space left
+		if(_rdb_offset + total_size > _rdb_size)
+		{
+			// TODO: (Cesar) Realloc the pool or add more chunks/blocks
+			if(!RdbGrow())
+			{
+				return nullptr;
+			}
+			return RdbAllocate(size);
+		}
+
+		// Enough space at the end OK.
+		std::uint64_t offset = _rdb_offset;
+		_rdb_offset += total_size;
+		return reinterpret_cast<RdbEntry*>(_rdb_handle + offset);
+	}
+
+	void RdbFree(RdbEntry* entry)
+	{
+		std::uint64_t free_offset = RdbCalculateEntryOffset(entry);
+		std::uint64_t free_size = RdbCalculateEntryTotalSize(entry);
+		_rdb_free_blocks.emplace_back(free_offset, free_size);
+
+		// if(free_offset + free_size == _rdb_offset)
+		// {
+		// 	_rdb_offset -= free_size;
+		// }
+		// else
+		// {
+		// 	_rdb_free_blocks.emplace_back(free_offset, free_size);
+		// }
+	}
+
+	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, const void* data, std::uint64_t count)
+	{
+		std::unique_lock lock(_rdb_rw_lock);
+
+		if(RdbFindEntryByNameUnlocked(key))
+		{
+			LogError("[rdb] Cannot create already existing key.");
+			return nullptr;
+		}
 
 		// Lock database map and handle for creation
 		const std::uint64_t data_size = RdbTypeSize(type);
 		const std::uint64_t data_total_size_bytes = count > 0 ? count * data_size : data_size;
 
-		// Check if we have enough memory to add the new key
-		// NOTE: (Cesar) This might invalidate the rdb handle
-		if(!RdbCheckSizeAndGrowIfNeeded(data_total_size_bytes))
+		RdbEntry* entry = RdbAllocate(data_total_size_bytes);
+
+		if(entry == nullptr)
 		{
-			LogError("[rdb] Failed to allocate more space on rdb for new key.");
+			LogError("[rdb] RdbAllocate failed.");
 			return nullptr;
 		}
-
-		// NOTE: (Cesar) _rdb_handle could have changed due to
-		// 				 possible realloc above
-
-		// Find emplace offset
-		std::uint64_t eoff = RdbFindEmplaceOffset(key);
-		std::uint8_t* ptr = _rdb_handle + eoff;
-
-		// Move rdb to accommodate the new entry
-		// Unless we are at the end block
-		if(eoff < _rdb_offset)
-		{
-			std::uint64_t entry_total_size = sizeof(RdbEntry) + data_total_size_bytes;
-			std::uint8_t* next = ptr + entry_total_size;
-			std::memmove(next, ptr, _rdb_offset - eoff);
-			RdbIncrementMapKeysAddrAfter(key, entry_total_size);
-		}
-
-		// Placement new and assign members
-		RdbEntry* entry = new(ptr) RdbEntry();
 
 		// Setup entry related statistics
 		entry->_tcreated = SysGetCurrentTime();
 		entry->_tmodified = entry->_tcreated;
 
-		entry->_key._name = key;
-		entry->_value._count = count;
-		entry->_value._size = data_size;
-		entry->_value._type = type;
-		// NOTE: (Cesar) entry->_value._ptr is automatically populated ahead
-
-		// Now copy the actual value data
-		ptr += sizeof(RdbEntry);
+		entry->_count = count;
+		entry->_size = data_size;
+		entry->_type = type;
+		
+		// + checks
 		if(data != nullptr)
 		{
-			std::memcpy(ptr, data, data_total_size_bytes);
+			std::memcpy(entry->_ptr, data, data_total_size_bytes);
 		}
 		else
 		{
-			std::memset(ptr, 0, data_total_size_bytes);
+			std::memset(entry->_ptr, 0, data_total_size_bytes);
 		}
 
-		// Finally put the key on the map
 		_rdb_offset_map.emplace(key.c_str(), entry);
-
-		_rdb_offset += sizeof(RdbEntry) + data_total_size_bytes;
 
 		RdbEmitWatchMatchCondition(key, entry);
 		EvtEmit("mxrdb::keycreated", reinterpret_cast<const std::uint8_t*>(key.c_str()), sizeof(RdbKeyName));
 		_rdb_statistics._write_ops.fetch_add(1);
 		_rdb_statistics._total_keys.fetch_add(1);
 
-		LogTrace("[rdb] Created new key: %s", key.c_str());
+		LogTrace("[rdb] Created new key: <%s>.", key.c_str());
 		return entry;
 	}
 
@@ -522,35 +527,14 @@ namespace mulex
 		RdbEntry* entry = RdbFindEntryByNameUnlocked(key);
 		if(!entry)
 		{
-			LogError("[rdb] Cannot delete unknown key.");
+			LogError("[rdb] Cannot delete unknown key: <%s>.", key.c_str());
 			return false;
 		}
 
-		// LogTrace("LOCK! DE");
-		// std::unique_lock lock_al(_rdb_allocation_lock);
-
 		RdbEmitWatchMatchCondition(key, entry);
 
-		// If we are at the end just move the offset
-		const std::uint64_t entry_total_size_bytes = RdbCalculateEntryTotalSize(*entry);
-		if(_rdb_handle + _rdb_offset - entry_total_size_bytes ==
-			reinterpret_cast<const std::uint8_t*>(entry)
-		)
-		{
-			_rdb_offset -= entry_total_size_bytes;
-		}
-		else
-		{
-			// We are not at the end so will need to move the memory
-			// This will however invalidate the memory
-			const std::uint8_t* entry_end = reinterpret_cast<const std::uint8_t*>(entry) + entry_total_size_bytes;
-			std::memmove(entry, entry_end, (_rdb_handle + _rdb_offset) - entry_end);
-			_rdb_offset -= entry_total_size_bytes;
-
-			// Left size of the key map is unchanged on the RDB since it is lexicographically sorted by key
-			_rdb_offset_map.erase(key.c_str());
-			RdbDecrementMapKeysAddrAfter(key, entry_total_size_bytes);
-		}
+		_rdb_offset_map.erase(key.c_str());
+		RdbFree(entry);
 
 		EvtEmit("mxrdb::keydeleted", reinterpret_cast<const std::uint8_t*>(key.c_str()), sizeof(RdbKeyName));
 		_rdb_statistics._write_ops.fetch_add(1);
@@ -565,7 +549,7 @@ namespace mulex
 		auto it = _rdb_offset_map.find(key.c_str());
 		if(it == _rdb_offset_map.end())
 		{
-			LogTrace("[rdb] Trying to access unknown rdb key: %s", key.c_str());
+			LogTrace("[rdb] Trying to access unknown rdb key: <%s>.", key.c_str());
 			return nullptr;
 		}
 		
@@ -574,7 +558,6 @@ namespace mulex
 
 	RdbEntry* RdbFindEntryByName(const RdbKeyName& key)
 	{
-		// Reading is ok to share the lock
 		std::shared_lock lock(_rdb_rw_lock);
 		return RdbFindEntryByNameUnlocked(key);
 	}
@@ -590,75 +573,37 @@ namespace mulex
 
 		LogDebug("[rdb] Dumping RDB metadata to file <%s>.", filename.c_str());
 
-		std::shared_lock lock(_rdb_rw_lock);
+		std::unique_lock lock(_rdb_rw_lock);
 		for(const auto& it : _rdb_offset_map)
 		{
 	  		const RdbEntry* const entry = it.second;
-			output << "Key: " << entry->_key._name.c_str() << std::endl;
-			output << "\t" << "Value type: " << static_cast<int>(entry->_value._type) << std::endl;
-			output << "\t" << "Value ptr: " << entry + sizeof(RdbEntry) << std::endl;
-			output << "\t" << "Value size: " << entry->_value._size << std::endl;
-			output << "\t" << "Value count: " << entry->_value._count << std::endl;
-			output << "\t" << "Entry ptr: " << entry << std::endl;
-			output << "\t" << "Entry size: " << RdbCalculateEntryTotalSize(*entry) << std::endl;
+			output << "Key: " << it.first << '\n';
+			output << "\t" << "Value type: " << static_cast<int>(entry->_type) << '\n';
+			output << "\t" << "Value ptr: " << entry + sizeof(RdbEntry) << '\n';
+			output << "\t" << "Value size: " << entry->_size << '\n';
+			output << "\t" << "Value count: " << entry->_count << '\n';
+			output << "\t" << "Entry ptr: " << entry << '\n';
+			output << "\t" << "Entry size: " << RdbCalculateEntryTotalSize(entry) << '\n';
 			output << std::endl;
 		}
 	}
 
-	void RdbTriggerEvent(std::uint64_t clientid, const RdbEntry& entry)
-	{
-		
-	}
-
-	void RdbLockMemOps()
-	{
-		_rdb_rw_lock.lock_shared();
-	}
-
-	void RdbUnlockMemOps()
-	{
-		_rdb_rw_lock.unlock_shared();
-	}
-
-	void RdbLockEntryRead(const RdbEntry& entry)
-	{
-		entry._rw_lock.lock_shared();
-	}
-
-	void RdbLockEntryReadWrite(const RdbEntry& entry)
-	{
-		entry._rw_lock.lock();
-	}
-
-	void RdbUnlockEntryRead(const RdbEntry& entry)
-	{
-		entry._rw_lock.unlock_shared();
-	}
-
-	void RdbUnlockEntryReadWrite(const RdbEntry& entry)
-	{
-		entry._rw_lock.unlock();
-	}
-
 	RPCGenericType RdbReadValueDirect(RdbKeyName keyname)
 	{
-		RdbLockMemOps();
+		std::shared_lock lock_ops(_rdb_rw_lock);
+
 		const RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
 		if(!entry)
 		{
-			RdbUnlockMemOps();
 			return std::vector<std::uint8_t>();
 		}
 
-		RdbLockEntryRead(*entry);
+		std::shared_lock lock_entry(entry->_rw_lock);
 
 		// Entry is read locked
-		std::uint64_t size = RdbCalculateDataSize(entry->_value);
+		std::uint64_t size = RdbCalculateDataSize(entry);
 		std::vector<std::uint8_t> buffer(size);
-		std::memcpy(buffer.data(), entry->_value._ptr, size);
-
-		RdbUnlockEntryRead(*entry);
-		RdbUnlockMemOps();
+		std::memcpy(buffer.data(), entry->_ptr, size);
 
 		_rdb_statistics._read_ops.fetch_add(1);
 
@@ -667,70 +612,61 @@ namespace mulex
 
 	bool RdbValueExists(RdbKeyName keyname)
 	{
-		const RdbEntry* entry = RdbFindEntryByName(keyname);
-		return entry != nullptr;
+		std::shared_lock lock(_rdb_rw_lock);
+		return RdbFindEntryByNameUnlocked(keyname) != nullptr;
 	}
 
 	RPCGenericType RdbReadKeyMetadata(RdbKeyName keyname)
 	{
-		RdbLockMemOps();
+		std::shared_lock lock_ops(_rdb_rw_lock);
+
 		const RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
 		if(!entry)
 		{
-			RdbUnlockMemOps();
 			return std::vector<std::uint8_t>();
 		}
 
-		RdbLockEntryRead(*entry);
-
-		// Entry is read locked
-		RdbValueType type = entry->_value._type;
-
-		RdbUnlockEntryRead(*entry);
-		RdbUnlockMemOps();
-
 		_rdb_statistics._read_ops.fetch_add(1);
 
-		return type;
+		std::shared_lock lock_entry(entry->_rw_lock);
+		return entry->_type;
 	}
 
 	void RdbWriteValueDirect(mulex::RdbKeyName keyname, RPCGenericType data)
 	{
-		RdbLockMemOps();
+		std::shared_lock lock_ops(_rdb_rw_lock);
+
 		RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
 		if(!entry)
 		{
-			RdbUnlockMemOps();
 			return;
 		}
 
-		RdbLockEntryReadWrite(*entry);
+		std::unique_lock lock_entry(entry->_rw_lock);
 
 		// Entry is read/write locked
-		if(data._data.size() != RdbCalculateDataSize(entry->_value))
+		if(data.getSize() != RdbCalculateDataSize(entry))
 		{
-			LogError("[rdb] Cannot write rdb value. Data type or length differs.");
+			LogError("[rdb] Cannot write rdb value. Data type or length differs. <%s>", keyname.c_str());
+			LogError("[rdb] Expected <%llu>. Got <%llu>.", RdbCalculateDataSize(entry), data.getSize());
 		}
 		else
 		{
 			entry->_tmodified = SysGetCurrentTime();
-			std::memcpy(entry->_value._ptr, data.getData(), data._data.size());
+			std::memcpy(entry->_ptr, data.getData(), data.getSize());
 
-			if(entry->_flags & RdbEntryFlag::EVENT_MOD_WATCHER)
-			{
-				// NOTE: (Cesar) : cid is 0 for system modifications
-				const std::uint64_t cid = SysGetClientId();
-
-				// Sends the modified data to all subscribers
-				// RdbTriggerEvent(cid, *entry);
-			}
+			// if(entry->_flags & RdbEntryFlag::EVENT_MOD_WATCHER)
+			// {
+			// 	// NOTE: (Cesar) : cid is 0 for system modifications
+			// 	const std::uint64_t cid = SysGetClientId();
+			//
+			// 	// Sends the modified data to all subscribers
+			// 	// RdbTriggerEvent(cid, *entry);
+			// }
 			
 			RdbEmitWatchMatchCondition(keyname, entry);
 			_rdb_statistics._write_ops.fetch_add(1);
 		}
-
-		RdbUnlockEntryReadWrite(*entry);
-		RdbUnlockMemOps();
 	}
 
 	bool RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data)
@@ -755,6 +691,7 @@ namespace mulex
 
 		std::unique_lock<std::shared_mutex> lock(_rdb_watch_lock); // RW lock
 		_rdb_watch_dirs.insert(dir.c_str());
+		_rdb_watch_last_trigger[dir.c_str()] = SysGetCurrentTime();
 		return event_name;
 	}
 
@@ -768,31 +705,30 @@ namespace mulex
 			return "";
 		}
 		_rdb_watch_dirs.erase(wit);
+		_rdb_watch_last_trigger.erase(dir.c_str());
 		return RdbMakeWatchEvent(dir);
 	}
 
 	mulex::RPCGenericType RdbListKeys()
 	{
+		std::shared_lock lock(_rdb_rw_lock);
 		std::vector<RdbKeyName> keys;
 		keys.reserve(_rdb_offset_map.size());
 		for(const auto& key : _rdb_offset_map)
 		{
-			RdbLockEntryRead(*key.second);
-			keys.push_back(key.second->_key._name);
-			RdbUnlockEntryRead(*key.second);
+			keys.push_back(key.first);
 		}
 		return keys;
 	}
 
 	mulex::RPCGenericType RdbListKeyTypes()
 	{
+		std::shared_lock lock(_rdb_rw_lock);
 		std::vector<std::uint8_t> types;
 		types.reserve(_rdb_offset_map.size());
 		for(const auto& key : _rdb_offset_map)
 		{
-			RdbLockEntryRead(*key.second);
-			types.push_back(static_cast<std::underlying_type_t<RdbValueType>>(key.second->_value._type));
-			RdbUnlockEntryRead(*key.second);
+			types.push_back(static_cast<std::underlying_type_t<RdbValueType>>(key.second->_type));
 		}
 		return types;
 	}
@@ -812,18 +748,17 @@ namespace mulex
 		prefix.back()++;
 		const auto it_high = _rdb_offset_map.lower_bound(prefix);
 
-		// TODO: (Cesar) Iterator aritmetic
-		// subkeys.reserve(it_high - it_low);
-
 		for(auto it = it_low; it != it_high; it++)
 		{
-			subkeys.push_back(it->second->_key._name);
+			subkeys.push_back(it->first);
 		}
 		return subkeys;
 	}
 
 	mulex::RPCGenericType RdbListSubkeys(mulex::RdbKeyName dir)
 	{
+		std::shared_lock lock(_rdb_rw_lock);
+
 		std::string sdir = dir.c_str();
 		if(sdir.find('*') == std::string::npos)
 		{
@@ -836,16 +771,12 @@ namespace mulex
 		// This is a prefix with the kleene star operator
 		for(const auto& key : _rdb_offset_map)
 		{
-			RdbLockEntryRead(*key.second);
-
-			const RdbKeyName& name = key.second->_key._name;
-			if(SysMatchPattern(sdir, name.c_str()))
+			if(SysMatchPattern(sdir, key.first))
 			{
-				keys.push_back(key.second->_key._name);
+				keys.push_back(key.first);
 			}
-
-			RdbUnlockEntryRead(*key.second);
 		}
+
 		return keys;
 	}
 
@@ -924,13 +855,5 @@ namespace mulex
 			return;
 		}
 		mulex::string32 event_name = exp.value()->_rpc_client->call<mulex::string32>(RPC_CALL_MULEX_RDBUNWATCH, RdbKeyName(_key));
-		// exp.value()->_evt_client->subscribe(event_name.c_str(), [=](const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata) {
-		// 	RdbKeyName key = reinterpret_cast<const char*>(data);
-		// 	RPCGenericType value = RPCGenericType::FromData(
-		// 		data + sizeof(RdbKeyName) + sizeof(std::uint64_t),
-		// 		*reinterpret_cast<const std::uint64_t*>(data + sizeof(RdbKeyName))
-		// 	);
-		// 	callback(key, value);
-		// });
 	}
 }

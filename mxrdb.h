@@ -90,14 +90,47 @@ namespace mulex
 
 		// Entry metadata
 		std::uint64_t _flags;
+		RdbValueType  _type;
+		std::uint64_t _size;
+		std::uint64_t _count;
 
 		// Entry data
-		RdbKey   _key;
-		RdbValue _value; // NOTE: Must be last
+		// std::uint8_t _padding[16];
+		mutable std::uint8_t _ptr[];
+
+
+
+		template<typename T>
+		constexpr inline T as() const
+		{
+			if constexpr(std::is_pointer_v<T>)
+			{
+				// Arrays
+				if(_count == 0)
+				{
+					LogError("RdbEntry::as() called with pointer type but its value is not an array.");
+					return nullptr;
+				}
+				return reinterpret_cast<T>(_ptr);
+			}
+			else
+			{
+				// Non arrays
+				if(_count > 0)
+				{
+					LogError("RdbEntry::as() called with non pointer type but its value is an array.");
+					return T();
+				}
+				return *reinterpret_cast<T*>(_ptr);
+			}
+		}
 	};
 
 	void RdbInit(std::uint64_t size);
 	void RdbClose();
+
+	RdbEntry* RdbAllocate(std::uint64_t size);
+	void RdbFree(RdbEntry* entry);
 
 	// TODO: (Cesar) Implement this
 	bool RdbImportFromSQL(const std::string& filename);
@@ -122,13 +155,6 @@ namespace mulex
 
 	std::string RdbMakeWatchEvent(const mulex::RdbKeyName& dir);
 	void RdbTriggerEvent(std::uint64_t clientid, const RdbEntry& entry);
-
-	void RdbLockMemOps();
-	void RdbUnlockMemOps();
-	void RdbLockEntryRead(const RdbEntry& entry);
-	void RdbLockEntryReadWrite(const RdbEntry& entry);
-	void RdbUnlockEntryRead(const RdbEntry& entry);
-	void RdbUnlockEntryReadWrite(const RdbEntry& entry);
 
 	// NOTE: (Cesar) This needs to be called after the Rdb
 	void PdbInit();
