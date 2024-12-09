@@ -276,7 +276,7 @@ namespace mulex
 		// _rdb_statistics_thread->join();
 		// _rdb_statistics_thread.reset();
 
-		RdbDumpMetadata("rdb_dump.txt");
+		// RdbDumpMetadata("rdb_dump.txt");
 
 		std::unique_lock lock(_rdb_rw_lock);
 
