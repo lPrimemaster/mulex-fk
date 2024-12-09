@@ -22,8 +22,20 @@ export class MxGenericType
 		return MxGenericType.fromValue(value, 'string512', intype);
 	}
 
+	static int8(value: number, intype: string = 'native') : MxGenericType {
+		return MxGenericType.fromValue(value, 'int8', intype);
+	}
+
+	static uint8(value: number, intype: string = 'native') : MxGenericType {
+		return MxGenericType.fromValue(value, 'uint8', intype);
+	}
+
 	static int32(value: number, intype: string = 'native') : MxGenericType {
 		return MxGenericType.fromValue(value, 'int32', intype);
+	}
+
+	static uint64(value: BigInt, intype: string = 'native') : MxGenericType {
+		return MxGenericType.fromValue(value, 'uint64', intype);
 	}
 
 	static f32(value: number, intype: string = 'native') : MxGenericType {
@@ -60,7 +72,7 @@ export class MxGenericType
 			data = new Uint8Array((new Int32Array([value])).buffer);
 		}
 		else if(type === 'int64') {
-			data = new Uint8Array((new BigInt64Array([value])).buffer);
+			data = new Uint8Array((new BigInt64Array([BigInt(value)])).buffer);
 		}
 		else if(type === 'uint8') {
 			data = new Uint8Array([value]);
@@ -72,7 +84,7 @@ export class MxGenericType
 			data = new Uint8Array((new Uint32Array([value])).buffer);
 		}
 		else if(type === 'uint64') {
-			data = new Uint8Array((new BigUint64Array([value])).buffer);
+			data = new Uint8Array((new BigUint64Array([BigInt(value)])).buffer);
 		}
 		else if(type === 'float32') {
 			data = new Uint8Array((new Float32Array([value])).buffer);
@@ -145,6 +157,24 @@ export class MxGenericType
 			case 11: { return 'bool'; }
 		}
 		return '';
+	}
+
+	static typeidFromType(type: string): number {
+		switch(type.toLowerCase()) {
+			case 'int8'   : { return  0; }
+			case 'int16'  : { return  1; }
+			case 'int32'  : { return  2; }
+			case 'int64'  : { return  3; }
+			case 'uint8'  : { return  4; }
+			case 'uint16' : { return  5; }
+			case 'uint32' : { return  6; }
+			case 'uint64' : { return  7; }
+			case 'float32': { return  8; }
+			case 'float64': { return  9; }
+			case 'string' : { return 10; }
+			case 'bool'   : { return 11; }
+		}
+		return NaN;
 	}
 
 	public hexdump() : Array<string> {
@@ -234,11 +264,26 @@ export class MxGenericType
 				return Array.from(u8arr);
 			}
 		}
+		else if(type === 'int16') {
+			const i16arr = new Int16Array(data.buffer, offset);
+			if(i16arr.length === 1) {
+				return i16arr[0];
+			}
+			else {
+				return Array.from(i16arr);
+			}
+		}
+		else if(type === 'uint16') {
+			const ui16arr = new Uint16Array(data.buffer, offset);
+			if(ui16arr.length === 1) {
+				return ui16arr[0];
+			}
+			else {
+				return Array.from(ui16arr);
+			}
+		}
 		else if(type === 'int32') {
-			// return view.getUint32(0, true);
-			// console.log(data);
 			const i32arr = new Int32Array(data.buffer, offset);
-			// console.log(i32arr);
 			if(i32arr.length === 1) {
 				return i32arr[0];
 			}
@@ -247,10 +292,7 @@ export class MxGenericType
 			}
 		}
 		else if(type === 'uint32') {
-			// return view.getUint32(0, true);
-			// console.log(data);
 			const ui32arr = new Uint32Array(data.buffer, offset);
-			// console.log(ui32arr);
 			if(ui32arr.length === 1) {
 				return ui32arr[0];
 			}

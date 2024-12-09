@@ -56,7 +56,6 @@ export class MxWebsocket {
 
 			// Attempt reconnect
 			setTimeout(() => {
-				// showToast({ title: "Trying to reconnect...", description: "Will background connect to <" + location.host + "> when available.", variant: "warning"});
 				this.socket = new WebSocket(`${this.address}`);
 				this.setupCallbacks();
 			}, 5000);
@@ -160,9 +159,12 @@ export class MxWebsocket {
 
 	private make_rpc_message(method: string, args: Array<MxGenericType>, response: boolean): [string, number] {
 		const id = this.messageid++;
-		const tdec = new TextDecoder();
+		// const tdec = new TextDecoder('iso8859-2');
+
 		// Minimize network impact with b64 encoding for the arguments
-		const rawData = btoa(tdec.decode(MxGenericType.concatData(args)));
+		const rawData = btoa(String.fromCharCode.apply(null, Array.from(MxGenericType.concatData(args))));
+		// const rawData = btoa(tdec.decode(MxGenericType.concatData(args)));
+
 		if(args.length > 0) {
 			// console.log(MxGenericType.concatData(args));
 			return [JSON.stringify({'type': 0, 'method': method, 'args': rawData, 'messageid': id, 'response': response}), id];

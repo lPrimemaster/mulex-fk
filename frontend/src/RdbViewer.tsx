@@ -16,7 +16,7 @@ import { Transition } from 'solid-transition-group';
 import { Button } from './components/Button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog';
 import { scroll_to_element, array_chunkify } from './lib/utils';
-import { TextField, TextFieldLabel, TextFieldInput } from './components/ui/text-field';
+import { TextField, TextFieldLabel, TextFieldInput, TextFieldErrorMessage } from './components/ui/text-field';
 import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip';
 
 class RdbStats {
@@ -274,6 +274,12 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 
 export const RdbViewer: Component = () => {
 	const [hideSystemKeys, setHideSystemKeys] = createSignal<boolean>(false);
+	const [newValueType, setNewValueType] = createSignal<string>('UINT8');
+	const [newValueData, setNewValueData] = createSignal<string>('');
+	const [newValueKey, setNewValueKey] = createSignal<string>('');
+	const [validKey, setValidKey] = createSignal<boolean>(false);
+	const [validValue, setValidValue] = createSignal<boolean>(false);
+	const [newKeyDialogOpen, setNewKeyDialogOpen] = createSignal<boolean>(false);
 
 	MxWebsocket.instance.on_connection_change((conn: boolean) => {
 		if(conn) {
@@ -338,6 +344,44 @@ export const RdbViewer: Component = () => {
 		});
 	});
 
+	function validateValueKey(key: string): boolean {
+		const res = !(key.startsWith('/system/') || rdbKeys.data.has(key) || key === '/system');
+		setValidKey(res);
+		return res;
+	}
+
+	function validateValueData(): boolean {
+		if(newValueType() !== 'STRING' && newValueType() !== 'BOOL') {
+			const res = !isNaN(Number(newValueData()));
+			setValidValue(res);
+			return res;
+		}
+		setValidValue(true);
+		return true;
+	}
+
+	function createRdbEntry() {
+		let data: MxGenericType;
+		if(newValueType() === 'BOOL') {
+			data = MxGenericType.bool(newValueData() == '1', 'generic');
+		}
+		else if(newValueType() !== 'STRING') {
+			data = MxGenericType.fromValue(Number(newValueData()), newValueType().toLowerCase(), 'generic');
+		}
+		else {
+			data = MxGenericType.str512(newValueData(), 'generic');
+		}
+
+		MxWebsocket.instance.rpc_call('mulex::RdbCreateValueDirect', [
+			MxGenericType.str512(newValueKey()),
+			MxGenericType.uint8(MxGenericType.typeidFromType(newValueType())),
+			MxGenericType.uint64(BigInt(0)),
+			data
+		]).then((res: MxGenericType) => console.log('mulex::RdbCreateValueDirect returned ' + res.astype('bool')));
+
+		setNewKeyDialogOpen(false);
+	}
+
 	return (
 		<div>
 			<Sidebar/>
@@ -382,44 +426,93 @@ export const RdbViewer: Component = () => {
 						</div>
 						*/}
 						<div class="flex">
-							<Dialog>
+							<Dialog open={newKeyDialogOpen()} onOpenChange={setNewKeyDialogOpen}>
 								<DialogTrigger as={Button}>New Key</DialogTrigger>
 								<DialogContent class="overflow-visible">
 									<DialogHeader>
 										<DialogTitle class="text-center">Create Key</DialogTitle>
 									</DialogHeader>
-									<TextField class="grid grid-cols-4 py-0 items-center">
+									<TextField
+										class="grid grid-cols-4 py-0 items-center"
+										value={newValueKey()}
+										onChange={setNewValueKey}
+										validationState={validateValueKey(newValueKey()) ? 'valid' : 'invalid'}
+									>
 										<TextFieldLabel class="text-right px-5">Name</TextFieldLabel>
 										<TextFieldInput placeholder="/user/my_dir/my_key" class="col-span-3" type="text"/>
+										<TextFieldErrorMessage>
+											<Show when={newValueKey().startsWith('/system/') || newValueKey() === '/system'}>
+												Creating '/system/*' keys is not allowed.
+											</Show>
+											<Show when={rdbKeys.data.has(newValueKey())}>
+												Key '{newValueKey()}' already exists.
+											</Show>
+										</TextFieldErrorMessage>
 									</TextField>
 									<div class="grid grid-cols-4 py-0 items-center">
 										<span class="text-right px-5 text-sm font-medium">Type</span>
 										<ComboSimple data={[
-											{ label: 'UINT8' , value: 'UINT8' , disabled: false },
-											{ label: 'UINT16', value: 'UINT16', disabled: false },
-											{ label: 'UINT32', value: 'UINT32', disabled: false },
-											{ label: 'UINT64', value: 'UINT64', disabled: false },
-											{ label: 'INT8' , value: 'INT8' , disabled: false },
-											{ label: 'INT16', value: 'INT16', disabled: false },
-											{ label: 'INT32', value: 'INT32', disabled: false },
-											{ label: 'INT64', value: 'INT64', disabled: false },
+											{ label: 'UINT8'  , value: 'UINT8'  , disabled: false },
+											{ label: 'UINT16' , value: 'UINT16' , disabled: false },
+											{ label: 'UINT32' , value: 'UINT32' , disabled: false },
+											{ label: 'UINT64' , value: 'UINT64' , disabled: false },
+											{ label: 'INT8'   , value: 'INT8'   , disabled: false },
+											{ label: 'INT16'  , value: 'INT16'  , disabled: false },
+											{ label: 'INT32'  , value: 'INT32'  , disabled: false },
+											{ label: 'INT64'  , value: 'INT64'  , disabled: false },
 											{ label: 'FLOAT32', value: 'FLOAT32', disabled: false },
 											{ label: 'FLOAT64', value: 'FLOAT64', disabled: false },
-											{ label: 'BOOL', value: 'BOOL', disabled: false },
-											{ label: 'STRING', value: 'STRING', disabled: false }
-										]} placeholder="" default="UINT8" onSelect={(value: boolean) => { console.log('Selected ' + value); }}/>
+											{ label: 'BOOL'   , value: 'BOOL'   , disabled: false },
+											{ label: 'STRING' , value: 'STRING' , disabled: false }
+										]} placeholder="" default="UINT8" onSelect={(value: string) => { setNewValueType(value); }}/>
 									</div>
-									<TextField class="grid grid-cols-4 py-0 items-center">
-										<TextFieldLabel class="text-right px-5">Value</TextFieldLabel>
-										<TextFieldInput placeholder="0" class="col-span-3" type="text"/>
-									</TextField>
+									<Show when={newValueType() === 'STRING'}>
+										<TextField
+											class="grid grid-cols-4 py-0 items-center"
+											value={newValueData()}
+											onChange={setNewValueData}
+										>
+											<TextFieldLabel class="text-right px-5">Value</TextFieldLabel>
+											<TextFieldInput placeholder="my_string" class="col-span-3" type="text"/>
+										</TextField>
+									</Show>
+									<Show when={newValueType() === 'BOOL'}>
+										<div class="grid grid-cols-4 py-0 items-center">
+											<span class="text-right px-5 text-sm font-medium">Value</span>
+											<ComboSimple data={[
+												{ label: 'True' , value: '1', disabled: false },
+												{ label: 'False', value: '0', disabled: false }
+											]} placeholder="" default="True" onSelect={(value: string) => { setNewValueData(value); }}/>
+										</div>
+									</Show>
+									<Show when={newValueType() !== 'STRING' && newValueType() !== 'BOOL'}>
+										<TextField
+											class="grid grid-cols-4 py-0 items-center"
+											value={newValueData()}
+											onChange={setNewValueData}
+											validationState={validateValueData() ? 'valid' : 'invalid'}
+										>
+											<TextFieldLabel class="text-right px-5">Value</TextFieldLabel>
+											<TextFieldInput placeholder="0" class="col-span-3" type="text"/>
+											<TextFieldErrorMessage>A valid number is required.</TextFieldErrorMessage>
+										</TextField>
+									</Show>
+									<div class="grid grid-cols-4 py-0 items-center">
+										<span class="text-right px-5 text-sm font-medium">Array</span>
+										<ComboSimple data={[
+											{ label: 'Yes' , value: true , disabled: true },
+											{ label: 'No'  , value: false, disabled: false }
+										]} placeholder="" default="No" onSelect={() => {}}/>
+									</div>
+									{/*
 									<TextField class="grid grid-cols-4 py-0 items-center">
 										<TextFieldLabel class="text-right px-5">Size</TextFieldLabel>
 										<TextFieldInput value="1" class="col-span-3" type="text"/>
 									</TextField>
+									*/}
 									<DialogFooter>
-										<Button onClick={() => {}} disabled>Create</Button>
-										<Button onClick={() => {}}>Cancel</Button>
+										<Button onClick={() => createRdbEntry()} disabled={!validKey() || !validValue()}>Create</Button>
+										<Button onClick={() => setNewKeyDialogOpen(false)}>Cancel</Button>
 									</DialogFooter>
 								</DialogContent>
 							</Dialog>
