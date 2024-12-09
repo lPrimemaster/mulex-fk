@@ -71,12 +71,6 @@ namespace mulex
 		}
 	}
 
-	RdbAccess MxBackend::getConfigRdbRoot()
-	{
-		static const std::string ekey = "/system/backends/" + std::string(SysGetBinaryName()) + "/config/";
-		return RdbAccess(ekey);
-	}
-
 	void MxBackend::startEventLoop()
 	{
 		if(!_init_ok)

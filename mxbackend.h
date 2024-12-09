@@ -17,19 +17,23 @@ namespace mulex
 		void registerEvent(const std::string& evt);
 		void subscribeEvent(const std::string& evt, EvtClientThread::EvtCallbackFunc func);
 
-		// Rdb
-		RdbAccess getConfigRdbRoot();
+	protected:
+		void onRunStart(std::uint64_t runno);
+		void onRunStop(std::uint64_t runno);
 
 	public:
 		void startEventLoop();
 		void eventLoop();
 
+	protected:
+		RdbAccess rdb;
+
 	private:
+		// Init metadata
 		bool _init_ok = false;
 		const Experiment* _experiment = nullptr;
 
-	protected:
+		// Periodic polling
 		std::int32_t _period_ms;
-		RdbAccess rdb;
 	};
 } // namespace mulex

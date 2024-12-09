@@ -22,7 +22,6 @@ public:
 		config["period_ms"].create(RdbValueType::INT32, std::int32_t(89));
 		// _period_ms = config["period_ms"];
 		// config["period_ms"] = 3;
-		_period_ms = 100;
 
 		registerEvent("TestBackend::data");
 		LogTrace("Backend name: %s", std::string(SysGetBinaryName()).c_str());
