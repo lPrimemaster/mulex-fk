@@ -17,19 +17,29 @@ export interface SearchBarContextType {
 	setSelectedItem: Setter<string>;
 	query: Accessor<string>;
 	setQuery: Setter<string>;
+	filteredItems: Accessor<Array<string>>;
+	setFilteredItems: Setter<Array<string>>;
 };
 
 export const SearchBarContext = createContext<SearchBarContextType>();
 export const SearchBarProvider: Component<{ children: JSXElement }> = (props) => {
 	const [selectedItem, setSelectedItem] = createSignal<string>('');
 	const [query, setQuery] = createSignal<string>('');
-	return <SearchBarContext.Provider value={{ selectedItem, setSelectedItem, query, setQuery }}>{props.children}</SearchBarContext.Provider>
+	const [filteredItems, setFilteredItems] = createSignal<Array<string>>([]);
+	return <SearchBarContext.Provider value={{
+		selectedItem,
+		setSelectedItem,
+		query,
+		setQuery,
+		filteredItems,
+		setFilteredItems
+	}}>{props.children}</SearchBarContext.Provider>
 };
 
-const SearchBarResultsView: Component<{ matches: Array<string> }> = (props) => {
+const SearchBarResultsView: Component<{ matches: Array<string>, dropdown: boolean }> = (props) => {
 	const { setSelectedItem, setQuery } = useContext(SearchBarContext) as SearchBarContextType;
 	return (
-		<Show when={props.matches.length > 0}>
+		<Show when={props.dropdown && props.matches.length > 0}>
 			<div class="absolute z-10 border border-gray-400 rounded-md bg-gray-100 shadow-md mt-2 ml-6">
 				<For each={props.matches}>{(item) =>
 					<div
@@ -42,8 +52,8 @@ const SearchBarResultsView: Component<{ matches: Array<string> }> = (props) => {
 	);
 };
 
-export const SearchBar: Component<{ items: Array<string>, placeholder?: string, children?: JSXElement }> = (props) => {
-	const { query, setQuery } = useContext(SearchBarContext) as SearchBarContextType;
+export const SearchBar: Component<{ items: Array<string>, placeholder?: string, dropdown?: boolean, children?: JSXElement }> = (props) => {
+	const { query, setQuery, setFilteredItems } = useContext(SearchBarContext) as SearchBarContextType;
 	const [flen, setFlen] = createSignal<number>(0);
 
 	function handleInputEvent(e: InputEvent) {
@@ -59,10 +69,15 @@ export const SearchBar: Component<{ items: Array<string>, placeholder?: string, 
 
 	createEffect(() => {
 		if(query().length > 0) {
-			setFlen(getFilteredItems().length);
+			const items = getFilteredItems();
+			setFlen(items.length);
+			setFilteredItems(items);
 		}
 		else {
 			setFlen(0);
+			if(!(props.dropdown ?? true)) {
+				setFilteredItems(props.items);
+			}
 		}
 	});
 
@@ -93,7 +108,7 @@ export const SearchBar: Component<{ items: Array<string>, placeholder?: string, 
 						</div>
 					</Show>
 				</div>
-			<SearchBarResultsView matches={getFilteredItems()}/>
+				<SearchBarResultsView matches={getFilteredItems()} dropdown={props.dropdown ?? true}/>
 			</div>
 		</>
 	);

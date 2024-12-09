@@ -3,10 +3,10 @@ import { splitProps } from "solid-js"
 
 import { cn } from "~/lib/utils"
 
-const Table: Component<ComponentProps<"table">> = (props) => {
+const Table: Component<ComponentProps<"table"> & { scroll?: boolean }> = (props) => {
   const [local, others] = splitProps(props, ["class"])
   return (
-    <div class="relative w-full">
+    <div class={"relative w-full"}>
       <table class={cn("w-full caption-bottom text-sm", local.class)} {...others} />
     </div>
   )

@@ -459,15 +459,6 @@ namespace mulex
 		{
 			HttpUnsubscribeEvent(ws, event.first);
 		}
-		// for(auto it = _active_ws_subscriptions.begin(); it != _active_ws_subscriptions.end(); it++)
-		// {
-		// 	auto wsit = it->second.find(ws);
-		// 	if(wsit != it->second.end())
-		// 	{
-		// 		// bridge->_local_experiment._evt_client->unsubscribe(it->first);
-		// 		it->second.erase(wsit);
-		// 	}
-		// }
 	}
 
 	void HttpStartServer(std::uint16_t port)
@@ -506,8 +497,6 @@ namespace mulex
 					LogDebug("[mxhttp] New WS connection.");
 				},
 				.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
-
-					// TODO: (Cesar): Support events
 
 					WsRpcBridge* bridge = ws->getUserData();
 
@@ -587,7 +576,7 @@ namespace mulex
 					bridge->_local_experiment._evt_client.reset();
 					LogDebug("[mxhttp] Closing WS connection.");
 				}
-			}).listen(port, [port](auto* token) {
+			}).listen("127.0.0.1", port, [port](auto* token) {
 				if(token)
 				{
 					_http_listen_socket = token;

@@ -155,6 +155,11 @@ namespace mulex
 			return _data.empty() ? nullptr : _data.data();
 		}
 
+		std::uint64_t getSize() const
+		{
+			return _data.size();
+		}
+
 		std::vector<std::uint8_t> _data;
 	};
 

@@ -36,7 +36,7 @@ export const ComboSimple = <T,>(props: ComboSimplePropsType<T>) => {
 	return (
 		<div>
 			<div class="flex">
-				<button class="w-20 cursor-pointer disabled:cursor-default disabled:text-gray-500 border border-gray-400 disabled:bg-gray-400 rounded-md text-ellipsis overflow-hidden text-left pl-2"
+				<button class="pr-5 cursor-pointer disabled:cursor-default disabled:text-gray-500 border border-gray-400 disabled:bg-gray-400 rounded-md text-ellipsis overflow-hidden text-left pl-2"
 					onClick={() => setOpen(!open())}
 					disabled={props.disabled ?? false}
 				>
@@ -74,7 +74,7 @@ export const ComboSimple = <T,>(props: ComboSimplePropsType<T>) => {
 				</Show>
 			</div>
 			<Show when={open()}>
-				<div class="absolute z-10 w-20 border border-gray-400 rounded-md bg-gray-100 shadow-md mt-0">
+				<div class="absolute z-10 border border-gray-400 rounded-md bg-gray-100 shadow-md mt-0">
 					<For each={props.data}>{(item) =>
 						<div
 							class="m-1 px-3 border rounded-md bg-gray-100 hover:bg-gray-200 active:bg-gray-300 cursor-pointer"

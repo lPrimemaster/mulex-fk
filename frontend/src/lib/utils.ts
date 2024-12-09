@@ -19,3 +19,15 @@ export function timestamp_tohms(ms: number): string {
 	let day = Math.trunc(hour / 24);
 	return day.toString() + 'd ' + (hour % 24).toString() + 'h ' + (min % 60).toString() + 'm ' + (sec % 60).toString() + 's';
 }
+
+export function scroll_to_element(element: HTMLDivElement | undefined) {
+	element?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+export function array_chunkify<T>(items: Array<T>, chunkSize: number): Array<Array<T>> {
+	const chunks = new Array<Array<T>>();
+	for(let i = 0; i < items.length; i += chunkSize) {
+		chunks.push(items.slice(i, i + chunkSize));
+	}
+	return chunks;
+}

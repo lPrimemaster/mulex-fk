@@ -396,8 +396,9 @@ namespace mulex
 			RdbWriteValueDirect(root_key + "last_connect_time", time);
 		}
 
-		RdbNewEntry(root_key + "statistics/event/read" , RdbValueType::UINT32, 0);
-		RdbNewEntry(root_key + "statistics/event/write", RdbValueType::UINT32, 0);
+		std::uint32_t init = 0;
+		RdbNewEntry(root_key + "statistics/event/read" , RdbValueType::UINT32, &init);
+		RdbNewEntry(root_key + "statistics/event/write", RdbValueType::UINT32, &init);
 
 		SetRdbClientConnectionStatus(cid, true);
 	}
@@ -417,6 +418,7 @@ namespace mulex
 		{
 			// This is a "ghost" client
 			// Not registered on the rdb
+			LogTrace("[evtserver] Client is ghost.");
 			_evt_client_ghost.insert(cid);
 			return;
 		}

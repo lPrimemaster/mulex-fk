@@ -71,7 +71,6 @@ const BackendStatusTable: Component = () => {
 						});
 					});
 			});
-
 		}
 	});
 
@@ -86,6 +85,19 @@ const BackendStatusTable: Component = () => {
 		const conkey = '/system/backends/' + cid + '/last_connect_time';
 		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(conkey)], 'generic').then((res: MxGenericType) => {
 			prev.uptime = Number(res.astype('int64'));
+			setBackends(cid, () => prev);
+		});
+	});
+
+	// Backend creation
+	rdb.watch('/system/backends/*/name', (key: string, value: MxGenericType) => {
+		const cid = extract_backend_name(key);
+		let prev = { ...backends[cid] };
+		prev.name = value.astype('string');
+
+		const hostkey = '/system/backends/' + cid + '/host';
+		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(hostkey)], 'generic').then((res: MxGenericType) => {
+			prev.host = res.astype('string');
 			setBackends(cid, () => prev);
 		});
 	});

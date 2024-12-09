@@ -35,8 +35,8 @@ int main(void)
 
 	entry = RdbFindEntryByName("/system/test");
 	entry2 = RdbFindEntryByName("/system/test2");
-	float fr = entry->_value.as<float>();
-	float fr2 = entry2->_value.as<float>();
+	float fr = entry->as<float>();
+	float fr2 = entry2->as<float>();
 	std::cout << fr << std::endl;
 	std::cout << fr2 << std::endl;
 
@@ -46,8 +46,8 @@ int main(void)
 
 	std::cout << entry << " " << entry2 << " " << entry3 << std::endl;
 
-	float* e3rdata = entry3->_value.as<float*>();
-	std::vector<float> e3data(e3rdata, e3rdata + entry3->_value._count);
+	float* e3rdata = entry3->as<float*>();
+	std::vector<float> e3data(e3rdata, e3rdata + entry3->_count);
 
 	ASSERT_THROW(fr == 7.0f);
 	ASSERT_THROW(fr2 == 8.0f);
