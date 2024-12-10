@@ -2,7 +2,9 @@
 #include "../mxbackend.h"
 #include "../mxlogger.h"
 #include "../mxsystem.h"
+#include <chrono>
 #include <rpcspec.inl>
+#include <thread>
 
 using namespace mulex;
 
@@ -58,6 +60,7 @@ public:
 		config["period_ms"] = ++s;
 		static std::vector<std::uint8_t> buffer(1000000);
 		dispatchEvent("TestBackend::data", buffer.data(), buffer.size());
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
 };
 

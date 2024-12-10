@@ -2,6 +2,7 @@
 #include "../mxsystem.h"
 #include "../mxlogger.h"
 #include "../mxevt.h"
+#include "../mxrun.h"
 
 #include <signal.h>
 static volatile sig_atomic_t stop = 0;
@@ -25,6 +26,26 @@ namespace mulex
 		}
 
 		_experiment = experiment.value();
+
+		// Register start/stop listeners
+		rdb["/system/run/status"].watch([this](const RdbKeyName&, const RPCGenericType& value) {
+			RunStatus status = static_cast<mulex::RunStatus>(value.asType<std::uint8_t>());
+
+			if(status == RunStatus::STARTING)
+			{
+				std::uint64_t no = rdb["/system/run/number"];
+				LogTrace("[mxbacked] Run %llu starting.", no);
+				this->onRunStart(no);
+			}
+			else if(status == RunStatus::STOPPING)
+			{
+				std::uint64_t no = rdb["/system/run/number"];
+				LogTrace("[mxbacked] Run %llu stopping.", no);
+				this->onRunStop(no);
+			}
+
+			// Silently ignore other transition states
+		});
 		
 		// So we stop on ctrl-C
 		LogMessage("[mxbackend] Running...");
@@ -69,6 +90,19 @@ namespace mulex
 		{
 			_experiment->_evt_client->subscribe(evt, func);
 		}
+	}
+
+	void MxBackend::onRunStart(std::uint64_t runno)
+	{
+	}
+
+	void MxBackend::onRunStop(std::uint64_t runno)
+	{
+	}
+
+	void MxBackend::deferExec(std::function<void()> wrapfunc)
+	{
+		// TODO: (Cesar)
 	}
 
 	void MxBackend::startEventLoop()

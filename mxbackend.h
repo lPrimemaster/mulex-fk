@@ -18,8 +18,9 @@ namespace mulex
 		void subscribeEvent(const std::string& evt, EvtClientThread::EvtCallbackFunc func);
 
 	protected:
-		void onRunStart(std::uint64_t runno);
-		void onRunStop(std::uint64_t runno);
+		virtual void onRunStart(std::uint64_t runno);
+		virtual void onRunStop(std::uint64_t runno);
+		void deferExec(std::function<void()> wrapfunc);
 
 	public:
 		void startEventLoop();

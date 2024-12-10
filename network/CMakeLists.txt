@@ -70,7 +70,7 @@ add_library(mxhttp
 
 find_package(ZLIB REQUIRED)
 
-target_link_libraries(mxhttp uv uSockets ZLIB::ZLIB RapidJSON base64)
+target_link_libraries(mxhttp uv uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
 
 target_include_directories(mxhttp PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>

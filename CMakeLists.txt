@@ -50,6 +50,7 @@ add_executable(mxmain
 add_subdirectory(network)
 add_subdirectory(rdb)
 add_subdirectory(drv)
+add_subdirectory(run)
 add_subdirectory(ctargets)
 
 # Link main

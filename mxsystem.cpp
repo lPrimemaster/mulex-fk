@@ -4,6 +4,7 @@
 #include "mxevt.h"
 #include "mxrdb.h"
 #include "mxhttp.h"
+#include "mxrun.h"
 #include <filesystem>
 #include <fstream>
 
@@ -264,6 +265,8 @@ namespace mulex
 		RdbInit(1024 * 1024);
 		PdbInit();
 
+		RunInitVariables();
+
 		_sys_rpc_thread = std::make_unique<RPCServerThread>();
 		_sys_evt_thread = std::make_unique<EvtServerThread>();
 
@@ -284,6 +287,9 @@ namespace mulex
 
 	void SysCloseExperiment()
 	{
+		// Force run stop if running
+		RunStop();
+
 		HttpStopServer();
 
 		_sys_rpc_thread.reset();
