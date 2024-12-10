@@ -26,6 +26,7 @@ export class MxWebsocket {
 				if(!this.deferred_p.has(data.messageid)) {
 					// Error
 					console.log(`MxWebsocket did not expect server message with id: ${data.messageid}`);
+					console.log('Data: ', data);
 				}
 				else {
 					const resolve = this.deferred_p.get(data.messageid);
@@ -109,14 +110,14 @@ export class MxWebsocket {
 		return new Promise<MxGenericType>((resolve) => {
 			// Send the data via websocket
 			this.socket.send(data);
-			if(response !== 'none') {
-				// Defer the response
-				this.deferred_p.set(id, [resolve, response]);
-			}
-			else {
-				// Resolve now with no response
-				resolve(MxGenericType.fromData(new Uint8Array([]), response));
-			}
+			this.deferred_p.set(id, [resolve, response]);
+			// if(response !== 'none') {
+			// 	// Defer the response
+			// }
+			// else {
+			// 	// Resolve now with no response
+			// 	resolve(MxGenericType.fromData(new Uint8Array([]), response));
+			// }
 		});
 	}
 
