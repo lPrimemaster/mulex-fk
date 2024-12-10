@@ -110,6 +110,8 @@ export class MxWebsocket {
 		return new Promise<MxGenericType>((resolve) => {
 			// Send the data via websocket
 			this.socket.send(data);
+
+			// Defer the response
 			this.deferred_p.set(id, [resolve, response]);
 			// if(response !== 'none') {
 			// 	// Defer the response
