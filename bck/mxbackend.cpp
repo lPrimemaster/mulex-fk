@@ -31,13 +31,13 @@ namespace mulex
 		rdb["/system/run/status"].watch([this](const RdbKeyName&, const RPCGenericType& value) {
 			RunStatus status = static_cast<mulex::RunStatus>(value.asType<std::uint8_t>());
 
-			if(status == RunStatus::STARTING)
+			if(status == RunStatus::RUNNING)
 			{
 				std::uint64_t no = rdb["/system/run/number"];
 				LogTrace("[mxbacked] Run %llu starting.", no);
 				this->onRunStart(no);
 			}
-			else if(status == RunStatus::STOPPING)
+			else if(status == RunStatus::STOPPED)
 			{
 				std::uint64_t no = rdb["/system/run/number"];
 				LogTrace("[mxbacked] Run %llu stopping.", no);
@@ -56,6 +56,15 @@ namespace mulex
 
 		_init_ok = true;
 		_period_ms = 0;
+
+		// Check the current status and schedule start
+		std::uint8_t status = rdb["/system/run/status"];
+		if(static_cast<RunStatus>(status) == RunStatus::RUNNING)
+		{
+			std::uint64_t no = rdb["/system/run/number"];
+			LogTrace("[mxbacked] Run %llu starting.", no);
+			this->onRunStart(no);
+		}
 	}
 
 	MxBackend::~MxBackend()
@@ -84,11 +93,24 @@ namespace mulex
 		}
 	}
 
+	void MxBackend::dispatchEvent(const std::string& evt, const std::vector<std::uint8_t>& data)
+	{
+		dispatchEvent(evt, data.data(), data.size());
+	}
+
 	void MxBackend::subscribeEvent(const std::string& evt, EvtClientThread::EvtCallbackFunc func)
 	{
 		if(_init_ok && _experiment)
 		{
 			_experiment->_evt_client->subscribe(evt, func);
+		}
+	}
+
+	void MxBackend::unsubscribeEvent(const std::string& evt)
+	{
+		if(_init_ok && _experiment)
+		{
+			_experiment->_evt_client->unsubscribe(evt);
 		}
 	}
 

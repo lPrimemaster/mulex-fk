@@ -15,4 +15,5 @@ namespace mulex
 	void RunInitVariables();
 	MX_RPC_METHOD bool RunStart();
 	MX_RPC_METHOD void RunStop();
+	MX_RPC_METHOD void RunReset();
 } // namespace mulex

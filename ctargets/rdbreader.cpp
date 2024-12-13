@@ -74,12 +74,26 @@ int main(int argc, char* argv[])
 		if(!ra[key].exists())
 		{
 			std::string value = argv[5];
-			ra[key].create(mulex::RdbValueType::UINT32, std::uint32_t(std::stoi(value)));
+			if(type == "int8")
+			{
+				ra[key].create(mulex::RdbValueType::INT8, std::int8_t(std::stoi(value)));
+			}
+			else if(type == "uint8")
+			{
+				ra[key].create(mulex::RdbValueType::UINT8, std::uint8_t(std::stoi(value)));
+			}
 		}
 		else
 		{
 			std::string value = argv[5];
-			ra[key] = std::stoi(value);
+			if(type == "int8")
+			{
+				ra[key] = std::int8_t(std::stoi(value));
+			}
+			else if(type == "uint8")
+			{
+				ra[key] = std::uint8_t(std::stoi(value));
+			}
 		}
 	}
 	

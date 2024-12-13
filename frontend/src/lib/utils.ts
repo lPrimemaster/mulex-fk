@@ -20,6 +20,10 @@ export function timestamp_tohms(ms: number): string {
 	return day.toString() + 'd ' + (hour % 24).toString() + 'h ' + (min % 60).toString() + 'm ' + (sec % 60).toString() + 's';
 }
 
+export function timestamp_tolocaltime(ts: number): string {
+	return (new Date(Number(ts))).toTimeString().split(' ')[0];
+}
+
 export function scroll_to_element(element: HTMLDivElement | undefined) {
 	element?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }

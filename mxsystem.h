@@ -58,21 +58,29 @@ namespace mulex
 	}
 
 	template<typename T>
-	inline constexpr std::size_t SysVargSize()
+	inline constexpr std::size_t SysVargSize(T& t)
 	{
-		return sizeof(T);
+		if constexpr(std::is_same_v<T, mulex::RPCGenericType>)
+		{
+			return t.getSize() + sizeof(std::uint64_t);
+		}
+		else
+		{
+			return sizeof(T);
+		}
 	}
 
 	template<typename T, typename U, typename ...Args>
-	inline constexpr std::size_t SysVargSize()
+	inline constexpr std::size_t SysVargSize(T& t, U& u, Args&... args)
 	{
-		return sizeof(T) + SysVargSize<U, Args...>();
+		return SysVargSize<T>(t) + SysVargSize<U, Args...>(u, args...);
 	}
 
 	class SysBufferStack
 	{
 	public:
 		void push(std::vector<std::uint8_t>&& data);
+		void push(const std::vector<std::uint8_t>& data);
 		std::vector<std::uint8_t> pop();
 		void requestUnblock();
 

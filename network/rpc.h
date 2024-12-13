@@ -226,7 +226,7 @@ namespace mulex
 		header.msgid = GetNextMessageId();
 		if constexpr(sizeof...(args) > 0)
 		{
-			header.payloadsize = static_cast<std::uint32_t>(SysVargSize<Args...>());
+			header.payloadsize = static_cast<std::uint32_t>(SysVargSize<Args...>(args...));
 		}
 		else
 		{
@@ -280,7 +280,7 @@ namespace mulex
 		header.client = SysGetClientId();
 		header.procedureid = procedureid;
 		header.msgid = GetNextMessageId();
-		header.payloadsize = static_cast<std::uint32_t>(SysVargSize<Args...>());
+		header.payloadsize = static_cast<std::uint32_t>(SysVargSize<Args...>(args...));
 
 		mulex::SocketResult result;
 		result = mulex::SocketSendBytes(conn, (std::uint8_t*)&header, sizeof(header));

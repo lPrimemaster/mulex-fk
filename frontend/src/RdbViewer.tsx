@@ -42,15 +42,6 @@ class RdbStats {
 const [rdbKeys, rdbKeysAction] = createSetStore<string>();
 const [rdbStats, setRdbStats] = createStore<RdbStats>(new RdbStats(0, 0, BigInt(0), BigInt(0), BigInt(0)));
 
-// const RdbKeyProperty: Component<{label: string, value: string}> = (props) => {
-// 	return (
-// 		<div class="flex gap-2">
-// 			<span class="w-20 text-right">{props.label}</span>
-// 			<span><BadgeLabel type="display">{props.value}</BadgeLabel></span>
-// 		</div>
-// 	);
-// };
-
 const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 	const { selectedItem, setSelectedItem } = useContext(SearchBarContext) as SearchBarContextType;
 	const [path, setPath] = createSignal<string>('');

@@ -5,6 +5,7 @@ include(cmake/InternetConnection.cmake)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 project(mulex-fk VERSION 0.1.0)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(LTRACE "Enable/Disable trace logging." OFF)
@@ -52,6 +53,7 @@ add_subdirectory(rdb)
 add_subdirectory(drv)
 add_subdirectory(run)
 add_subdirectory(ctargets)
+add_subdirectory(examples)
 
 # Link main
 target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp)

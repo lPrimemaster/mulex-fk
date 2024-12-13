@@ -48,7 +48,7 @@ namespace mulex
 			return false;
 		}
 
-		RdbWriteValueDirect("/system/run/status", std::uint8_t(2));
+		// RdbWriteValueDirect("/system/run/status", std::uint8_t(2));
 
 		// Increment the run
 		std::uint64_t runno = RdbReadValueDirect("/system/run/number").asType<std::uint64_t>() + 1;
@@ -75,12 +75,28 @@ namespace mulex
 			return;
 		}
 
-		RdbWriteValueDirect("/system/run/status", std::uint8_t(3));
+		// RdbWriteValueDirect("/system/run/status", std::uint8_t(3));
 
 		// For now we don't do anything else
 		
 		RdbWriteValueDirect("/system/run/status", std::uint8_t(0));
 
 		LogTrace("[mxrun] RunStop() OK.");
+	}
+
+	void RunReset()
+	{
+		// Check the status
+		RunStatus status = static_cast<RunStatus>(RdbReadValueDirect("/system/run/status").asType<std::uint8_t>());
+
+		if(status != RunStatus::STOPPED)
+		{
+			LogError("[mxrun] Failed to reset run number. Status is '%s'. Status 'STOPPED' is required.", RunStatusToString(status));
+			return;
+		}
+
+		RdbWriteValueDirect("/system/run/number", std::uint64_t(0));
+
+		LogTrace("[mxrun] RunReset() OK.");
 	}
 }

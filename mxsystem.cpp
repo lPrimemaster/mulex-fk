@@ -5,6 +5,7 @@
 #include "mxrdb.h"
 #include "mxhttp.h"
 #include "mxrun.h"
+#include "mxmsg.h"
 #include <filesystem>
 #include <fstream>
 
@@ -280,6 +281,9 @@ namespace mulex
 			std::this_thread::yield();
 		}
 
+		// After ent thread init
+		MsgInit();
+
 		HttpStartServer(8080);
 
 		return true;
@@ -411,12 +415,20 @@ namespace mulex
 		return true;
 	}
 
-
 	void SysBufferStack::push(std::vector<std::uint8_t>&& data)
 	{
 		{
 			std::unique_lock<std::mutex> lock(_mutex);
 			_stack.push(std::move(data));
+		}
+		_notifier.notify_one();	
+	}
+
+	void SysBufferStack::push(const std::vector<std::uint8_t>& data)
+	{
+		{
+			std::unique_lock<std::mutex> lock(_mutex);
+			_stack.push(data);
 		}
 		_notifier.notify_one();	
 	}
@@ -536,6 +548,12 @@ namespace mulex
 			std::memcpy(&msg_size, _buffer.data() + _header_size_offset, sizeof(std::uint32_t));
 			
 			payloadsize = msg_size + _header_size;
+
+			// LogTrace("Waiting for buffer with payloadsize = %llu", payloadsize);
+			// LogTrace("HS = %llu", _header_size);
+			// LogTrace("MSG = %d", msg_size);
+			// LogTrace("Current buffer offset = %llu", _buffer_offset);
+			// LogTrace("Buffer total size = %llu", _buffer.size());
 			
 			_notifier.wait(lock, [&](){ return payloadsize <= _buffer_offset; });
 

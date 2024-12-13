@@ -1,28 +1,13 @@
 #include "../mxmsg.h"
 #include "../mxsystem.h"
 #include "../mxlogger.h"
+#include "../mxrdb.h"
+#include "rpc.h"
 
 #include <cstdarg>
 #include <vector>
 #include <sstream>
-
 #include <rpcspec.inl>
-
-std::uint16_t RPCIdLookup(const std::string& name, bool* error)
-{
-	static const std::map<std::string, std::uint16_t> _map = {
-		{"RPC_CALL_MULEX_MSGWRITE", 1},
-		{"RPC_CALL_MULEX_MSGWRITE", 1}
-	};
-	auto mit = _map.find(name);
-	if(mit == _map.end())
-	{
-		if(error) *error = true;
-		return 0;
-	}
-	if(error) *error = false;
-	return mit->second;
-}
 
 namespace mulex
 {
@@ -30,7 +15,7 @@ namespace mulex
 	{
 	}
 	
-	void MsgEmitter::emitMessageInfo(const char* fmt, ...)
+	void MsgEmitter::info(const char* fmt, ...)
 	{
 		va_list vargs;
 		va_start(vargs, fmt);
@@ -43,7 +28,7 @@ namespace mulex
 		}
 	}
 
-	void MsgEmitter::emitMessageWarn(const char* fmt, ...)
+	void MsgEmitter::warn(const char* fmt, ...)
 	{
 		va_list vargs;
 		va_start(vargs, fmt);
@@ -56,7 +41,7 @@ namespace mulex
 		}
 	}
 
-	void MsgEmitter::emitMessageError(const char* fmt, ...)
+	void MsgEmitter::error(const char* fmt, ...)
 	{
 		va_list vargs;
 		va_start(vargs, fmt);
@@ -93,7 +78,7 @@ namespace mulex
 		std::optional<const Experiment*> experiment = SysGetConnectedExperiment();
 		if(!experiment.has_value())
 		{
-			LogWarning("emitMessage failed, not connected to an experiment.");
+			LogWarning("[mxmsg] emitMessage failed, not connected to an experiment.");
 		}
 		else
 		{
@@ -115,34 +100,33 @@ namespace mulex
 
 	void MsgWrite(mulex::MsgClass mclass, std::int64_t timestamp, mulex::RPCGenericType msg)
 	{
-		const std::uint16_t cid = GetCurrentCallerId();
+		const std::vector<char> message_data = msg.asVectorType<char>();
+		const std::uint64_t message_size = message_data.size() < MSG_MAX_SIZE ? message_data.size() : MSG_MAX_SIZE;
 
-		// Write message rdb stats
-		std::string rkey = "/system/clients/" + std::to_string(cid) + "/msg";
-		RdbEntry* entry = RdbFindEntryByName(rkey + "/count");
-		if(entry)
-		{
-			std::uint64_t count = RdbReadValueDirect(rkey + "/count");
-			RdbWriteValueDirect(rkey + "/count", count + 1);
-		}
-		else
-		{
-			std::uint64_t count = 1;
-			RdbNewEntry(rkey + "/count", RdbValueType::UINT64, &count);
-		}
+		std::uint8_t buffer[sizeof(MsgMessageHeader) + MSG_MAX_SIZE];
+		MsgMessageHeader* message = reinterpret_cast<MsgMessageHeader*>(&buffer);
 
-		entry = RdbFindEntryByName(rkey + "/last");
-		if(entry)
+		// TODO: (Cesar) This client id is duplicated (already exists on the evt header)
+		message->_client = GetCurrentCallerId();
+		message->_timestamp = timestamp;
+		message->_type = mclass;
+		message->_size = message_size;
+		std::memcpy(buffer + sizeof(MsgMessageHeader), message_data.data(), message_size);
+		LogTrace("Local buffer: %s", message_data.data());
+		LogTrace("Local size: %llu", msg.getSize());
+
+		EvtEmit("mxmsg::message", buffer, sizeof(MsgMessageHeader) + message_size);
+
+		// Now place the message on the pdb
+		// PdbWriteTable();
+	}
+
+	void MsgInit()
+	{
+		if(!EvtRegister("mxmsg::message"))
 		{
-			RdbWriteValueDirect(rkey + "/last", msg);
+			return;
 		}
-		else
-		{
-			RdbNewEntry(rkey + "/last", RdbValueType::STRING, msg.getData());
-		}
-		
-		// TODO: (Cesar) Get caller name (TODO register callers)
-		//				 Log the message on the pdb and trigger event 
-		//				 TODO - rdb Events ? / msg events ?
+		LogTrace("[mxmsg] MsgInit() OK.");
 	}
 } // namespace mulex

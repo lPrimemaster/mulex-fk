@@ -11,15 +11,26 @@ namespace mulex
 		ERROR
 	};
 
+	static constexpr std::uint64_t MSG_MAX_SIZE = 1024;
+
+	struct MsgMessageHeader
+	{
+		std::uint64_t _client;
+		std::int64_t  _timestamp;
+		MsgClass 	  _type;
+		std::uint8_t  _padding[7];
+		std::uint64_t _size;
+	};
+
 	class MsgEmitter
 	{
 	public:
-		explicit MsgEmitter(const std::string& name);
+		explicit MsgEmitter(const std::string& name = "");
 		virtual ~MsgEmitter() {  }
 		
-		void emitMessageInfo(const char* fmt, ...);
-		void emitMessageWarn(const char* fmt, ...);
-		void emitMessageError(const char* fmt, ...);
+		void info(const char* fmt, ...);
+		void warn(const char* fmt, ...);
+		void error(const char* fmt, ...);
 
 		void attachLogger(bool attach);
 
@@ -34,5 +45,6 @@ namespace mulex
 
 	std::string_view MsgClassToString(MsgClass mclass);
 	MX_RPC_METHOD void MsgWrite(mulex::MsgClass mclass, std::int64_t timestamp, mulex::RPCGenericType msg);
+	void MsgInit();
 
 } // namespace mulex

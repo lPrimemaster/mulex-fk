@@ -204,6 +204,8 @@ namespace mulex
 		header.msgid = GetNextEventMessageId();
 		header.payloadsize = static_cast<std::uint32_t>(len);
 
+		LogTrace("payloadsize on client: %d", header.payloadsize);
+
 		std::vector<std::uint8_t> vdata;
 		vdata.resize(sizeof(EvtHeader) + len);
 
@@ -213,7 +215,8 @@ namespace mulex
 			std::memcpy(vdata.data() + sizeof(EvtHeader), data, len);
 		}
 
-		_evt_emit_stack.push(std::move(vdata));
+		// _evt_emit_stack.push(std::move(vdata));
+		_evt_emit_stack.push(vdata);
 	}
 
 	void EvtClientThread::regist(const std::string& event)
@@ -542,7 +545,7 @@ namespace mulex
 
 		for(const auto& cid : cidit->second)
 		{
-			_evt_emit_stack.at(_evt_client_socket_pair_rev.at(cid)).push(std::move(vdata));
+			_evt_emit_stack.at(_evt_client_socket_pair_rev.at(cid)).push(vdata);
 		}
 		return true;
 	}
@@ -550,7 +553,7 @@ namespace mulex
 	void EvtServerThread::relay(const std::uint64_t clientid, const std::uint8_t* data, std::uint64_t len)
 	{
 		std::vector<std::uint8_t> vdata(data, data + len);
-		_evt_emit_stack.at(_evt_client_socket_pair_rev.at(clientid)).push(std::move(vdata));
+		_evt_emit_stack.at(_evt_client_socket_pair_rev.at(clientid)).push(vdata);
 	}
 
 	void EvtServerThread::serverConnAcceptThread()
@@ -684,15 +687,16 @@ namespace mulex
 			//				  and see how it goes
 			EvtHeader header;
 			std::memcpy(&header, data.data(), sizeof(EvtHeader));
-			LogTrace("[evtserver] Emitting Event <%d> from <0x%llx>.", header.eventid, header.client);
+			std::uint64_t cid = _evt_client_socket_pair.at(socket._handle);
+			LogTrace("[evtserver] Emitting Event <%d> to <0x%llx>.", header.eventid, cid);
 			
 			SocketSendBytes(socket, data.data(), data.size());
 
-			if(!ClientIsGhost(header.client))
+			if(!ClientIsGhost(cid))
 			{
 				// Write statistics
 				std::uint64_t download = sizeof(EvtHeader) + header.payloadsize;
-				EvtAccumulateClientStatistics(header.client, (download & 0xFFFFFFFF) << 32); // Hi DWORD
+				EvtAccumulateClientStatistics(cid, (download & 0xFFFFFFFF) << 32); // Hi DWORD
 			}
 		}
 	}

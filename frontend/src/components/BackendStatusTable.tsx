@@ -180,9 +180,9 @@ const BackendStatusTable: Component = () => {
 							<TableCell class="p-0">
 								{backends[clientid].host}
 							</TableCell>
-							<TableCell class="p-0">
-								<span class="p-1"><BadgeDelta deltaType="increase">{bps_to_string(backends[clientid].evt_upload_speed, false)}</BadgeDelta></span>
-								<span class="p-1"><BadgeDelta deltaType="decrease">{bps_to_string(backends[clientid].evt_download_speed, false)}</BadgeDelta></span>
+							<TableCell class="p-0 flex">
+								<span class="p-0 w-28"><BadgeDelta deltaType="increase">{bps_to_string(backends[clientid].evt_upload_speed, false)}</BadgeDelta></span>
+								<span class="p-0 w-28"><BadgeDelta deltaType="decrease">{bps_to_string(backends[clientid].evt_download_speed, false)}</BadgeDelta></span>
 							</TableCell>
 							<TableCell class="p-0">
 								<Show when={backends[clientid].connected}>
