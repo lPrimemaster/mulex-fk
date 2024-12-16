@@ -301,7 +301,6 @@ namespace mulex
 			return std::make_tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool>(0, {}, 0, true);
 		}
 
-		LogTrace("[mxhttp] HttpParseWSMessage() OK.");
 		return std::make_tuple(procedureid, args, messageidws, expectresult);
 	}
 
@@ -325,8 +324,6 @@ namespace mulex
 		d.AddMember("messageid", messageid, d.GetAllocator());
 
 		d.Accept(writer);
-
-		LogTrace("[mxhttp] HttpMakeWSRPCMessage() OK.");
 
 		return buffer.GetString();
 	}
@@ -461,9 +458,9 @@ namespace mulex
 		}
 	}
 
-	void HttpStartServer(std::uint16_t port)
+	void HttpStartServer(std::uint16_t port, bool islocal)
 	{
-		_http_thread = new std::thread([port](){
+		_http_thread = new std::thread([port, islocal](){
 			_ws_loop_thread = uWS::Loop::get(); // Only read is ok
 			uWS::App().get("/*", [](auto* res, auto* req) {
 				HttpServeFile(res, req);
@@ -499,8 +496,6 @@ namespace mulex
 				.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
 
 					WsRpcBridge* bridge = ws->getUserData();
-
-					LogTrace("[mxhttp] Received WS message <%s>.", std::string(ws->getRemoteAddressAsText()).c_str());
 
 					// Parse the received data
 					bool parse_error;
@@ -576,11 +571,17 @@ namespace mulex
 					bridge->_local_experiment._evt_client.reset();
 					LogDebug("[mxhttp] Closing WS connection.");
 				}
-			}).listen("127.0.0.1", port, [port](auto* token) {
+			}).listen(islocal ? "127.0.0.1" : "0.0.0.0", port, [port, islocal](auto* token) {
 				if(token)
 				{
 					_http_listen_socket = token;
 					LogMessage("[mxhttp] Started listening on port %d.", port);
+
+					if(islocal)
+					{
+						LogMessage("[mxhttp] Loopback mode is active.");
+					}
+
 					LogDebug("[mxhttp] HttpStartServer() OK.");
 				}
 				else

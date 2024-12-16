@@ -3,6 +3,6 @@
 
 namespace mulex
 {
-	void HttpStartServer(std::uint16_t port);
+	void HttpStartServer(std::uint16_t port, bool islocal);
 	void HttpStopServer();
 } // namespace mulex
