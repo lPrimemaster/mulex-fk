@@ -8,8 +8,12 @@ namespace mulex
 {
 	static constexpr std::uint64_t RDB_MAX_KEY_SIZE = 512;
 	static constexpr std::uint64_t RDB_MAX_STRING_SIZE = 512;
+	static constexpr std::uint64_t PDB_MAX_TABLE_NAME_SIZE = 512;
+	static constexpr std::uint64_t PDB_MAX_STRING_SIZE = 512;
 
 	using RdbKeyName = mxstring<RDB_MAX_KEY_SIZE>;
+	using PdbQuery = mxstring<PDB_MAX_TABLE_NAME_SIZE>;
+	using PdbString = mxstring<PDB_MAX_STRING_SIZE>;
 
 	struct RdbKey
 	{
@@ -31,6 +35,9 @@ namespace mulex
 		STRING,
 		BOOL
 	};
+
+	// Because of the RPC layer this needs to have dynamic types
+	using PdbValueType = RdbValueType;
 
 	struct RdbValue
 	{
@@ -98,8 +105,6 @@ namespace mulex
 		// std::uint8_t _padding[16];
 		mutable std::uint8_t _ptr[];
 
-
-
 		template<typename T>
 		constexpr inline T as() const
 		{
@@ -159,10 +164,120 @@ namespace mulex
 	// NOTE: (Cesar) This needs to be called after the Rdb
 	void PdbInit();
 	void PdbClose();
+	std::uint64_t PdbTypeSize(const PdbValueType& type);
 
-	// TODO: (Cesar)
-	template<typename Table>
-	void PdbWriteTable(const Table& data);
+	MX_RPC_METHOD void PdbWriteTableRow(mulex::PdbQuery table, mulex::RPCGenericType types, mulex::RPCGenericType data);
+
+	template<std::uint64_t S>
+	struct CTS
+	{
+		char data[S];
+	};
+
+	template<typename T, CTS N>
+	struct PdbTableVariable
+	{
+		using Type = T;
+		static constexpr CTS name = N;
+	};
+
+	template<typename> struct is_spec_PdbTableVariable : std::false_type {};
+	template<typename T, CTS N> struct is_spec_PdbTableVariable<PdbTableVariable<T, N>> : std::true_type {};
+	template<typename T> concept PdbTableVariableType = is_spec_PdbTableVariable<T>::value;
+
+	struct PdbTableDetail {};
+
+	template<PdbTableVariableType ...Ts>
+	struct PdbTable : PdbTableDetail
+	{
+		using Types = std::tuple<typename Ts::Type...>; 
+		inline static constexpr auto names = std::tuple<decltype(Ts::name)...>({Ts::name...});
+	};
+
+	template<typename T> concept PdbTableType = std::is_base_of_v<PdbTableDetail, T>;
+
+	template<PdbTableType T>
+	std::string PdbGenerateSQLQuery(std::string table)
+	{
+		auto columns = T::names; // Column names
+		std::transform(table.begin(), table.end(), table.begin(), ::toupper); // Table name uppercase
+		std::string query = "INSERT INTO " + table + " (";
+		std::apply([&](auto... col) { ((query += std::string(col.data) + ", "), ...); }, columns); // Column names expansion
+		query.pop_back(); query.pop_back(); // Remove last ", "
+		query += ") VALUES (";
+		std::apply([&](auto... col) { ((static_cast<void>(col), query += "?, "), ...); }, columns); // Column placeholder expansion
+		query.pop_back(); query.pop_back(); // Remove last ", "
+		query += ")";
+		return query;
+	}
+
+	template<typename Tuple, typename Ret>
+	struct tuple_func_type;
+
+	template<typename Ret, typename... Ts>
+	struct tuple_func_type<std::tuple<Ts...>, Ret>
+	{
+		using type = std::function<Ret(Ts...)>;
+	};
+
+	template<typename T>
+	constexpr PdbValueType PdbGetValueType(const T&)
+	{
+		if constexpr(std::is_same_v<T, std::int8_t>) return PdbValueType::INT8;
+		if constexpr(std::is_same_v<T, std::uint8_t>) return PdbValueType::UINT8;
+		if constexpr(std::is_same_v<T, std::int16_t>) return PdbValueType::INT16;
+		if constexpr(std::is_same_v<T, std::uint16_t>) return PdbValueType::UINT16;
+		if constexpr(std::is_same_v<T, std::int32_t>) return PdbValueType::INT32;
+		if constexpr(std::is_same_v<T, std::uint32_t>) return PdbValueType::UINT32;
+		if constexpr(std::is_same_v<T, std::int64_t>) return PdbValueType::INT64;
+		if constexpr(std::is_same_v<T, std::uint64_t>) return PdbValueType::UINT64;
+		if constexpr(std::is_same_v<T, float>) return PdbValueType::FLOAT32;
+		if constexpr(std::is_same_v<T, double>) return PdbValueType::FLOAT64;
+		if constexpr(std::is_same_v<T, PdbString>) return PdbValueType::STRING;
+		if constexpr(std::is_same_v<T, bool>) return PdbValueType::BOOL;
+		
+		LogError("[pdb] PdbGetValueType() FAILED.");
+		return PdbValueType::INT8;
+	}
+
+	template<typename... Args>
+	std::pair<std::vector<PdbValueType>, std::vector<std::uint8_t>> PdbSerializeArguments(Args&&... args)
+	{
+		static constexpr std::uint64_t argsize = (sizeof(Args) + ...);
+		std::vector<std::uint8_t> data(argsize);
+		std::vector<PdbValueType> type(argsize);
+
+		std::uint64_t offset = 0;
+		auto pack = [&](const auto& val) {
+			std::memcpy(data.data() + offset, &val, sizeof(val));
+			type.push_back(PdbGetValueType(val));
+			offset += sizeof(val);
+		};
+
+		(pack(args), ...);
+		return { type, data };
+	}
+
+	template<PdbTableType T>
+	typename tuple_func_type<typename T::Types, void>::type PdbTableWriter(const std::string& table)
+	{
+		return [table](auto&&... args) {
+			const static std::string statement = PdbGenerateSQLQuery<T>(table);
+			const auto [types, data] = PdbSerializeArguments(args...);
+			PdbWriteTableRow(statement, types, data);
+		};
+	}
+	
+	inline void writeT()
+	{
+		auto f = PdbTableWriter<PdbTable<
+			PdbTableVariable<int, {"id"}>,
+			PdbTableVariable<std::string, {"name"}>,
+			PdbTableVariable<std::string, {"post"}>
+		>>("LogTable");
+
+		f(1, "", "");
+	}
 
 	class RdbProxyValue
 	{
