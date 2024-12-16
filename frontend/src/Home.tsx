@@ -75,6 +75,12 @@ const Home: Component = () => {
 
 	rdb.watch('/system/run/status', (_: string, value: MxGenericType) => {
 		setRunStatusFromCode(value.astype('uint8'));
+		if(value.astype('uint8') == 1) {
+			showToast({ title: 'Run ' + runNumber() + ' started.', variant: 'success'});
+		}
+		else if(value.astype('uint8') == 0) {
+			showToast({ title: 'Run ' + runNumber() + ' stopped.', variant: 'error'});
+		}
 	});
 	rdb.watch('/system/run/number', (_: string, value: MxGenericType) => {
 		setRunNumber(value.astype('uint64'));
@@ -115,7 +121,6 @@ const Home: Component = () => {
 										const run_ok = res.astype('bool');
 										if(run_ok) {
 											// TODO: (Cesar)
-											showToast({ title: 'Run ' + runNumber() + ' started.', variant: 'success'});
 										}
 									});
 								}}
@@ -125,7 +130,6 @@ const Home: Component = () => {
 								class="col-span-1 row-span-2 row-start-3 m-1"
 								onClick={() => {
 									MxWebsocket.instance.rpc_call('mulex::RunStop', [], 'none');
-									showToast({ title: 'Run ' + runNumber() + ' stopped.', variant: 'error'});
 								}}
 								disabled={runStatus() != 'Running'}
 							>Stop Run</Button>
