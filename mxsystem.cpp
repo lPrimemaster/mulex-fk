@@ -242,7 +242,10 @@ namespace mulex
 			return true;
 		}
 
+		bool loopback = false;
+
 		SysAddArgument("name", 'n', true, [](const std::string& expname){ _sys_expname = expname; }, "Set the current experiment name.");
+		SysAddArgument("loopback", 'l', false, [&](const std::string&){ loopback = true; }, "Set the http server on loopback mode only.");
 
 		if(!SysParseArguments(argc, argv))
 		{
@@ -284,7 +287,7 @@ namespace mulex
 		// After ent thread init
 		MsgInit();
 
-		HttpStartServer(8080);
+		HttpStartServer(8080, loopback);
 
 		return true;
 	}
@@ -305,12 +308,6 @@ namespace mulex
 
 	bool SysInitializeBackend(int argc, char* argv[])
 	{
-		if(argc < 2)
-		{
-			// Running without arguments will try to connect to localhost's RPC/EVT servers
-			return true;
-		}
-
 		std::string server_name = "localhost";
 
 		SysAddArgument("server", 's', true, [&](const std::string& server){ server_name = server; }, "Set the server to connect to.");
