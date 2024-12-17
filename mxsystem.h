@@ -49,8 +49,41 @@ namespace mulex
 		}
 	}
 
+	template<typename T>
+	inline void SysPackArguments(std::vector<std::uint8_t>& buffer, const T& t)
+	{
+		static_assert(
+			std::is_same_v<T, mulex::RPCGenericType> ||
+			std::is_trivially_copyable_v<T>,
+			"SysPackArguments requires trivially copyable arguments."
+		);
+
+		if constexpr(std::is_same_v<T, mulex::RPCGenericType>)
+		{
+			std::uint8_t sbuf[sizeof(std::uint64_t)];
+			*reinterpret_cast<std::uint64_t*>(sbuf) = t._data.size();
+			buffer.insert(buffer.end(), sbuf, sbuf + sizeof(std::uint64_t));
+			buffer.insert(buffer.end(), t._data.begin(), t._data.end());
+		}
+		else
+		{
+
+			std::uint8_t ibuf[sizeof(T)];
+			*reinterpret_cast<T*>(ibuf) = t; // NOTE: Copy constructor
+			buffer.insert(buffer.end(), ibuf, ibuf + sizeof(T));
+		}
+	}
+
 	template<typename ...Args>
 	inline std::vector<std::uint8_t> SysPackArguments(Args&... args)
+	{
+		std::vector<std::uint8_t> buffer;
+		(SysPackArguments(buffer, args), ...);
+		return buffer;
+	}
+
+	template<typename ...Args>
+	inline std::vector<std::uint8_t> SysPackArguments(const Args&... args)
 	{
 		std::vector<std::uint8_t> buffer;
 		(SysPackArguments(buffer, args), ...);

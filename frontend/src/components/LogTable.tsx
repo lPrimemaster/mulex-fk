@@ -1,7 +1,7 @@
 import { Component, For, createSignal, createEffect, createContext, JSXElement, Setter, useContext, Accessor } from "solid-js";
 import { MxWebsocket } from "../lib/websocket";
 import { MxGenericType } from "~/lib/convert";
-import { scroll_to_element, timestamp_tolocaltime } from "~/lib/utils";
+import { timestamp_tolocaltime } from "~/lib/utils";
 import { showToast } from "./ui/toast";
 import { BadgeLabel } from "./ui/badge-label";
 
@@ -48,12 +48,62 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 		}
 	});
 
+	function addMessage(cid: BigInt, ts: BigInt, type: number, message: string) {
+		// MEMO
+		// enum class MsgClass : std::uint8_t
+		// {
+		// 	INFO,
+		// 	WARN,
+		// 	ERROR
+		// };
+		if(!clientMsgList.has(cid)) {
+			MxWebsocket.instance.rpc_call(
+				'mulex::RdbReadValueDirect',
+				[MxGenericType.str512('/system/backends/' + cid.toString(16) + '/name')],
+				'generic'
+			).then((res: MxGenericType) => {
+				const bck_name: string = res.astype('string');
+				clientMsgList.set(cid, bck_name);
+
+				setLogs((prev) => {
+					const log = {
+						timestamp: timestamp_tolocaltime(Number(ts)),
+						backend: bck_name,
+						type: typeToString(type),
+						message: message
+					};
+					const nlogs = [...prev, log];
+					return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
+				});
+			});
+		}
+		else {
+			const bck_name = clientMsgList.get(cid)!;
+			setLogs((prev) => {
+				const log = {
+					timestamp: timestamp_tolocaltime(Number(ts)),
+					backend: bck_name,
+					type: typeToString(type),
+					message: message
+				};
+				const nlogs = [...prev, log];
+				return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
+			});
+		}
+	}
+
 	MxWebsocket.instance.on_connection_change((conn: boolean) => {
 		if(conn) {
-			// TODO: (Cesar)
 			// Fetch the logs
+			MxWebsocket.instance.rpc_call('mulex::MsgGetLastLogs', [MxGenericType.uint32(props.maxLogs)], 'generic').then((res: MxGenericType) => {
+				const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
+				for(const l of logs) {
+					const [ _, level, cid, timestamp, message ] = l;
+					addMessage(cid, timestamp, level, message);
+				}
+			});
+
 			// Watch on new logs
-			// clientMsgList = new Map<BigInt, string>();
 			MxWebsocket.instance.subscribe('mxmsg::message', (data: Uint8Array) => {
 				// MEMO:
 				// struct MsgMessage
@@ -77,50 +127,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 				const decoder = new TextDecoder('latin1');
 				const message = decoder.decode(msg);
 
-				// console.log(cid, ts, type, size, msg);
-				// console.log(cid, ts, decoder.decode(msg));
-				// MEMO
-				// enum class MsgClass : std::uint8_t
-				// {
-				// 	INFO,
-				// 	WARN,
-				// 	ERROR
-				// };
-
-				if(!clientMsgList.has(cid)) {
-					MxWebsocket.instance.rpc_call(
-						'mulex::RdbReadValueDirect',
-						[MxGenericType.str512('/system/backends/' + cid.toString(16) + '/name')],
-						'generic'
-					).then((res: MxGenericType) => {
-						const bck_name: string = res.astype('string');
-						clientMsgList.set(cid, bck_name);
-
-						setLogs((prev) => {
-							const log = {
-								timestamp: timestamp_tolocaltime(Number(ts)),
-								backend: bck_name,
-								type: typeToString(type),
-								message: message
-							};
-							const nlogs = [...prev, log];
-							return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
-						});
-					});
-				}
-				else {
-					const bck_name = clientMsgList.get(cid)!;
-					setLogs((prev) => {
-						const log = {
-							timestamp: timestamp_tolocaltime(Number(ts)),
-							backend: bck_name,
-							type: typeToString(type),
-							message: message
-						};
-						const nlogs = [...prev, log];
-						return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
-					});
-				}
+				addMessage(cid, ts, type, message);
 			});
 		}
 	});

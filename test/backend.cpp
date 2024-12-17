@@ -28,6 +28,28 @@ public:
 		// _period_ms = config["period_ms"];
 		// config["period_ms"] = 3;
 
+		PdbAccess pdb;
+
+		pdb.createTable<int, PdbString>(
+			"table0",
+			{
+				"id INTEGER PRIMARY KEY AUTOINCREMENT",
+				"value TEXT NOT NULL"
+			}
+		);
+
+		auto writer = pdb.getWriter<int, PdbString>("table0", {"id", "value"});
+
+		writer(std::nullopt, "some value");
+		writer(std::nullopt, "other value");
+		writer(3, "modified value");
+
+		auto reader = pdb.getReader<int, PdbString>("table0", {"id", "value"});
+		auto values = reader("WHERE id = 3");
+		auto [id, value] = values[0];
+		
+		log.info("id0, value0: %d, %s", id, value.c_str());
+
 		registerEvent("TestBackend::data");
 		LogTrace("Backend name: %s", std::string(SysGetBinaryName()).c_str());
 

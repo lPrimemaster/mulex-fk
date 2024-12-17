@@ -45,6 +45,8 @@ namespace mulex
 
 	std::string_view MsgClassToString(MsgClass mclass);
 	MX_RPC_METHOD void MsgWrite(mulex::MsgClass mclass, std::int64_t timestamp, mulex::RPCGenericType msg);
+	MX_RPC_METHOD mulex::RPCGenericType MsgGetLastLogs(std::uint32_t count);
 	void MsgInit();
+	void MsgClose();
 
 } // namespace mulex

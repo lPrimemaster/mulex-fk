@@ -7,7 +7,12 @@
 #include <cstdarg>
 #include <vector>
 #include <sstream>
+#include <queue>
 #include <rpcspec.inl>
+
+static std::queue<std::tuple<std::uint8_t, std::uint64_t, std::int64_t, mulex::PdbString>> _msg_queue;
+static std::mutex _msg_queue_lock;
+static constexpr std::uint64_t MSG_MAX_BACKLOG = 20;
 
 namespace mulex
 {
@@ -98,6 +103,19 @@ namespace mulex
 		return "";
 	}
 
+	static void MsgFlushSQLQueue()
+	{
+		LogTrace("[mxmsg] Flushing logs to disk.");
+		while(!_msg_queue.empty())
+		{
+			const static std::vector<PdbValueType> types = { PdbValueType::NIL, PdbValueType::UINT8, PdbValueType::UINT64, PdbValueType::INT64, PdbValueType::STRING };
+			auto [level, client, timestamp, message] = _msg_queue.front();
+			_msg_queue.pop();
+			std::vector<std::uint8_t> data = SysPackArguments(level, client, timestamp, message);
+			PdbWriteTable("INSERT INTO logs (id, level, client, timestamp, message) VALUES (?, ?, ?, ?, ?);", types, data);
+		}
+	}
+
 	void MsgWrite(mulex::MsgClass mclass, std::int64_t timestamp, mulex::RPCGenericType msg)
 	{
 		const std::vector<char> message_data = msg.asVectorType<char>();
@@ -112,13 +130,37 @@ namespace mulex
 		message->_type = mclass;
 		message->_size = message_size;
 		std::memcpy(buffer + sizeof(MsgMessageHeader), message_data.data(), message_size);
-		LogTrace("Local buffer: %s", message_data.data());
-		LogTrace("Local size: %llu", msg.getSize());
+		// LogTrace("Local buffer: %s", message_data.data());
+		// LogTrace("Local size: %llu", msg.getSize());
 
 		EvtEmit("mxmsg::message", buffer, sizeof(MsgMessageHeader) + message_size);
 
-		// Now place the message on the pdb
-		// PdbWriteTable();
+		// Now place the message on the pdb queue
+		std::unique_lock<std::mutex> lock(_msg_queue_lock);
+		_msg_queue.push({
+			static_cast<std::uint8_t>(message->_type),
+			message->_client,
+			message->_timestamp,
+			PdbString(reinterpret_cast<const char*>(buffer + sizeof(MsgMessageHeader)))
+		});
+
+		if(_msg_queue.size() > MSG_MAX_BACKLOG)
+		{
+			// No need to defer
+			// MsgFlushSQLQueue would block any MsgWrite call anyways
+			MsgFlushSQLQueue();
+		}
+	}
+
+	mulex::RPCGenericType MsgGetLastLogs(std::uint32_t count)
+	{
+		std::unique_lock<std::mutex> lock(_msg_queue_lock);
+
+		// Force queue flush when getting last logs
+		MsgFlushSQLQueue();
+
+		const static std::vector<PdbValueType> types = { PdbValueType::INT32, PdbValueType::UINT8, PdbValueType::UINT64, PdbValueType::INT64, PdbValueType::STRING };
+		return PdbReadTable("SELECT * FROM logs ORDER BY timestamp ASC LIMIT " + std::to_string(count) + ";", types);
 	}
 
 	void MsgInit()
@@ -127,6 +169,23 @@ namespace mulex
 		{
 			return;
 		}
+
+		const std::string query = 
+		"CREATE TABLE IF NOT EXISTS logs ("
+			"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+			"level INTEGER NOT NULL,"
+			"client BIGINT NOT NULL,"
+			"timestamp BIGINT NOT NULL,"
+			"message TEXT NOT NULL"
+		");";
+		PdbExecuteQuery(query);
+
 		LogTrace("[mxmsg] MsgInit() OK.");
+	}
+
+	void MsgClose()
+	{
+		std::unique_lock<std::mutex> lock(_msg_queue_lock);
+		MsgFlushSQLQueue();
 	}
 } // namespace mulex

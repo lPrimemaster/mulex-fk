@@ -297,6 +297,8 @@ namespace mulex
 		// Force run stop if running
 		RunStop();
 
+		MsgClose();
+
 		HttpStopServer();
 
 		_sys_rpc_thread.reset();

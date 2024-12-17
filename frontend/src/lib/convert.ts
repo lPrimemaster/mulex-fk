@@ -34,6 +34,10 @@ export class MxGenericType
 		return MxGenericType.fromValue(value, 'int32', intype);
 	}
 
+	static uint32(value: number, intype: string = 'native') : MxGenericType {
+		return MxGenericType.fromValue(value, 'uint32', intype);
+	}
+
 	static uint64(value: BigInt, intype: string = 'native') : MxGenericType {
 		return MxGenericType.fromValue(value, 'uint64', intype);
 	}
@@ -321,5 +325,88 @@ export class MxGenericType
 			console.log('MxGenericType.astype: Could not convert from unknown type <' + type + '>.');
 			return null;
 		}
+	}
+
+	public unpack(structure: Array<string>) : any {
+		if(this.data.byteLength === 0) {
+			return null;
+		}
+
+		let offset = 0;
+
+		if(this.intype === 'generic' && this.data.byteLength > 8) {
+			offset = 8; // 64-bit uint with size first
+		}
+
+		offset += this.data.byteOffset;
+
+		const view = new DataView(this.data.buffer, offset);
+		let packoffset = 0;
+		const output = new Array<Array<any>>();
+
+		// TODO: (Cesar) Check the length of data (should be superfluous...)
+
+		while(packoffset < this.data.length - offset) {
+			const element = new Array<any>();
+			for(const type of structure) {
+				// Client side is ok with only 'string'
+				if(type === 'str512') {
+					const decoder = new TextDecoder();
+					element.push(decoder.decode(view.buffer.slice(view.byteOffset + packoffset)).split('\0').shift()); // Null terminate the string
+					packoffset += 512;
+				}
+				else if(type === 'float32') {
+					element.push(view.getFloat32(packoffset, true));
+					packoffset += 4;
+				}
+				else if(type === 'float64') {
+					element.push(view.getFloat64(packoffset, true));
+					packoffset += 8;
+				}
+				else if(type === 'int8') {
+					element.push(view.getInt8(packoffset));
+					packoffset += 1;
+				}
+				else if(type === 'uint8') {
+					element.push(view.getUint8(packoffset));
+					packoffset += 1;
+				}
+				else if(type === 'int16') {
+					element.push(view.getInt16(packoffset, true));
+					packoffset += 2;
+				}
+				else if(type === 'uint16') {
+					element.push(view.getUint16(packoffset, true));
+					packoffset += 2;
+				}
+				else if(type === 'int32') {
+					element.push(view.getInt32(packoffset, true));
+					packoffset += 4;
+				}
+				else if(type === 'uint32') {
+					element.push(view.getUint32(packoffset, true));
+					packoffset += 4;
+				}
+				else if(type === 'int64') {
+					element.push(view.getBigInt64(packoffset, true));
+					packoffset += 8;
+				}
+				else if(type === 'uint64') {
+					element.push(view.getBigUint64(packoffset, true));
+					packoffset += 8;
+				}
+				else if(type === 'bool') {
+					element.push(view.getUint8(packoffset) === 1);
+					packoffset += 1;
+				}
+				else {
+					// TODO: (Cesar) Emit frontend errors to the frontend (toast, etc, ...)
+					console.log('MxGenericType.unpack: Could not convert from unknown type <' + type + '>.');
+					return null;
+				}
+			}
+			output.push(element);
+		}
+		return output;
 	}
 };

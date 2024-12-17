@@ -2,6 +2,8 @@
 #include "mxtypes.h"
 #include "mxlogger.h"
 #include <shared_mutex>
+#include <tuple>
+#include <utility>
 #include "network/rpc.h"
 
 namespace mulex
@@ -37,7 +39,22 @@ namespace mulex
 	};
 
 	// Because of the RPC layer this needs to have dynamic types
-	using PdbValueType = RdbValueType;
+	enum class PdbValueType : std::uint8_t
+	{
+		INT8,
+		INT16,
+		INT32,
+		INT64,
+		UINT8,
+		UINT16,
+		UINT32,
+		UINT64,
+		FLOAT32,
+		FLOAT64,
+		STRING,
+		BOOL,
+		NIL // Avoid clash with NULL
+	};
 
 	struct RdbValue
 	{
@@ -166,118 +183,9 @@ namespace mulex
 	void PdbClose();
 	std::uint64_t PdbTypeSize(const PdbValueType& type);
 
-	MX_RPC_METHOD void PdbWriteTableRow(mulex::PdbQuery table, mulex::RPCGenericType types, mulex::RPCGenericType data);
-
-	template<std::uint64_t S>
-	struct CTS
-	{
-		char data[S];
-	};
-
-	template<typename T, CTS N>
-	struct PdbTableVariable
-	{
-		using Type = T;
-		static constexpr CTS name = N;
-	};
-
-	template<typename> struct is_spec_PdbTableVariable : std::false_type {};
-	template<typename T, CTS N> struct is_spec_PdbTableVariable<PdbTableVariable<T, N>> : std::true_type {};
-	template<typename T> concept PdbTableVariableType = is_spec_PdbTableVariable<T>::value;
-
-	struct PdbTableDetail {};
-
-	template<PdbTableVariableType ...Ts>
-	struct PdbTable : PdbTableDetail
-	{
-		using Types = std::tuple<typename Ts::Type...>; 
-		inline static constexpr auto names = std::tuple<decltype(Ts::name)...>({Ts::name...});
-	};
-
-	template<typename T> concept PdbTableType = std::is_base_of_v<PdbTableDetail, T>;
-
-	template<PdbTableType T>
-	std::string PdbGenerateSQLQuery(std::string table)
-	{
-		auto columns = T::names; // Column names
-		std::transform(table.begin(), table.end(), table.begin(), ::toupper); // Table name uppercase
-		std::string query = "INSERT INTO " + table + " (";
-		std::apply([&](auto... col) { ((query += std::string(col.data) + ", "), ...); }, columns); // Column names expansion
-		query.pop_back(); query.pop_back(); // Remove last ", "
-		query += ") VALUES (";
-		std::apply([&](auto... col) { ((static_cast<void>(col), query += "?, "), ...); }, columns); // Column placeholder expansion
-		query.pop_back(); query.pop_back(); // Remove last ", "
-		query += ")";
-		return query;
-	}
-
-	template<typename Tuple, typename Ret>
-	struct tuple_func_type;
-
-	template<typename Ret, typename... Ts>
-	struct tuple_func_type<std::tuple<Ts...>, Ret>
-	{
-		using type = std::function<Ret(Ts...)>;
-	};
-
-	template<typename T>
-	constexpr PdbValueType PdbGetValueType(const T&)
-	{
-		if constexpr(std::is_same_v<T, std::int8_t>) return PdbValueType::INT8;
-		if constexpr(std::is_same_v<T, std::uint8_t>) return PdbValueType::UINT8;
-		if constexpr(std::is_same_v<T, std::int16_t>) return PdbValueType::INT16;
-		if constexpr(std::is_same_v<T, std::uint16_t>) return PdbValueType::UINT16;
-		if constexpr(std::is_same_v<T, std::int32_t>) return PdbValueType::INT32;
-		if constexpr(std::is_same_v<T, std::uint32_t>) return PdbValueType::UINT32;
-		if constexpr(std::is_same_v<T, std::int64_t>) return PdbValueType::INT64;
-		if constexpr(std::is_same_v<T, std::uint64_t>) return PdbValueType::UINT64;
-		if constexpr(std::is_same_v<T, float>) return PdbValueType::FLOAT32;
-		if constexpr(std::is_same_v<T, double>) return PdbValueType::FLOAT64;
-		if constexpr(std::is_same_v<T, PdbString>) return PdbValueType::STRING;
-		if constexpr(std::is_same_v<T, bool>) return PdbValueType::BOOL;
-		
-		LogError("[pdb] PdbGetValueType() FAILED.");
-		return PdbValueType::INT8;
-	}
-
-	template<typename... Args>
-	std::pair<std::vector<PdbValueType>, std::vector<std::uint8_t>> PdbSerializeArguments(Args&&... args)
-	{
-		static constexpr std::uint64_t argsize = (sizeof(Args) + ...);
-		std::vector<std::uint8_t> data(argsize);
-		std::vector<PdbValueType> type(argsize);
-
-		std::uint64_t offset = 0;
-		auto pack = [&](const auto& val) {
-			std::memcpy(data.data() + offset, &val, sizeof(val));
-			type.push_back(PdbGetValueType(val));
-			offset += sizeof(val);
-		};
-
-		(pack(args), ...);
-		return { type, data };
-	}
-
-	template<PdbTableType T>
-	typename tuple_func_type<typename T::Types, void>::type PdbTableWriter(const std::string& table)
-	{
-		return [table](auto&&... args) {
-			const static std::string statement = PdbGenerateSQLQuery<T>(table);
-			const auto [types, data] = PdbSerializeArguments(args...);
-			PdbWriteTableRow(statement, types, data);
-		};
-	}
-	
-	inline void writeT()
-	{
-		auto f = PdbTableWriter<PdbTable<
-			PdbTableVariable<int, {"id"}>,
-			PdbTableVariable<std::string, {"name"}>,
-			PdbTableVariable<std::string, {"post"}>
-		>>("LogTable");
-
-		f(1, "", "");
-	}
+	MX_RPC_METHOD bool PdbExecuteQuery(mulex::PdbQuery query);
+	MX_RPC_METHOD bool PdbWriteTable(mulex::PdbString table, mulex::RPCGenericType types, mulex::RPCGenericType data);
+	MX_RPC_METHOD mulex::RPCGenericType PdbReadTable(mulex::PdbQuery query, mulex::RPCGenericType types);
 
 	class RdbProxyValue
 	{
@@ -349,5 +257,154 @@ namespace mulex
 
 	private:
 		std::string _rootkey;
+	};
+
+	template<typename T> concept PdbVariable = 
+		std::is_same_v<std::uint8_t , std::decay_t<T>> ||
+		std::is_same_v<std::uint16_t, std::decay_t<T>> ||
+		std::is_same_v<std::uint32_t, std::decay_t<T>> ||
+		std::is_same_v<std::uint64_t, std::decay_t<T>> ||
+		std::is_same_v<std::int8_t , std::decay_t<T>> ||
+		std::is_same_v<std::int16_t, std::decay_t<T>> ||
+		std::is_same_v<std::int32_t, std::decay_t<T>> ||
+		std::is_same_v<std::int64_t, std::decay_t<T>> ||
+		std::is_same_v<float , std::decay_t<T>> ||
+		std::is_same_v<double, std::decay_t<T>> ||
+		std::is_same_v<bool  , std::decay_t<T>> ||
+		std::is_same_v<PdbString, std::decay_t<T>>;
+
+	class PdbAccess
+	{
+	public:
+		PdbAccess(const std::string& db = "") : _db(db) {  };
+
+		template<PdbVariable... Vs>
+		bool createTable(const std::string& table, const std::initializer_list<std::string>& spec)
+		{
+			const std::string query = generateSQLQueryCreate(table, spec);
+			return executeQueryRemote(query);
+		}
+
+		template<PdbVariable... Vs>
+		std::function<bool(const std::optional<Vs>&...)> getWriter(const std::string& table, const std::initializer_list<std::string>& names)
+		{
+			const std::string query = generateSQLQueryInsert(table, names);
+			return [this, query](const std::optional<Vs>&... args) {
+				std::vector<std::uint8_t> data;
+				std::vector<PdbValueType> types;
+				data.resize((sizeof(Vs) + ...));
+				types.reserve(sizeof...(Vs));
+				std::uint8_t* ptr = data.data();
+				([&](){
+					if(args.has_value())
+					{
+						std::memcpy(ptr, &args.value(), sizeof(Vs));
+						ptr += sizeof(Vs);
+						types.push_back(getValueType<Vs>());
+					}
+					else
+					{
+						types.push_back(PdbValueType::NIL);
+					}
+				}(), ...);
+
+				LogTrace("%s", query.c_str());
+				return executeInsertRemote(query, types, data);
+			};
+		}
+
+		template<PdbVariable... Vs>
+		std::function<std::vector<std::tuple<Vs...>>(const std::string&)> getReader(const std::string& table, const std::initializer_list<std::string>& names)
+		{
+			const std::string query = generateSQLQuerySelect(table, names);
+			const std::vector<PdbValueType> types = { getValueType<Vs>()... };
+			return [this, query, types](const std::string& conditions) -> std::vector<std::tuple<Vs...>> {
+				return executeSelectRemote<Vs...>(query, conditions, types);
+			};
+		}
+
+	private:
+		template<typename T>
+		constexpr PdbValueType getValueType(const T&)
+		{
+			if constexpr(std::is_same_v<T, std::int8_t>) return PdbValueType::INT8;
+			if constexpr(std::is_same_v<T, std::uint8_t>) return PdbValueType::UINT8;
+			if constexpr(std::is_same_v<T, std::int16_t>) return PdbValueType::INT16;
+			if constexpr(std::is_same_v<T, std::uint16_t>) return PdbValueType::UINT16;
+			if constexpr(std::is_same_v<T, std::int32_t>) return PdbValueType::INT32;
+			if constexpr(std::is_same_v<T, std::uint32_t>) return PdbValueType::UINT32;
+			if constexpr(std::is_same_v<T, std::int64_t>) return PdbValueType::INT64;
+			if constexpr(std::is_same_v<T, std::uint64_t>) return PdbValueType::UINT64;
+			if constexpr(std::is_same_v<T, float>) return PdbValueType::FLOAT32;
+			if constexpr(std::is_same_v<T, double>) return PdbValueType::FLOAT64;
+			if constexpr(std::is_same_v<T, PdbString>) return PdbValueType::STRING;
+			if constexpr(std::is_same_v<T, bool>) return PdbValueType::BOOL;
+			
+			LogError("[pdb] PdbGetValueType() FAILED.");
+			return PdbValueType::INT8;
+		}
+
+		template<typename T>
+		constexpr PdbValueType getValueType()
+		{
+			if constexpr(std::is_same_v<T, std::int8_t>) return PdbValueType::INT8;
+			if constexpr(std::is_same_v<T, std::uint8_t>) return PdbValueType::UINT8;
+			if constexpr(std::is_same_v<T, std::int16_t>) return PdbValueType::INT16;
+			if constexpr(std::is_same_v<T, std::uint16_t>) return PdbValueType::UINT16;
+			if constexpr(std::is_same_v<T, std::int32_t>) return PdbValueType::INT32;
+			if constexpr(std::is_same_v<T, std::uint32_t>) return PdbValueType::UINT32;
+			if constexpr(std::is_same_v<T, std::int64_t>) return PdbValueType::INT64;
+			if constexpr(std::is_same_v<T, std::uint64_t>) return PdbValueType::UINT64;
+			if constexpr(std::is_same_v<T, float>) return PdbValueType::FLOAT32;
+			if constexpr(std::is_same_v<T, double>) return PdbValueType::FLOAT64;
+			if constexpr(std::is_same_v<T, PdbString>) return PdbValueType::STRING;
+			if constexpr(std::is_same_v<T, bool>) return PdbValueType::BOOL;
+			
+			LogError("[pdb] PdbGetValueType() FAILED.");
+			return PdbValueType::NIL;
+		}
+
+		std::string generateSQLQueryCreate(const std::string& table, const std::initializer_list<std::string>& specs);
+		std::string generateSQLQueryInsert(const std::string& table, const std::initializer_list<std::string>& names);
+		std::string generateSQLQuerySelect(const std::string& table, const std::initializer_list<std::string>& names);
+		bool executeQueryRemote(const std::string& query);
+		bool executeInsertRemote(const std::string& query, const std::vector<PdbValueType>& types, const std::vector<uint8_t>& data);
+		std::vector<std::uint8_t> executeSelectRemoteI(const std::string& query, const std::vector<PdbValueType>& types);
+
+		template<typename T>
+		T readBuffer(const std::vector<std::uint8_t>& buffer, std::uint64_t& offset)
+		{
+			T value;
+			std::memcpy(&value, buffer.data() + offset, sizeof(T));
+			offset += sizeof(T);
+			return value;
+		}
+
+		template<typename T, std::uint64_t... Ti>
+		std::vector<T> bufferToTupleVI(const std::vector<std::uint8_t>& buffer, std::index_sequence<Ti...>)
+		{
+			std::uint64_t offset = 0;
+			std::vector<T> output;
+			while(offset < buffer.size())
+			{
+				output.push_back(T{readBuffer<std::tuple_element_t<Ti, T>>(buffer, offset)...});
+			}
+			return output;
+		}
+
+		template<typename... Ts>
+		std::vector<std::tuple<Ts...>> bufferToTupleV(const std::vector<std::uint8_t>& buffer)
+		{
+			return bufferToTupleVI<std::tuple<Ts...>>(buffer, std::index_sequence_for<Ts...>{});
+		}
+
+		template<PdbVariable... Vs>
+		std::vector<std::tuple<Vs...>> executeSelectRemote(const std::string& query, const std::string& conditions, const std::vector<PdbValueType>& types)
+		{
+			std::vector<std::uint8_t> data = executeSelectRemoteI(query + " " + conditions + ";", types);
+			return bufferToTupleV<Vs...>(data);
+		}
+	private:
+		std::string _db;
 	};
 }
