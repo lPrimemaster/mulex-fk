@@ -282,6 +282,8 @@ namespace mulex
 					{
 						if constexpr(std::is_same_v<Vs, std::vector<std::uint8_t>>)
 						{
+							std::uint64_t size = args.value().size();
+							PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&size), sizeof(std::uint64_t), data);
 							PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(args.value().data()), args.value().size(), data);
 						}
 						else

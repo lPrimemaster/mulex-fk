@@ -117,7 +117,7 @@ namespace mulex
 			case PdbValueType::INT64:
 			case PdbValueType::UINT64:
 			{
-				const std::int32_t i64 = sqlite3_column_int64(stmt, col);
+				const std::int64_t i64 = sqlite3_column_int64(stmt, col);
 				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&i64), PdbTypeSize(type), buffer);
 				break;
 			}
