@@ -25,12 +25,13 @@ public:
 		log.info("This is a very big info string from the constructor of TestBackend!");
 		config["period_ms"].erase();
 		config["period_ms"].create(RdbValueType::INT32, std::int32_t(89));
+		config["period_ms"].history(true);
 		// _period_ms = config["period_ms"];
 		// config["period_ms"] = 3;
 
-		PdbAccess pdb;
+		PdbAccessRemote pdb;
 
-		pdb.createTable<int, PdbString>(
+		pdb.createTable(
 			"table0",
 			{
 				"id INTEGER PRIMARY KEY AUTOINCREMENT",

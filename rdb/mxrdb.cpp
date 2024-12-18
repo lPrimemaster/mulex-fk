@@ -44,6 +44,23 @@ static RdbStatistics                _rdb_statistics;
 static std::unique_ptr<std::thread> _rdb_statistics_thread;
 static std::atomic<bool> 			_rdb_statistics_flag;
 
+struct RdbHistoryData
+{
+	mulex::RdbKeyName   _key;
+	mulex::RdbValueType _type;
+	std::uint64_t 		_size;
+	std::int64_t  		_timestamp;
+	std::uint8_t  		_data[];
+};
+
+static std::uint8_t* _rdb_history_handle = nullptr;
+static std::uint64_t _rdb_history_offset = 0;
+static std::uint64_t _rdb_history_size = 0;
+
+static std::unique_ptr<mulex::PdbAccessLocal> _rdb_history_access;
+
+static std::shared_mutex _rdb_history_rw_lock;
+
 namespace mulex
 {
 	std::uint64_t operator& (std::uint64_t a, RdbEntryFlag b)
@@ -76,6 +93,11 @@ namespace mulex
 	{
 		a = a | b;
 		return a;
+	}
+
+	std::uint64_t operator~ (RdbEntryFlag a)
+	{
+		return ~static_cast<std::uint64_t>(a);
 	}
 
 	static std::uint64_t FindString(const char* data, std::uint64_t idx)
@@ -307,6 +329,118 @@ namespace mulex
 		return sizeof(RdbEntry) + RdbCalculateDataSize(entry);
 	}
 
+	void RdbInitHistoryBuffer()
+	{
+		std::unique_lock lock(_rdb_history_rw_lock);
+		constexpr static std::uint64_t RDB_HISTORY_DEF_SIZE = 1024 * 1024 * 100; // 100 kB
+		_rdb_history_size = RDB_HISTORY_DEF_SIZE;
+		_rdb_history_offset = 0;
+
+		if(RdbNewEntry("/system/rdb/history_buffer_size", RdbValueType::UINT64, &RDB_HISTORY_DEF_SIZE) == nullptr)
+		{
+			_rdb_history_size = RdbReadValueDirect("/system/rdb/history_buffer_size");
+		}
+
+		_rdb_history_handle = RdbAlignedAlloc(1024, _rdb_history_size);
+
+		if(!_rdb_history_handle)
+		{
+			LogError("[rdb] Failed to create rdb history buffer.");
+			LogError("[rdb] Allocation failed with size: %llu kb.", _rdb_history_size / 1024);
+			_rdb_history_size = 0;
+			return;
+		}
+
+		_rdb_history_access = std::make_unique<PdbAccessLocal>();
+
+		_rdb_history_access->createTable("history", {
+			"id INTEGER PRIMARY KEY AUTOINCREMENT",
+			"keyname TEXT NOT NULL",
+			"timestamp BIGINT NOT NULL",
+			"type INTEGER NOT NULL",
+			"data BLOB NOT NULL"
+		});
+
+		LogDebug("[rdb] RdbInitHistoryBuffer() OK.");
+	}
+
+	void RdbCloseHistoryBuffer()
+	{
+		std::unique_lock lock(_rdb_history_rw_lock);
+		if(_rdb_history_handle)
+		{
+			RdbHistoryFlushUnlocked();
+			_rdb_history_size = 0;
+			_rdb_history_offset = 0;
+			RdbAlignedFree(_rdb_history_handle);
+		}
+
+		_rdb_history_access.reset();
+
+		LogDebug("[rdb] RdbCloseHistoryBuffer() OK.");
+	}
+
+	void RdbHistoryFlush()
+	{
+		std::unique_lock lock(_rdb_history_rw_lock);
+		RdbHistoryFlushUnlocked();
+	}
+
+	void RdbHistoryFlushUnlocked()
+	{
+		static auto history_writer = _rdb_history_access->getWriter<
+			std::int32_t,
+			PdbString,
+			std::int64_t,
+			std::uint8_t,
+			std::vector<std::uint8_t>
+		>("history", {"id", "keyname", "timestamp", "type", "data"});
+
+		std::uint64_t iterator = 0;
+		static const std::vector<PdbValueType> types = {
+			PdbValueType::INT32,
+			PdbValueType::STRING,
+			PdbValueType::INT64,
+			PdbValueType::UINT8,
+			PdbValueType::BINARY };
+		while(iterator < _rdb_history_offset)
+		{
+			RdbHistoryData* data = reinterpret_cast<RdbHistoryData*>(_rdb_history_handle + iterator);
+			history_writer(
+				std::nullopt,
+				data->_key,
+				data->_timestamp,
+				static_cast<std::uint8_t>(data->_type),
+				std::vector<std::uint8_t>(data->_data, data->_data + data->_size)
+			);
+			iterator += (sizeof(RdbHistoryData) + data->_size);
+		}
+		
+		_rdb_history_offset = 0; // Reset the history memory cache
+	}
+
+	void RdbHistoryAdd(RdbEntry* entry, const RdbKeyName& key)
+	{
+		// Entry must be locked at this point
+		// Read lock is sufficient
+		std::unique_lock lock(_rdb_history_rw_lock);
+		std::uint64_t entry_data_size = RdbCalculateDataSize(entry);
+
+		if(_rdb_history_offset + sizeof(RdbHistoryData) + entry_data_size > _rdb_history_size)
+		{
+			RdbHistoryFlushUnlocked();
+		}
+
+		RdbHistoryData data;
+		data._timestamp = entry->_tmodified;
+		data._key = key;
+		data._type = entry->_type;
+		data._size = entry_data_size;
+		std::memcpy(_rdb_history_handle + _rdb_history_offset, &data, sizeof(RdbHistoryData));
+		std::memcpy(_rdb_history_handle + _rdb_history_offset + sizeof(RdbHistoryData), entry->_ptr, entry_data_size);
+		_rdb_history_offset += (sizeof(RdbHistoryData) + entry_data_size);
+	}
+
 	static bool RdbGrow()
 	{
 		std::uint8_t* temp_handle = RdbAlignedAlloc(1024, _rdb_size * 2);
@@ -496,6 +630,7 @@ namespace mulex
 		entry->_count = count;
 		entry->_size = data_size;
 		entry->_type = type;
+		entry->_flags = 0;
 		
 		// + checks
 		if(data != nullptr)
@@ -655,14 +790,10 @@ namespace mulex
 			entry->_tmodified = SysGetCurrentTime();
 			std::memcpy(entry->_ptr, data.getData(), data.getSize());
 
-			// if(entry->_flags & RdbEntryFlag::EVENT_MOD_WATCHER)
-			// {
-			// 	// NOTE: (Cesar) : cid is 0 for system modifications
-			// 	const std::uint64_t cid = SysGetClientId();
-			//
-			// 	// Sends the modified data to all subscribers
-			// 	// RdbTriggerEvent(cid, *entry);
-			// }
+			if(entry->_flags & RdbEntryFlag::HISTORY_ENABLED)
+			{
+				RdbHistoryAdd(entry, keyname);
+			}
 			
 			RdbEmitWatchMatchCondition(keyname, entry);
 			_rdb_statistics._write_ops.fetch_add(1);
@@ -780,6 +911,71 @@ namespace mulex
 		return keys;
 	}
 
+	static inline std::uint64_t RdbSetEntryFlag(std::uint64_t state, RdbEntryFlag flag, bool active)
+	{
+		return (active) ? (state | flag) : (state & (~flag));
+	}
+
+	bool RdbToggleHistory(mulex::RdbKeyName keyname, bool active)
+	{
+		std::shared_lock lock_ops(_rdb_rw_lock);
+
+		RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
+		if(!entry)
+		{
+			return false;
+		}
+
+		std::unique_lock lock_entry(entry->_rw_lock);
+		entry->_flags = RdbSetEntryFlag(entry->_flags, RdbEntryFlag::HISTORY_ENABLED, active);
+		return true;
+	}
+
+	static std::vector<std::uint8_t> RdbReadHistoryLimit(const RdbKeyName& keyname, std::uint64_t count)
+	{
+		static auto history_reader = _rdb_history_access->getReaderRaw<
+			std::int32_t,
+			PdbString,
+			std::int64_t,
+			std::uint8_t,
+			std::vector<std::uint8_t>
+		>("history", {"id", "keyname", "timestamp", "type", "data"});
+
+		std::string condition = "WHERE keyname = '" + std::string(keyname.c_str()) + "' ORDER BY timestamp";
+		if(count > 0)
+		{
+			condition += " LIMIT " + std::to_string(count);
+		}
+
+		const std::vector<std::uint8_t> data = history_reader(condition);
+		LogTrace("[rdb] RdbReadHistoryLimit() OK. Read %llu bytes. For key <%s>.", data.size(), keyname.c_str());
+		return data;
+	}
+
+	// NOTE: (Cesar) This function is pretty I/O intensive
+	mulex::RPCGenericType RdbGetHistory(mulex::RdbKeyName keyname, std::uint64_t count)
+	{
+		std::vector<uint8_t> output;
+		std::shared_lock lock_ops(_rdb_rw_lock);
+
+		RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
+		if(!entry)
+		{
+			return output;
+		}
+
+		std::shared_lock lock_entry(entry->_rw_lock);
+		if(!(entry->_flags & RdbEntryFlag::HISTORY_ENABLED))
+		{
+			return output;
+		}
+
+		// Flush before read
+		RdbHistoryFlush();
+
+		return RdbReadHistoryLimit(keyname, count);
+	}
+
 	void RdbProxyValue::writeEntry()
 	{
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
@@ -855,5 +1051,15 @@ namespace mulex
 			return;
 		}
 		mulex::string32 event_name = exp.value()->_rpc_client->call<mulex::string32>(RPC_CALL_MULEX_RDBUNWATCH, RdbKeyName(_key));
+	}
+
+	bool RdbProxyValue::history(bool status)
+	{
+		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
+		if(!exp.has_value())
+		{
+			return false;
+		}
+		return exp.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_RDBTOGGLEHISTORY, RdbKeyName(_key), status);
 	}
 }

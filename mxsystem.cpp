@@ -269,6 +269,9 @@ namespace mulex
 		RdbInit(1024 * 1024);
 		PdbInit();
 
+		// After PdbInit()
+		RdbInitHistoryBuffer();
+
 		RunInitVariables();
 
 		_sys_rpc_thread = std::make_unique<RPCServerThread>();
@@ -284,7 +287,7 @@ namespace mulex
 			std::this_thread::yield();
 		}
 
-		// After ent thread init
+		// After evt thread init
 		MsgInit();
 
 		HttpStartServer(8080, loopback);
@@ -303,6 +306,8 @@ namespace mulex
 
 		_sys_rpc_thread.reset();
 		_sys_evt_thread.reset();
+
+		RdbCloseHistoryBuffer();
 
 		PdbClose();
 		RdbClose();

@@ -17,11 +17,6 @@ namespace mulex
 	using PdbQuery = mxstring<PDB_MAX_TABLE_NAME_SIZE>;
 	using PdbString = mxstring<PDB_MAX_STRING_SIZE>;
 
-	struct RdbKey
-	{
-		RdbKeyName _name;
-	};
-
 	enum class RdbValueType : std::uint8_t
 	{
 		INT8,
@@ -53,45 +48,14 @@ namespace mulex
 		FLOAT64,
 		STRING,
 		BOOL,
+		BINARY,
 		NIL // Avoid clash with NULL
-	};
-
-	struct RdbValue
-	{
-		RdbValueType  _type;
-		std::uint64_t _size;
-		std::uint64_t _count;
-		mutable std::uint8_t  _ptr[];
-
-		template<typename T>
-		constexpr inline T as() const
-		{
-			if constexpr(std::is_pointer_v<T>)
-			{
-				// Arrays
-				if(_count == 0)
-				{
-					LogError("RdbValue::as() called with pointer type but its value is not an array.");
-					return nullptr;
-				}
-				return reinterpret_cast<T>(_ptr);
-			}
-			else
-			{
-				// Non arrays
-				if(_count > 0)
-				{
-					LogError("RdbValue::as() called with non pointer type but its value is an array.");
-					return T();
-				}
-				return *reinterpret_cast<T*>(_ptr);
-			}
-		}
 	};
 
 	enum class RdbEntryFlag : std::uint64_t
 	{
-		EVENT_MOD_WATCHER = 0x01
+		EVENT_MOD_WATCHER = (1 << 0),
+		HISTORY_ENABLED   = (1 << 1)
 	};
 
 	std::uint64_t operator&  (RdbEntryFlag  a, RdbEntryFlag b);
@@ -102,6 +66,8 @@ namespace mulex
 
 	std::uint64_t operator&= (std::uint64_t a, RdbEntryFlag b);
 	std::uint64_t operator|= (std::uint64_t a, RdbEntryFlag b);
+
+	std::uint64_t operator~  (RdbEntryFlag  a);
 
 	struct RdbEntry
 	{
@@ -151,6 +117,12 @@ namespace mulex
 	void RdbInit(std::uint64_t size);
 	void RdbClose();
 
+	void RdbInitHistoryBuffer();
+	void RdbCloseHistoryBuffer();
+	void RdbHistoryFlush();
+	void RdbHistoryFlushUnlocked();
+	void RdbHistoryAdd(RdbEntry* entry, const RdbKeyName& key);
+
 	RdbEntry* RdbAllocate(std::uint64_t size);
 	void RdbFree(RdbEntry* entry);
 
@@ -174,6 +146,8 @@ namespace mulex
 	MX_RPC_METHOD mulex::RPCGenericType RdbListKeys();
 	MX_RPC_METHOD mulex::RPCGenericType RdbListKeyTypes();
 	MX_RPC_METHOD mulex::RPCGenericType RdbListSubkeys(mulex::RdbKeyName dir);
+	MX_RPC_METHOD bool RdbToggleHistory(mulex::RdbKeyName keyname, bool active);
+	MX_RPC_METHOD mulex::RPCGenericType RdbGetHistory(mulex::RdbKeyName keyname, std::uint64_t count);
 
 	std::string RdbMakeWatchEvent(const mulex::RdbKeyName& dir);
 	void RdbTriggerEvent(std::uint64_t clientid, const RdbEntry& entry);
@@ -182,6 +156,12 @@ namespace mulex
 	void PdbInit();
 	void PdbClose();
 	std::uint64_t PdbTypeSize(const PdbValueType& type);
+	void PdbPushBufferBytes(const std::uint8_t* value, std::uint64_t size, std::vector<std::uint8_t>& buffer);
+
+	std::string PdbGenerateSQLQueryCreate(const std::string& table, const std::initializer_list<std::string>& specs);
+	std::string PdbGenerateSQLQueryInsert(const std::string& table, const std::initializer_list<std::string>& names);
+	std::string PdbGenerateSQLQuerySelect(const std::string& table, const std::initializer_list<std::string>& names);
+
 
 	MX_RPC_METHOD bool PdbExecuteQuery(mulex::PdbQuery query);
 	MX_RPC_METHOD bool PdbWriteTable(mulex::PdbString table, mulex::RPCGenericType types, mulex::RPCGenericType data);
@@ -235,6 +215,7 @@ namespace mulex
 		bool erase();
 		void watch(std::function<void(const RdbKeyName& key, const RPCGenericType& value)> callback);
 		void unwatch();
+		bool history(bool status);
 
 	private:
 		void writeEntry();
@@ -271,35 +252,42 @@ namespace mulex
 		std::is_same_v<float , std::decay_t<T>> ||
 		std::is_same_v<double, std::decay_t<T>> ||
 		std::is_same_v<bool  , std::decay_t<T>> ||
-		std::is_same_v<PdbString, std::decay_t<T>>;
+		std::is_same_v<PdbString, std::decay_t<T>> ||
+		std::is_same_v<std::vector<std::uint8_t>, std::decay_t<T>>;
 
+	template<typename Policy>
 	class PdbAccess
 	{
 	public:
 		PdbAccess(const std::string& db = "") : _db(db) {  };
 
-		template<PdbVariable... Vs>
 		bool createTable(const std::string& table, const std::initializer_list<std::string>& spec)
 		{
-			const std::string query = generateSQLQueryCreate(table, spec);
-			return executeQueryRemote(query);
+			const std::string query = PdbGenerateSQLQueryCreate(table, spec);
+			return Policy::executeQueryRemote(query);
+			// return executeQueryRemote(query);
 		}
 
 		template<PdbVariable... Vs>
 		std::function<bool(const std::optional<Vs>&...)> getWriter(const std::string& table, const std::initializer_list<std::string>& names)
 		{
-			const std::string query = generateSQLQueryInsert(table, names);
+			const std::string query = PdbGenerateSQLQueryInsert(table, names);
 			return [this, query](const std::optional<Vs>&... args) {
 				std::vector<std::uint8_t> data;
 				std::vector<PdbValueType> types;
-				data.resize((sizeof(Vs) + ...));
+				data.reserve((sizeof(Vs) + ...));
 				types.reserve(sizeof...(Vs));
-				std::uint8_t* ptr = data.data();
 				([&](){
 					if(args.has_value())
 					{
-						std::memcpy(ptr, &args.value(), sizeof(Vs));
-						ptr += sizeof(Vs);
+						if constexpr(std::is_same_v<Vs, std::vector<std::uint8_t>>)
+						{
+							PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(args.value().data()), args.value().size(), data);
+						}
+						else
+						{
+							PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&args.value()), sizeof(Vs), data);
+						}
 						types.push_back(getValueType<Vs>());
 					}
 					else
@@ -308,18 +296,27 @@ namespace mulex
 					}
 				}(), ...);
 
-				LogTrace("%s", query.c_str());
-				return executeInsertRemote(query, types, data);
+				return Policy::executeInsertRemote(query, types, data);
 			};
 		}
 
 		template<PdbVariable... Vs>
 		std::function<std::vector<std::tuple<Vs...>>(const std::string&)> getReader(const std::string& table, const std::initializer_list<std::string>& names)
 		{
-			const std::string query = generateSQLQuerySelect(table, names);
+			const std::string query = PdbGenerateSQLQuerySelect(table, names);
 			const std::vector<PdbValueType> types = { getValueType<Vs>()... };
 			return [this, query, types](const std::string& conditions) -> std::vector<std::tuple<Vs...>> {
 				return executeSelectRemote<Vs...>(query, conditions, types);
+			};
+		}
+
+		template<PdbVariable... Vs>
+		std::function<std::vector<std::uint8_t>(const std::string&)> getReaderRaw(const std::string& table, const std::initializer_list<std::string>& names)
+		{
+			const std::string query = PdbGenerateSQLQuerySelect(table, names);
+			const std::vector<PdbValueType> types = { getValueType<Vs>()... };
+			return [this, query, types](const std::string& conditions) -> std::vector<std::uint8_t> {
+				return Policy::executeSelectRemoteI(query + " " + conditions + ";", types);
 			};
 		}
 
@@ -339,6 +336,7 @@ namespace mulex
 			if constexpr(std::is_same_v<T, double>) return PdbValueType::FLOAT64;
 			if constexpr(std::is_same_v<T, PdbString>) return PdbValueType::STRING;
 			if constexpr(std::is_same_v<T, bool>) return PdbValueType::BOOL;
+			if constexpr(std::is_same_v<T, std::vector<std::uint8_t>>) return PdbValueType::BINARY;
 			
 			LogError("[pdb] PdbGetValueType() FAILED.");
 			return PdbValueType::INT8;
@@ -359,25 +357,30 @@ namespace mulex
 			if constexpr(std::is_same_v<T, double>) return PdbValueType::FLOAT64;
 			if constexpr(std::is_same_v<T, PdbString>) return PdbValueType::STRING;
 			if constexpr(std::is_same_v<T, bool>) return PdbValueType::BOOL;
+			if constexpr(std::is_same_v<T, std::vector<std::uint8_t>>) return PdbValueType::BINARY;
 			
 			LogError("[pdb] PdbGetValueType() FAILED.");
 			return PdbValueType::NIL;
 		}
 
-		std::string generateSQLQueryCreate(const std::string& table, const std::initializer_list<std::string>& specs);
-		std::string generateSQLQueryInsert(const std::string& table, const std::initializer_list<std::string>& names);
-		std::string generateSQLQuerySelect(const std::string& table, const std::initializer_list<std::string>& names);
-		bool executeQueryRemote(const std::string& query);
-		bool executeInsertRemote(const std::string& query, const std::vector<PdbValueType>& types, const std::vector<uint8_t>& data);
-		std::vector<std::uint8_t> executeSelectRemoteI(const std::string& query, const std::vector<PdbValueType>& types);
-
 		template<typename T>
 		T readBuffer(const std::vector<std::uint8_t>& buffer, std::uint64_t& offset)
 		{
-			T value;
-			std::memcpy(&value, buffer.data() + offset, sizeof(T));
-			offset += sizeof(T);
-			return value;
+			if constexpr(std::is_same_v<T, std::vector<std::uint8_t>>)
+			{
+				std::int32_t size = *reinterpret_cast<const std::int32_t*>(buffer.data() + offset);
+				std::vector<std::uint8_t> value(size);
+				std::memcpy(value.data(), buffer.data() + offset + sizeof(std::int32_t), size);
+				offset += (sizeof(std::int32_t) + size);
+				return value;
+			}
+			else
+			{
+				T value;
+				std::memcpy(&value, buffer.data() + offset, sizeof(T));
+				offset += sizeof(T);
+				return value;
+			}
 		}
 
 		template<typename T, std::uint64_t... Ti>
@@ -401,10 +404,29 @@ namespace mulex
 		template<PdbVariable... Vs>
 		std::vector<std::tuple<Vs...>> executeSelectRemote(const std::string& query, const std::string& conditions, const std::vector<PdbValueType>& types)
 		{
-			std::vector<std::uint8_t> data = executeSelectRemoteI(query + " " + conditions + ";", types);
+			std::vector<std::uint8_t> data = Policy::executeSelectRemoteI(query + " " + conditions + ";", types);
 			return bufferToTupleV<Vs...>(data);
 		}
 	private:
 		std::string _db;
 	};
+
+	class PdbAccessPolicyRemote
+	{
+	public:
+		static bool executeQueryRemote(const std::string& query);
+		static bool executeInsertRemote(const std::string& query, const std::vector<PdbValueType>& types, const std::vector<uint8_t>& data);
+		static std::vector<std::uint8_t> executeSelectRemoteI(const std::string& query, const std::vector<PdbValueType>& types);
+	};
+
+	class PdbAccessPolicyLocal
+	{
+	public:
+		static bool executeQueryRemote(const std::string& query);
+		static bool executeInsertRemote(const std::string& query, const std::vector<PdbValueType>& types, const std::vector<uint8_t>& data);
+		static std::vector<std::uint8_t> executeSelectRemoteI(const std::string& query, const std::vector<PdbValueType>& types);
+	};
+
+	using PdbAccessRemote = PdbAccess<PdbAccessPolicyRemote>;
+	using PdbAccessLocal  = PdbAccess<PdbAccessPolicyLocal>;
 }

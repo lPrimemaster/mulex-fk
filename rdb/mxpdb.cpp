@@ -83,12 +83,21 @@ namespace mulex
 			case PdbValueType::FLOAT64: return sizeof(double);
 			case PdbValueType::STRING: return PDB_MAX_STRING_SIZE; // HACK: For now store the max size
 			case PdbValueType::BOOL: return sizeof(bool);
+			case PdbValueType::BINARY: return 0; // Calculated at insert/select time
 			case PdbValueType::NIL: return 0;
 		}
 		return 0;
 	}
+	
+	void PdbPushBufferBytes(const std::uint8_t* value, std::uint64_t size, std::vector<std::uint8_t>& buffer)
+	{
+		for(std::uint64_t i = 0; i < size; i++)
+		{
+			buffer.push_back(*(value + i));
+		}
+	}
 
-	static void PdbTableGet(const PdbValueType& type, std::uint8_t*& ptr, int col, sqlite3_stmt* stmt)
+	static void PdbTableGet(const PdbValueType& type, std::vector<std::uint8_t>& buffer, int col, sqlite3_stmt* stmt)
 	{
 		switch (type)
 		{
@@ -100,38 +109,46 @@ namespace mulex
 			case PdbValueType::INT32:
 			case PdbValueType::UINT32:
 			{
-				std::int32_t i32 = sqlite3_column_int(stmt, col);
-				std::memcpy(ptr, &i32, PdbTypeSize(type)); // Only copying the low bytes
+				const std::int32_t i32 = sqlite3_column_int(stmt, col);
+				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&i32), PdbTypeSize(type), buffer);
 				break;
 			}
 
 			case PdbValueType::INT64:
 			case PdbValueType::UINT64:
 			{
-				std::int64_t i64 = sqlite3_column_int64(stmt, col);
-				std::memcpy(ptr, &i64, PdbTypeSize(type));
+				const std::int32_t i64 = sqlite3_column_int64(stmt, col);
+				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&i64), PdbTypeSize(type), buffer);
 				break;
 			}
 
 			case PdbValueType::FLOAT32:
 			{
-				float f = sqlite3_column_double(stmt, col);
-				std::memcpy(ptr, &f, PdbTypeSize(type));
+				const float f = sqlite3_column_double(stmt, col);
+				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&f), PdbTypeSize(type), buffer);
 				break;
 			}
 
 			case PdbValueType::FLOAT64:
 			{
-				double d = sqlite3_column_double(stmt, col);
-				std::memcpy(ptr, &d, PdbTypeSize(type));
+				const double f = sqlite3_column_double(stmt, col);
+				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&f), PdbTypeSize(type), buffer);
 				break;
 			}
 
 			case PdbValueType::STRING:
 			{
 				PdbString s = reinterpret_cast<const char*>(sqlite3_column_text(stmt, col));
-				std::memcpy(ptr, &s, PdbTypeSize(type));
+				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(s.c_str()), PdbTypeSize(type), buffer);
 				break;
+			}
+
+			case PdbValueType::BINARY:
+			{
+				const std::uint8_t* p = reinterpret_cast<const std::uint8_t*>(sqlite3_column_blob(stmt, col));
+				std::int32_t size = sqlite3_column_bytes(stmt, col);
+				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&size), sizeof(std::int32_t), buffer);
+				PdbPushBufferBytes(p, size, buffer);
 			}
 
 			case PdbValueType::NIL:
@@ -140,32 +157,59 @@ namespace mulex
 				break;
 			}
 		}
-		ptr += PdbTypeSize(type);
 	}
 
-	static bool PdbTableBind(const PdbValueType& type, const std::uint8_t* ptr, int col, sqlite3_stmt* stmt)
+	static bool PdbTableBind(const PdbValueType& type, const std::uint8_t* ptr, int col, sqlite3_stmt* stmt, std::uint64_t& offset)
 	{
 		switch (type)
 		{
 			case PdbValueType::INT8:  
 			case PdbValueType::UINT8:
 			case PdbValueType::BOOL:
+			{
+				offset += PdbTypeSize(type);
 				return sqlite3_bind_int(stmt, col, *reinterpret_cast<const std::int8_t*>(ptr)) == SQLITE_OK;
+			}
 			case PdbValueType::INT16:
 			case PdbValueType::UINT16:
+			{
+				offset += PdbTypeSize(type);
 				return sqlite3_bind_int(stmt, col, *reinterpret_cast<const std::int16_t*>(ptr)) == SQLITE_OK;
+			}
 			case PdbValueType::INT32:
 			case PdbValueType::UINT32:
+			{
+				offset += PdbTypeSize(type);
 				return sqlite3_bind_int(stmt, col, *reinterpret_cast<const std::int32_t*>(ptr)) == SQLITE_OK;
+			}
 			case PdbValueType::INT64:
 			case PdbValueType::UINT64:
+			{
+				offset += PdbTypeSize(type);
 				return sqlite3_bind_int64(stmt, col, *reinterpret_cast<const std::int64_t*>(ptr)) == SQLITE_OK;
+			}
 			case PdbValueType::FLOAT32:
+			{
+				offset += PdbTypeSize(type);
 				return sqlite3_bind_double(stmt, col, *reinterpret_cast<const float*>(ptr)) == SQLITE_OK;
+			}
 			case PdbValueType::FLOAT64:
+			{
+				offset += PdbTypeSize(type);
 				return sqlite3_bind_double(stmt, col, *reinterpret_cast<const double*>(ptr)) == SQLITE_OK;
+			}
 			case PdbValueType::STRING:
+			{
+				offset += PdbTypeSize(type);
 				return sqlite3_bind_text(stmt, col, reinterpret_cast<const PdbString*>(ptr)->c_str(), -1, SQLITE_STATIC) == SQLITE_OK;
+			}
+			case PdbValueType::BINARY:
+			{
+				// Increment here where we know the size of the data
+				const std::uint64_t size = *reinterpret_cast<const std::uint64_t*>(ptr);
+				offset += size;
+				return sqlite3_bind_blob(stmt, col, ptr + sizeof(std::uint64_t), size, SQLITE_STATIC) == SQLITE_OK;
+			}
 			case PdbValueType::NIL:
 				return sqlite3_bind_null(stmt, col) == SQLITE_OK;
 			default:
@@ -189,14 +233,13 @@ namespace mulex
 		std::uint64_t offset = 0;
 		for(int i = 0; i < static_cast<int>(vars.size()); i++)
 		{
-			if(!PdbTableBind(vars[i], vdata.data() + offset, i + 1, stmt))
+			if(!PdbTableBind(vars[i], vdata.data() + offset, i + 1, stmt, offset))
 			{
 				LogError("[pdb] Failed to bind value. Type might be wrong. Or data is unexpected.");
 				LogError("[pdb] %s.", sqlite3_errmsg(_pdb_handle));
 				sqlite3_finalize(stmt);
 				return false;
 			}
-			offset += PdbTypeSize(vars[i]);
 		}
 
 		if(sqlite3_step(stmt) != SQLITE_DONE)
@@ -250,15 +293,14 @@ namespace mulex
 
 		std::vector<PdbValueType> vars = types;
 		std::uint64_t size = PdbCalculateTypesSize(vars);
-		std::vector<std::uint8_t> data(size);
-		std::uint8_t* iptr = data.data();
+		std::vector<std::uint8_t> data;
+		data.reserve(size);
 		std::vector<std::vector<std::uint8_t>> list;
 		while(sqlite3_step(stmt) == SQLITE_ROW)
 		{
-			std::uint8_t* ptr = iptr;
 			for(int i = 0; i < static_cast<int>(vars.size()); i++)
 			{
-				PdbTableGet(vars[i], ptr, i, stmt);
+				PdbTableGet(vars[i], data, i, stmt);
 			}
 			list.push_back(data);
 		}
@@ -285,6 +327,8 @@ namespace mulex
 				return "REAL";
 			case PdbValueType::STRING:
 				return "TEXT";
+			case PdbValueType::BINARY:
+				return "BLOB";
 			case PdbValueType::NIL:
 				return "NULL";
 		}
@@ -303,7 +347,7 @@ namespace mulex
 		return true;
 	}
 
-	std::string PdbAccess::generateSQLQueryCreate(const std::string& table, const std::initializer_list<std::string>& specs)
+	std::string PdbGenerateSQLQueryCreate(const std::string& table, const std::initializer_list<std::string>& specs)
 	{
 		std::string query = "CREATE TABLE IF NOT EXISTS " + table + " (";
 		// std::apply([&](auto&&... val){ ((query += val, query += ","), ...); }, spec);
@@ -317,7 +361,7 @@ namespace mulex
 		return query;
 	}
 
-	std::string PdbAccess::generateSQLQueryInsert(const std::string& table, const std::initializer_list<std::string>& names)
+	std::string PdbGenerateSQLQueryInsert(const std::string& table, const std::initializer_list<std::string>& names)
 	{
 		std::string query = "INSERT INTO " + table + " (";
 		for(const auto& name : names)
@@ -338,7 +382,7 @@ namespace mulex
 		return query;
 	}
 
-	std::string PdbAccess::generateSQLQuerySelect(const std::string& table, const std::initializer_list<std::string>& names)
+	std::string PdbGenerateSQLQuerySelect(const std::string& table, const std::initializer_list<std::string>& names)
 	{
 		std::string query = "SELECT ";
 		for(const auto& name : names)
@@ -353,7 +397,7 @@ namespace mulex
 		return query;
 	}
 
-	bool PdbAccess::executeQueryRemote(const std::string& query)
+	bool PdbAccessPolicyRemote::executeQueryRemote(const std::string& query)
 	{
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
@@ -363,7 +407,7 @@ namespace mulex
 		return false;
 	}
 
-	bool PdbAccess::executeInsertRemote(const std::string& query, const std::vector<PdbValueType>& types, const std::vector<uint8_t>& data)
+	bool PdbAccessPolicyRemote::executeInsertRemote(const std::string& query, const std::vector<PdbValueType>& types, const std::vector<uint8_t>& data)
 	{
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
@@ -373,7 +417,7 @@ namespace mulex
 		return false;
 	}
 
-	std::vector<std::uint8_t> PdbAccess::executeSelectRemoteI(const std::string& query, const std::vector<PdbValueType>& types)
+	std::vector<std::uint8_t> PdbAccessPolicyRemote::executeSelectRemoteI(const std::string& query, const std::vector<PdbValueType>& types)
 	{
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
@@ -381,5 +425,20 @@ namespace mulex
 			return exp.value()->_rpc_client->call<RPCGenericType>(RPC_CALL_MULEX_PDBREADTABLE, PdbQuery(query), RPCGenericType(types));
 		}
 		return {};
+	}
+
+	bool PdbAccessPolicyLocal::executeQueryRemote(const std::string& query)
+	{
+		return PdbExecuteQuery(query);
+	}
+
+	bool PdbAccessPolicyLocal::executeInsertRemote(const std::string& query, const std::vector<PdbValueType>& types, const std::vector<uint8_t>& data)
+	{
+		return PdbWriteTable(PdbQuery(query), types, data);
+	}
+
+	std::vector<std::uint8_t> PdbAccessPolicyLocal::executeSelectRemoteI(const std::string& query, const std::vector<PdbValueType>& types)
+	{
+		return PdbReadTable(PdbQuery(query), types);
 	}
 } // namespace mulex
