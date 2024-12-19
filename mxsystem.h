@@ -208,4 +208,21 @@ namespace mulex
 
 	std::uint64_t SysStringHash64(const std::string& key);
 	bool SysMatchPattern(const std::string& pattern, const std::string& target);
+
+	struct SysPerformanceMetrics
+	{
+		double _cpu_usage;
+		double _cpu_temp;
+		std::uint64_t _ram_total;
+		std::uint64_t _ram_used;
+		std::uint64_t _disk_total;
+		std::uint64_t _disk_free;
+		std::uint64_t _disk_io_read;
+		std::uint64_t _disk_io_write;
+	};
+
+	SysPerformanceMetrics SysGetPerformanceMetrics();
+	void SysStartPerformanceMetricsThread();
+	void SysStopPerformanceMetricsThread();
+
 } // namespace mulex

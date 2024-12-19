@@ -1,4 +1,5 @@
 #include "mxsystem.h"
+#include <memory>
 #include <signal.h>
 #include "network/rpc.h"
 #include "mxevt.h"
@@ -8,12 +9,16 @@
 #include "mxmsg.h"
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 #ifdef _WIN32
 #include <Windows.h>
 #include <shlwapi.h>
+#include <pdh.h>
+#include <pdhmsg.h>
 #else
 #include <fcntl.h>
+#include <sys/sysinfo.h>
 #endif
 
 static mulex::Experiment _sys_experiment;
@@ -31,6 +36,10 @@ static std::map<std::string, bool> _sys_argscmd_long_reqarg;
 static std::map<std::string, std::string> _sys_argscmd_helptxt;
 static bool _sys_isdaemon = false;
 static std::uint64_t _sys_cid = 0x00;
+
+static std::unique_ptr<std::thread> _sys_performance_metrics_thread;
+static std::atomic<bool> _sys_performance_metrics_running;
+static constexpr std::uint64_t SYS_PERF_GATHER_INTERVAL = 5000;
 
 namespace mulex
 {
@@ -269,6 +278,8 @@ namespace mulex
 		RdbInit(1024 * 1024);
 		PdbInit();
 
+		SysStartPerformanceMetricsThread();
+
 		// After PdbInit()
 		RdbInitHistoryBuffer();
 
@@ -308,6 +319,8 @@ namespace mulex
 		_sys_evt_thread.reset();
 
 		RdbCloseHistoryBuffer();
+
+		SysStopPerformanceMetricsThread();
 
 		PdbClose();
 		RdbClose();
@@ -887,5 +900,103 @@ namespace mulex
 
 		// ks is not in a valid position
 		return false;	
+	}
+
+	static double SysGetCpuUsage()
+	{
+#ifdef __linux__
+	static std::uint64_t prev_idle = 0;
+	static std::uint64_t prev_total = 0;
+	std::ifstream stat("/proc/stat");
+	std::string line;
+	std::getline(stat, line);
+	std::istringstream iss(line);
+	std::string cpu;
+	std::uint64_t times[8];
+	iss >> cpu >> times[0] >> times[1] >> times[2] >> times[3] >> times[4] >> times[5] >> times[6] >> times[7];
+	std::uint64_t total = times[0] + times[1] + times[2] + times[3] + times[4] + times[5] + times[6] + times[7];
+	std::uint64_t delta_total = total - prev_total;
+	std::uint64_t delta_idle = times[3] - prev_idle;
+
+	prev_idle = times[3];
+	prev_total = total;
+
+	return 100.0 * (delta_total - delta_idle) / delta_total;
+#else
+	static PDH_HQUERY cpu_query;
+	static PDH_HCOUNTER cpu_total;
+	static bool init = false;
+	if (!init)
+	{
+		PdhOpenQuery(nullptr, 0, &cpu_query);
+		PdhAddCounter(cpu_query, L"\\Processor(_Total)\\% Processor Time", 0, &cpu_total);
+		PdhCollectQueryData(cpu_query);
+		init = true;
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
+
+	PdhCollectQueryData(cpu_query);
+
+	PDH_FMT_COUNTERVALUE cpu_value;
+	PdhGetFormattedCounterValue(cpu_total, PDH_FMT_DOUBLE, nullptr, &cpu_value);
+	return cpu_value.doubleValue;
+#endif
+	}
+
+	static std::pair<std::uint64_t, std::uint64_t> SysGetRAMUsage()
+	{
+#ifdef __linux__
+		struct sysinfo info;
+		sysinfo(&info);
+		return { info.totalram * info.mem_unit, (info.totalram - info.freeram) * info.mem_unit };
+#else
+		MEMORYSTATUSEX statex;
+		statex.dwLength = sizeof(statex);
+		GlobalMemoryStatusEx(&statex);
+		return { statex.ullTotalPhys, statex.ullTotalPhys - statex.ullAvailPhys };
+#endif
+	}
+
+	SysPerformanceMetrics SysGetPerformanceMetrics()
+	{
+		SysPerformanceMetrics metrics;
+
+		metrics._cpu_usage = SysGetCpuUsage();
+		std::tie(metrics._ram_total, metrics._ram_used) = SysGetRAMUsage();
+
+		return metrics;
+	}
+
+	void SysStartPerformanceMetricsThread()
+	{
+		RdbCreateValueDirect("/system/metrics/cpu_usage", RdbValueType::FLOAT64, 0, 0.0);
+		RdbCreateValueDirect("/system/metrics/mem_total", RdbValueType::UINT64, 0, std::uint64_t(0));
+		RdbCreateValueDirect("/system/metrics/mem_used" , RdbValueType::UINT64, 0, std::uint64_t(0));
+
+		SysPerformanceMetrics metrics = SysGetPerformanceMetrics();
+		RdbWriteValueDirect("/system/metrics/mem_total", metrics._ram_total);
+
+		_sys_performance_metrics_running.store(true);
+
+		_sys_performance_metrics_thread = std::make_unique<std::thread>([](){
+			while(_sys_performance_metrics_running.load())
+			{
+				SysPerformanceMetrics metrics = SysGetPerformanceMetrics();
+
+				RdbWriteValueDirect("/system/metrics/cpu_usage", metrics._cpu_usage);
+				RdbWriteValueDirect("/system/metrics/mem_used", metrics._ram_used);
+
+				std::this_thread::sleep_for(std::chrono::milliseconds(SYS_PERF_GATHER_INTERVAL));
+			}
+		});
+		LogTrace("[sys] SysStartPerformanceMetricsThread() OK.");
+	}
+
+	void SysStopPerformanceMetricsThread()
+	{
+		LogTrace("[sys] Shutting down performance metrics thread.");
+		_sys_performance_metrics_running.store(false);
+		_sys_performance_metrics_thread->join();
+		_sys_performance_metrics_thread.reset();
 	}
 } // namespace mulex

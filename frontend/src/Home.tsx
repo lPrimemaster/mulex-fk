@@ -1,7 +1,6 @@
 import { Component, createSignal, createEffect, on } from 'solid-js';
 import Sidebar from './components/Sidebar'
 import Card from './components/Card';
-import Status from './components/Status';
 import BackendStatusTable from './components/BackendStatusTable';
 import { MxWebsocket } from './lib/websocket';
 import { showToast } from './components/ui/toast';
@@ -12,6 +11,7 @@ import { MxRdb } from './lib/rdb';
 import { BadgeLabel } from './components/ui/badge-label';
 import { timestamp_tohms } from './lib/utils';
 import { LogTable } from './components/LogTable';
+import { ResourcePanel } from './components/ResourcePanel';
 
 const [socketStatus, setSocketStatus] = createSignal<boolean>(false);
 const [runStatus, setRunStatus] = createSignal<string>('Stopped');
@@ -161,6 +161,9 @@ const Home: Component = () => {
 					</Card>
 					<Card title="Backends">
 						<BackendStatusTable/>
+					</Card>
+					<Card title="Server Resources">
+						<ResourcePanel/>
 					</Card>
 					<Card title="Logs">
 						<LogTable/>

@@ -10,6 +10,7 @@ export interface MxLog {
 	backend: string;
 	type: string;
 	message: string;
+	displayToast: boolean;
 };
 
 export interface MxLogContext {
@@ -39,7 +40,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 
 		const log = llist[llist.length - 1];
 
-		if(log.type == 'error') {
+		if(log.type == 'error' && log.displayToast) {
 			showToast({
 				title: '[' + log.timestamp + '] Error at ' + log.backend,
 				description: log.message,
@@ -48,7 +49,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 		}
 	});
 
-	function addMessage(cid: BigInt, ts: BigInt, type: number, message: string) {
+	function addMessage(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean = true) {
 		// MEMO
 		// enum class MsgClass : std::uint8_t
 		// {
@@ -70,7 +71,8 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 						timestamp: timestamp_tolocaltime(Number(ts)),
 						backend: bck_name,
 						type: typeToString(type),
-						message: message
+						message: message,
+						displayToast: displayToast
 					};
 					const nlogs = [...prev, log];
 					return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
@@ -84,7 +86,8 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 					timestamp: timestamp_tolocaltime(Number(ts)),
 					backend: bck_name,
 					type: typeToString(type),
-					message: message
+					message: message,
+					displayToast: displayToast
 				};
 				const nlogs = [...prev, log];
 				return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
@@ -100,7 +103,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 				console.log(logs);
 				for(const l of logs) {
 					const [ _, level, cid, timestamp, message ] = l;
-					addMessage(cid, timestamp, level, message);
+					addMessage(cid, timestamp, level, message, false);
 				}
 			});
 
