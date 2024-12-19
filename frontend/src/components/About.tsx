@@ -13,7 +13,7 @@ const About: Component<{show: boolean, setShow: SetShowF, children? : JSX.Elemen
 				<AlertDialogTitle>About</AlertDialogTitle>
 				<AlertDialogDescription>
 					<h2 class="font-bold">mxfk 2024</h2>
-					<span class="font-medium">Current Version: 0.1.0 (Centauri)</span>
+					<span class="font-medium">Current Version: 0.2.0 (Barnard)</span>
 					<br/>
 					Licensed under the GNU GPL v3.
 

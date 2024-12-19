@@ -4,13 +4,13 @@ include(cmake/InternetConnection.cmake)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-project(mulex-fk VERSION 0.1.0)
+project(mulex-fk VERSION 0.2.0)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(LTRACE "Enable/Disable trace logging." OFF)
-option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." ON)
 option(PROFILE "Enable/Disable profiling with tracy." OFF)
+option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." ON)
 
 if(LTRACE)
 	add_definitions(-DLTRACE)
@@ -54,11 +54,12 @@ add_definitions(-D${RPC_CALL_KEYWORD}=)
 set(RPC_SPEC_FILE rpcspec.inl)
 
 if(PROFILE)
-	# Make sure tracy profiler is installed/linked system wide
 	add_definitions(-DTRACY_ENABLE)
-	link_libraries(TracyClient)
-	include_directories(${tracy_SOURCE_DIR}/public)
 endif()
+
+# Make sure tracy profiler is installed/linked system wide
+link_libraries(TracyClient)
+include_directories(${tracy_SOURCE_DIR}/public)
 
 add_executable(mxmain
 	main.cpp
