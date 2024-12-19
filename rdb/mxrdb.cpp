@@ -16,6 +16,8 @@
 #include <set>
 #include <rpcspec.inl>
 
+#include <tracy/Tracy.hpp>
+
 static std::uint8_t* _rdb_handle = nullptr;
 static std::uint64_t _rdb_offset = 0;
 static std::uint64_t _rdb_size   = 0;
@@ -102,12 +104,14 @@ namespace mulex
 
 	static std::uint64_t FindString(const char* data, std::uint64_t idx)
 	{
+		ZoneScoped;
 		while(data[idx] != 0) idx++;
 		return idx + 1;
 	}
 
 	static void RdbLoadOffsetMap(const char* data, std::uint64_t size)
 	{
+		ZoneScoped;
 		std::uint64_t idx = 0;
 		while(idx < size)
 		{
@@ -121,6 +125,7 @@ namespace mulex
 
 	static std::vector<std::uint8_t> RdbWriteOffsetMap()
 	{
+		ZoneScoped;
 		std::vector<std::uint8_t> data;
 		std::uint64_t offset = 0;
 		for(const auto& it : _rdb_offset_map)
@@ -139,6 +144,7 @@ namespace mulex
 
 	static std::uint8_t* RdbAlignedAlloc(std::uint64_t align, std::uint64_t size)
 	{
+		ZoneScoped;
 		_rdb_statistics._rdb_allocated.store(size);
 #ifdef __unix__
 		return reinterpret_cast<std::uint8_t*>(std::aligned_alloc(align, size));
@@ -149,6 +155,7 @@ namespace mulex
 
 	static void RdbAlignedFree(std::uint8_t* ptr)
 	{
+		ZoneScoped;
 #ifdef __unix__
 		std::free(ptr);
 #else
@@ -158,6 +165,7 @@ namespace mulex
 
 	static void RdbLoadFromFile(const std::string& filename)
 	{
+		ZoneScoped;
 		// Load the existing rdb data
 		std::vector<std::uint8_t> data = SysReadBinFile(filename);
 
@@ -196,6 +204,7 @@ namespace mulex
 
 	static void RdbSaveToFile(const std::string& filename)
 	{
+		ZoneScoped;
 		std::vector<std::uint8_t> data_offset = RdbWriteOffsetMap();
 		std::uint64_t mapsize = data_offset.size();
 		std::vector<std::uint8_t> output;
@@ -238,6 +247,7 @@ namespace mulex
 
 	void RdbInit(std::uint64_t size)
 	{
+		ZoneScoped;
 		std::unique_lock lock(_rdb_rw_lock);
 
 		// Make sure size is a multiple of 1024 and aligned
@@ -292,6 +302,7 @@ namespace mulex
 
 	void RdbClose()
 	{
+		ZoneScoped;
 		LogDebug("[rdb] Closing rdb.");
 
 		_rdb_statistics_flag.store(false);
@@ -321,16 +332,19 @@ namespace mulex
 
 	static std::uint64_t RdbCalculateDataSize(const RdbEntry* entry)
 	{
+		ZoneScoped;
 		return entry->_count > 0 ? entry->_count * entry->_size : entry->_size;
 	}
 
 	static std::uint64_t RdbCalculateEntryTotalSize(const RdbEntry* entry)
 	{
+		ZoneScoped;
 		return sizeof(RdbEntry) + RdbCalculateDataSize(entry);
 	}
 
 	void RdbInitHistoryBuffer()
 	{
+		ZoneScoped;
 		std::unique_lock lock(_rdb_history_rw_lock);
 		constexpr static std::uint64_t RDB_HISTORY_DEF_SIZE = 1024 * 1024 * 100; // 100 kB
 		_rdb_history_size = RDB_HISTORY_DEF_SIZE;
@@ -366,6 +380,7 @@ namespace mulex
 
 	void RdbCloseHistoryBuffer()
 	{
+		ZoneScoped;
 		std::unique_lock lock(_rdb_history_rw_lock);
 		if(_rdb_history_handle)
 		{
@@ -382,12 +397,14 @@ namespace mulex
 
 	void RdbHistoryFlush()
 	{
+		ZoneScoped;
 		std::unique_lock lock(_rdb_history_rw_lock);
 		RdbHistoryFlushUnlocked();
 	}
 
 	void RdbHistoryFlushUnlocked()
 	{
+		ZoneScoped;
 		static auto history_writer = _rdb_history_access->getWriter<
 			std::int32_t,
 			PdbString,
@@ -421,6 +438,7 @@ namespace mulex
 
 	void RdbHistoryAdd(RdbEntry* entry, const RdbKeyName& key)
 	{
+		ZoneScoped;
 		// Entry must be locked at this point
 		// Read lock is sufficient
 		std::unique_lock lock(_rdb_history_rw_lock);
@@ -443,6 +461,7 @@ namespace mulex
 
 	static bool RdbGrow()
 	{
+		ZoneScoped;
 		std::uint8_t* temp_handle = RdbAlignedAlloc(1024, _rdb_size * 2);
 		
 		if(!temp_handle)
@@ -473,6 +492,7 @@ namespace mulex
 	
 	static std::uint64_t RdbTypeSize(const RdbValueType& type)
 	{
+		ZoneScoped;
 		switch (type)
 		{
 			case RdbValueType::INT8: return sizeof(std::int8_t);
@@ -493,6 +513,7 @@ namespace mulex
 
 	static void RdbEmitEvtCondition(const std::string& swatch, const RdbKeyName& key, const RdbEntry* entry)
 	{
+		ZoneScoped;
 		std::string event_name = RdbMakeWatchEvent(swatch);
 		std::vector<std::uint8_t> evt_buffer;
 		std::uint64_t entry_data_size = RdbCalculateDataSize(entry);
@@ -525,6 +546,7 @@ namespace mulex
 	//				 That would make this a lot faster
 	static void RdbEmitWatchMatchCondition(const RdbKeyName& key, const RdbEntry* entry)
 	{
+		ZoneScoped;
 		std::shared_lock<std::shared_mutex> lock_watch(_rdb_watch_lock);
 		for(const auto& watch : _rdb_watch_dirs)
 		{
@@ -538,11 +560,13 @@ namespace mulex
 
 	static std::uint64_t RdbCalculateEntryOffset(RdbEntry* entry)
 	{
+		ZoneScoped;
 		return (reinterpret_cast<std::uint8_t*>(entry) - _rdb_handle);
 	}
 
 	RdbEntry* RdbAllocate(std::uint64_t size)
 	{
+		ZoneScoped;
 		const std::uint64_t total_size = sizeof(RdbEntry) + size;
 
 		// Check for free blocks
@@ -587,6 +611,7 @@ namespace mulex
 
 	void RdbFree(RdbEntry* entry)
 	{
+		ZoneScoped;
 		std::uint64_t free_offset = RdbCalculateEntryOffset(entry);
 		std::uint64_t free_size = RdbCalculateEntryTotalSize(entry);
 		_rdb_free_blocks.emplace_back(free_offset, free_size);
@@ -603,6 +628,7 @@ namespace mulex
 
 	RdbEntry* RdbNewEntry(const RdbKeyName& key, const RdbValueType& type, const void* data, std::uint64_t count)
 	{
+		ZoneScoped;
 		std::unique_lock lock(_rdb_rw_lock);
 
 		if(RdbFindEntryByNameUnlocked(key))
@@ -655,6 +681,7 @@ namespace mulex
 
 	bool RdbDeleteEntry(const RdbKeyName& key)
 	{
+		ZoneScoped;
 		// Lock database map and handle for deletion
 		// This also locks W/R access to any key
 		std::unique_lock lock(_rdb_rw_lock);
@@ -681,6 +708,7 @@ namespace mulex
 
 	RdbEntry* RdbFindEntryByNameUnlocked(const RdbKeyName& key)
 	{
+		ZoneScoped;
 		auto it = _rdb_offset_map.find(key.c_str());
 		if(it == _rdb_offset_map.end())
 		{
@@ -693,12 +721,14 @@ namespace mulex
 
 	RdbEntry* RdbFindEntryByName(const RdbKeyName& key)
 	{
+		ZoneScoped;
 		std::shared_lock lock(_rdb_rw_lock);
 		return RdbFindEntryByNameUnlocked(key);
 	}
 
 	void RdbDumpMetadata(const std::string& filename)
 	{
+		ZoneScoped;
 		std::ofstream output(filename);
 		if(!output.is_open())
 		{
@@ -725,6 +755,7 @@ namespace mulex
 
 	RPCGenericType RdbReadValueDirect(RdbKeyName keyname)
 	{
+		ZoneScoped;
 		std::shared_lock lock_ops(_rdb_rw_lock);
 
 		const RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
@@ -747,12 +778,14 @@ namespace mulex
 
 	bool RdbValueExists(RdbKeyName keyname)
 	{
+		ZoneScoped;
 		std::shared_lock lock(_rdb_rw_lock);
 		return RdbFindEntryByNameUnlocked(keyname) != nullptr;
 	}
 
 	RPCGenericType RdbReadKeyMetadata(RdbKeyName keyname)
 	{
+		ZoneScoped;
 		std::shared_lock lock_ops(_rdb_rw_lock);
 
 		const RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
@@ -769,6 +802,7 @@ namespace mulex
 
 	void RdbWriteValueDirect(mulex::RdbKeyName keyname, RPCGenericType data)
 	{
+		ZoneScoped;
 		std::shared_lock lock_ops(_rdb_rw_lock);
 
 		RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
@@ -802,21 +836,25 @@ namespace mulex
 
 	bool RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data)
 	{
+		ZoneScoped;
 		return (RdbNewEntry(keyname, type, data.getData(), count) != nullptr);
 	}
 
 	void RdbDeleteValueDirect(mulex::RdbKeyName keyname)
 	{
+		ZoneScoped;
 		RdbDeleteEntry(keyname);
 	}
 
 	std::string RdbMakeWatchEvent(const mulex::RdbKeyName& dir)
 	{
+		ZoneScoped;
 		return "mxevt::rdbw-" + SysI64ToHexString(SysStringHash64(dir.c_str()));
 	}
 
 	string32 RdbWatch(mulex::RdbKeyName dir)
 	{
+		ZoneScoped;
 		std::string event_name = RdbMakeWatchEvent(dir);
 		EvtRegister(event_name);
 
@@ -828,6 +866,7 @@ namespace mulex
 
 	string32 RdbUnwatch(mulex::RdbKeyName dir)
 	{
+		ZoneScoped;
 		std::unique_lock<std::shared_mutex> lock(_rdb_watch_lock); // RW lock
 		auto wit = _rdb_watch_dirs.find(dir.c_str());
 		if(wit == _rdb_watch_dirs.end())
@@ -842,6 +881,7 @@ namespace mulex
 
 	mulex::RPCGenericType RdbListKeys()
 	{
+		ZoneScoped;
 		std::shared_lock lock(_rdb_rw_lock);
 		std::vector<RdbKeyName> keys;
 		keys.reserve(_rdb_offset_map.size());
@@ -854,6 +894,7 @@ namespace mulex
 
 	mulex::RPCGenericType RdbListKeyTypes()
 	{
+		ZoneScoped;
 		std::shared_lock lock(_rdb_rw_lock);
 		std::vector<std::uint8_t> types;
 		types.reserve(_rdb_offset_map.size());
@@ -866,6 +907,7 @@ namespace mulex
 
 	static std::vector<RdbKeyName> RdbFindSubkeys(std::string prefix)
 	{
+		ZoneScoped;
 		std::vector<RdbKeyName> subkeys;
 
 		if(prefix.back() != '/')
@@ -888,6 +930,7 @@ namespace mulex
 
 	mulex::RPCGenericType RdbListSubkeys(mulex::RdbKeyName dir)
 	{
+		ZoneScoped;
 		std::shared_lock lock(_rdb_rw_lock);
 
 		std::string sdir = dir.c_str();
@@ -913,11 +956,13 @@ namespace mulex
 
 	static inline std::uint64_t RdbSetEntryFlag(std::uint64_t state, RdbEntryFlag flag, bool active)
 	{
+		ZoneScoped;
 		return (active) ? (state | flag) : (state & (~flag));
 	}
 
 	bool RdbToggleHistory(mulex::RdbKeyName keyname, bool active)
 	{
+		ZoneScoped;
 		std::shared_lock lock_ops(_rdb_rw_lock);
 
 		RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
@@ -933,6 +978,7 @@ namespace mulex
 
 	static std::vector<std::uint8_t> RdbReadHistoryLimit(const RdbKeyName& keyname, std::uint64_t count)
 	{
+		ZoneScoped;
 		static auto history_reader = _rdb_history_access->getReaderRaw<
 			std::int32_t,
 			PdbString,
@@ -955,6 +1001,7 @@ namespace mulex
 	// NOTE: (Cesar) This function is pretty I/O intensive
 	mulex::RPCGenericType RdbGetHistory(mulex::RdbKeyName keyname, std::uint64_t count)
 	{
+		ZoneScoped;
 		std::vector<uint8_t> output;
 		std::shared_lock lock_ops(_rdb_rw_lock);
 
@@ -978,6 +1025,7 @@ namespace mulex
 
 	void RdbProxyValue::writeEntry()
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
@@ -987,6 +1035,7 @@ namespace mulex
 
 	void RdbProxyValue::readEntry()
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
@@ -996,6 +1045,7 @@ namespace mulex
 
 	bool RdbProxyValue::exists()
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
@@ -1006,6 +1056,7 @@ namespace mulex
 
 	bool RdbProxyValue::create(RdbValueType type, RPCGenericType value, std::uint64_t count)
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
@@ -1016,6 +1067,7 @@ namespace mulex
 
 	bool RdbProxyValue::erase()
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
@@ -1027,6 +1079,7 @@ namespace mulex
 
 	void RdbProxyValue::watch(std::function<void(const RdbKeyName& key, const RPCGenericType& value)> callback)
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(!exp.has_value())
 		{
@@ -1045,6 +1098,7 @@ namespace mulex
 
 	void RdbProxyValue::unwatch()
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(!exp.has_value())
 		{
@@ -1055,6 +1109,7 @@ namespace mulex
 
 	bool RdbProxyValue::history(bool status)
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(!exp.has_value())
 		{

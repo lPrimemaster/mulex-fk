@@ -33,6 +33,7 @@ namespace mulex
 
 	protected:
 		RdbAccess rdb;
+		PdbAccessRemote pdb;
 		MsgEmitter log;
 
 	private:

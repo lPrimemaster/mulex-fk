@@ -29,8 +29,6 @@ public:
 		// _period_ms = config["period_ms"];
 		// config["period_ms"] = 3;
 
-		PdbAccessRemote pdb;
-
 		pdb.createTable(
 			"table0",
 			{

@@ -269,7 +269,6 @@ namespace mulex
 	{
 		std::vector<std::uint8_t> data;
 		std::uint64_t tsize = std::accumulate(list.begin(), list.end(), 0, [](std::uint64_t s, const std::vector<std::uint8_t>& v) { return s + v.size(); });
-		data.clear();
 		data.reserve(tsize);
 
 		for(const auto& v : list)
@@ -303,6 +302,7 @@ namespace mulex
 				PdbTableGet(vars[i], data, i, stmt);
 			}
 			list.push_back(data);
+			data.clear();
 		}
 
 		return PdbFlattenList(list);

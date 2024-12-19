@@ -10,6 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(LTRACE "Enable/Disable trace logging." OFF)
 option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." ON)
+option(PROFILE "Enable/Disable profiling with tracy." OFF)
 
 if(LTRACE)
 	add_definitions(-DLTRACE)
@@ -38,10 +39,26 @@ if (NOT sqlite3_POPULATED)
 	FetchContent_Populate(sqlite3)
 endif()
 
+# Tracy Profiler
+FetchContent_Declare(
+	tracy
+	GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+	GIT_TAG v0.11.1
+	GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(tracy)
+
 # RPC related configuration
 set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
 add_definitions(-D${RPC_CALL_KEYWORD}=)
 set(RPC_SPEC_FILE rpcspec.inl)
+
+if(PROFILE)
+	# Make sure tracy profiler is installed/linked system wide
+	add_definitions(-DTRACY_ENABLE)
+	link_libraries(TracyClient)
+	include_directories(${tracy_SOURCE_DIR}/public)
+endif()
 
 add_executable(mxmain
 	main.cpp

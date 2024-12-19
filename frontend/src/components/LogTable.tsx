@@ -97,6 +97,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 			// Fetch the logs
 			MxWebsocket.instance.rpc_call('mulex::MsgGetLastLogs', [MxGenericType.uint32(props.maxLogs)], 'generic').then((res: MxGenericType) => {
 				const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
+				console.log(logs);
 				for(const l of logs) {
 					const [ _, level, cid, timestamp, message ] = l;
 					addMessage(cid, timestamp, level, message);

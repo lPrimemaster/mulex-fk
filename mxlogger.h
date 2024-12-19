@@ -6,16 +6,41 @@
 #include <sstream>
 #include <fstream>
 #include <chrono>
+#include <tracy/Tracy.hpp>
 
 namespace mulex
 {
 	namespace detail
 	{
-		struct LogErrorPolicy   { constexpr static std::string_view Prefix() { return "[ERROR]"; } };
-		struct LogWarningPolicy { constexpr static std::string_view Prefix() { return  "[WARN]"; } };
-		struct LogMessagePolicy { constexpr static std::string_view Prefix() { return   "[MSG]"; } };
-		struct LogDebugPolicy   { constexpr static std::string_view Prefix() { return "[DEBUG]"; } };
-		struct LogTracePolicy   { constexpr static std::string_view Prefix() { return "[TRACE]"; } };
+		struct LogErrorPolicy
+		{
+			constexpr static std::string_view Prefix() { return "[ERROR]"; }
+			constexpr static std::uint32_t Color() { return 0xFF0000; }
+		};
+
+		struct LogWarningPolicy
+		{
+			constexpr static std::string_view Prefix() { return  "[WARN]"; }
+			constexpr static std::uint32_t Color() { return 0xFFF000; }
+		};
+
+		struct LogMessagePolicy
+		{
+			constexpr static std::string_view Prefix() { return   "[MSG]"; }
+			constexpr static std::uint32_t Color() { return 0x0068FF; }
+		};
+
+		struct LogDebugPolicy
+		{
+			constexpr static std::string_view Prefix() { return "[DEBUG]"; }
+			constexpr static std::uint32_t Color() { return 0x4D4D4D; }
+		};
+
+		struct LogTracePolicy
+		{
+			constexpr static std::string_view Prefix() { return "[TRACE]"; }
+			constexpr static std::uint32_t Color() { return 0xBFBFBF; }
+		};
 	}
 
 	static std::string GetTimeString()
@@ -35,6 +60,7 @@ namespace mulex
 #endif
 		constexpr bool kLogToStdOut = true;
 		constexpr bool kLogToFile = true;
+		constexpr bool kLogToTracy = true;
 
 		va_list vargs, vargscpy;
 		va_start(vargs, fmt);
@@ -63,6 +89,11 @@ namespace mulex
 		{
 			static std::ofstream file("log.txt");
 			file << output;
+		}
+
+		if constexpr(kLogToTracy)
+		{
+			TracyMessageC(output.c_str(), output.size(), Policy::Color());
 		}
 	}
 
