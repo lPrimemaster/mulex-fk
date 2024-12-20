@@ -11,29 +11,36 @@ interface ClientInfo {
 	id: number;
 };
 
+const [clients, clientsActions] = createMapStore(new Map<number, ClientInfo>());
+
 export const ClientsTable : Component = () => {
-	const [clients, clientsActions] = createMapStore(new Map<number, ClientInfo>());
 
-	MxWebsocket.instance.subscribe('mxhttp::newclient', (data: Uint8Array) => {
-		const client = MxGenericType.fromData(data).unpack(['str32', 'int64', 'uint64'])[0];
-		clientsActions.add(client[2], { ip: client[0], timestamp: client[1], id: client[2] });
-	});
+	function watchClients() {
+		MxWebsocket.instance.subscribe('mxhttp::newclient', (data: Uint8Array) => {
+			const client = MxGenericType.fromData(data).unpack(['str32', 'int64', 'uint64'])[0];
+			clientsActions.add(client[2], { ip: client[0], timestamp: client[1], id: client[2] });
+		});
 
-	MxWebsocket.instance.subscribe('mxhttp::delclient', (data: Uint8Array) => {
-		clientsActions.remove(MxGenericType.fromData(data).astype('uint64'));
-	});
+		MxWebsocket.instance.subscribe('mxhttp::delclient', (data: Uint8Array) => {
+			clientsActions.remove(MxGenericType.fromData(data).astype('uint64'));
+		});
+	}
+
+	watchClients();
 
 	MxWebsocket.instance.on_connection_change((conn: boolean) => {
 		if(conn) {
 			MxWebsocket.instance.rpc_call('mulex::HttpGetClients', [], 'generic').then((data: MxGenericType) => {
 				const client_list = data.unpack(['str32', 'int64', 'uint64']);
 
-				console.log(client_list);
+				clientsActions.set(new Map<number, ClientInfo>());
 
 				for(const client of client_list) {
 					clientsActions.add(client[2], { ip: client[0], timestamp: client[1], id: client[2] });
 				}
 			});
+
+			watchClients();
 		}
 	});
 

@@ -21,6 +21,8 @@
 #include <sys/sysinfo.h>
 #endif
 
+#include <tracy/Tracy.hpp>
+
 static mulex::Experiment _sys_experiment;
 static bool _sys_experiment_connected = false;
 static std::string _mxcachedir;
@@ -434,6 +436,7 @@ namespace mulex
 
 	void SysBufferStack::push(std::vector<std::uint8_t>&& data)
 	{
+		ZoneScoped;
 		{
 			std::unique_lock<std::mutex> lock(_mutex);
 			_stack.push(std::move(data));
@@ -443,6 +446,7 @@ namespace mulex
 
 	void SysBufferStack::push(const std::vector<std::uint8_t>& data)
 	{
+		ZoneScoped;
 		{
 			std::unique_lock<std::mutex> lock(_mutex);
 			_stack.push(data);
@@ -452,6 +456,7 @@ namespace mulex
 
 	std::vector<std::uint8_t> SysBufferStack::pop()
 	{
+		ZoneScoped;
 		std::unique_lock<std::mutex> lock(_mutex);
 		_notifier.wait(lock, [this](){ return !_stack.empty() || _sig_unblock.load(); }); // Don't wait if the stack if not empty
 		if(_sig_unblock.load())
@@ -531,6 +536,7 @@ namespace mulex
 
 	bool SysByteStream::push(std::uint8_t* data, std::uint64_t size)
 	{
+		ZoneScoped;
 		{
 			std::unique_lock<std::mutex> lock(_mutex);
 			
@@ -550,6 +556,7 @@ namespace mulex
 
 	std::uint64_t SysByteStream::fetch(std::uint8_t* buffer, std::uint64_t size)
 	{
+		ZoneScoped;
 		std::uint64_t payloadsize = 0;
 		{
 			std::unique_lock<std::mutex> lock(_mutex);

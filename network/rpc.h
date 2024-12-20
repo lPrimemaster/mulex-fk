@@ -10,6 +10,8 @@
 #include "../mxlogger.h"
 #include "../mxsystem.h"
 
+#include <tracy/Tracy.hpp>
+
 namespace mulex
 {
 	static constexpr std::uint16_t RPC_PORT = 5701;
@@ -47,6 +49,7 @@ namespace mulex
 		template<typename T>
 		/* implicit */ RPCGenericType(const T& t)
 		{
+			ZoneScoped;
 			static_assert(std::is_trivially_copyable_v<T>, "RPCGenericType, type must be trivially copyable.");
 			static_assert(!std::is_pointer_v<T>, "RPCGenericType, type must not be a pointer.");
 			_data.resize(sizeof(T));
@@ -55,12 +58,14 @@ namespace mulex
 
 		/* implicit */ RPCGenericType(const std::nullptr_t& t)
 		{
+			ZoneScoped;
 			_data.clear();
 		}
 		
 		template<typename T>
 		/* implicit */ RPCGenericType(const std::vector<T>& vt)
 		{
+			ZoneScoped;
 			static_assert(std::is_trivially_copyable_v<T>, "RPCGenericType, type must be trivially copyable.");
 			static_assert(!std::is_pointer_v<T>, "RPCGenericType, type must not be a pointer.");
 			_data.resize(sizeof(T) * vt.size());
@@ -70,18 +75,21 @@ namespace mulex
 		template<typename T>
 		operator T() const
 		{
+			ZoneScoped;
 			return asType<T>();
 		}
 
 		template<typename T>
 		operator std::vector<T>() const
 		{
+			ZoneScoped;
 			return asVectorType<T>();
 		}
 
 		template<typename T>
 		RPCGenericType& operator=(const T& t)
 		{
+			ZoneScoped;
 			static_assert(std::is_trivially_copyable_v<T>, "RPCGenericType, type must be trivially copyable.");
 			static_assert(!std::is_pointer_v<T>, "RPCGenericType, type must not be a pointer.");
 			_data.resize(sizeof(T));
@@ -92,6 +100,7 @@ namespace mulex
 		template<typename T>
 		RPCGenericType& operator=(const std::vector<T>& vt)
 		{
+			ZoneScoped;
 			static_assert(std::is_trivially_copyable_v<T>, "RPCGenericType, type must be trivially copyable.");
 			static_assert(!std::is_pointer_v<T>, "RPCGenericType, type must not be a pointer.");
 			_data.resize(sizeof(T) * vt.size());
@@ -102,6 +111,7 @@ namespace mulex
 		template<typename T>
 		T asType() const
 		{
+			ZoneScoped;
 			static_assert(std::is_trivially_copyable_v<T>, "RPCGenericType, type must be trivially copyable.");
 			static_assert(!std::is_pointer_v<T>, "RPCGenericType, type must not be a pointer.");
 
@@ -118,6 +128,7 @@ namespace mulex
 		template<typename T>
 		std::vector<T> asVectorType() const
 		{
+			ZoneScoped;
 			static_assert(std::is_trivially_copyable_v<T>, "RPCGenericType, type must be trivially copyable.");
 			static_assert(!std::is_pointer_v<T>, "RPCGenericType, type must not be a pointer.");
 
@@ -137,6 +148,7 @@ namespace mulex
 		template<typename T>
 		T* asPointer()
 		{
+			ZoneScoped;
 			static_assert(std::is_trivially_copyable_v<T>, "RPCGenericType, type must be trivially copyable.");
 			static_assert(!std::is_pointer_v<T>, "RPCGenericType, type must not be a pointer.");
 
@@ -152,11 +164,13 @@ namespace mulex
 
 		std::uint8_t* getData()
 		{
+			ZoneScoped;
 			return _data.empty() ? nullptr : _data.data();
 		}
 
 		std::uint64_t getSize() const
 		{
+			ZoneScoped;
 			return _data.size();
 		}
 
@@ -221,6 +235,7 @@ namespace mulex
 	template<typename T, typename... Args>
 	inline T RPCClientThread::call(std::uint16_t procedureid, Args&&... args)
 	{
+		ZoneScoped;
 		const mulex::Socket& conn = _rpc_socket;
 		mulex::RPCMessageHeader header;
 		if(_rpc_has_custom_id)
@@ -242,21 +257,27 @@ namespace mulex
 			header.payloadsize = 0;
 		}
 
-		mulex::SocketResult result;
-		result = mulex::SocketSendBytes(conn, (std::uint8_t*)&header, sizeof(header));
-		if(result == mulex::SocketResult::ERROR)
-		{
-			mulex::LogError("CallRemoteFunction failed to send header data.");
-			return T();
-		}
-
 		if constexpr(sizeof...(args) > 0)
 		{
+			mulex::SocketResult result;
+			std::vector<std::uint8_t> buffer(sizeof(header) + header.payloadsize);
 			std::vector<std::uint8_t> params = SysPackArguments(args...);
-			result = mulex::SocketSendBytes(conn, params.data(), header.payloadsize);
+			std::memcpy(buffer.data(), &header, sizeof(header));
+			std::memcpy(buffer.data() + sizeof(header), params.data(), header.payloadsize);
+			result = mulex::SocketSendBytes(conn, buffer.data(), sizeof(header) + header.payloadsize);
 			if(result == mulex::SocketResult::ERROR)
 			{
-				mulex::LogError("CallRemoteFunction failed to send payload.");
+				mulex::LogError("CallRemoteFunction failed to send data.");
+				return T();
+			}
+		}
+		else
+		{
+			mulex::SocketResult result;
+			result = mulex::SocketSendBytes(conn, (std::uint8_t*)&header, sizeof(header));
+			if(result == mulex::SocketResult::ERROR)
+			{
+				mulex::LogError("CallRemoteFunction failed to send data.");
 				return T();
 			}
 		}
@@ -284,6 +305,7 @@ namespace mulex
 	template<typename... Args>
 	inline void RPCClientThread::call(std::uint16_t procedureid, Args&&... args)
 	{
+		ZoneScoped;
 		const mulex::Socket& conn = _rpc_socket;
 		mulex::RPCMessageHeader header;
 		if(_rpc_has_custom_id)
@@ -298,21 +320,28 @@ namespace mulex
 		header.msgid = GetNextMessageId();
 		header.payloadsize = static_cast<std::uint32_t>(SysVargSize<Args...>(args...));
 
-		mulex::SocketResult result;
-		result = mulex::SocketSendBytes(conn, (std::uint8_t*)&header, sizeof(header));
-		if(result == mulex::SocketResult::ERROR)
-		{
-			mulex::LogError("CallRemoteFunction failed to send header data.");
-			return;
-		}
 
 		if constexpr(sizeof...(args) > 0)
 		{
+			mulex::SocketResult result;
+			std::vector<std::uint8_t> buffer(sizeof(header) + header.payloadsize);
 			std::vector<std::uint8_t> params = SysPackArguments(args...);
-			result = mulex::SocketSendBytes(conn, params.data(), header.payloadsize);
+			std::memcpy(buffer.data(), &header, sizeof(header));
+			std::memcpy(buffer.data() + sizeof(header), params.data(), header.payloadsize);
+			result = mulex::SocketSendBytes(conn, buffer.data(), sizeof(header) + header.payloadsize);
 			if(result == mulex::SocketResult::ERROR)
 			{
-				mulex::LogError("CallRemoteFunction failed to send payload.");
+				mulex::LogError("CallRemoteFunction failed to send data.");
+				return;
+			}
+		}
+		else
+		{
+			mulex::SocketResult result;
+			result = mulex::SocketSendBytes(conn, (std::uint8_t*)&header, sizeof(header));
+			if(result == mulex::SocketResult::ERROR)
+			{
+				mulex::LogError("CallRemoteFunction failed to send data.");
 				return;
 			}
 		}
@@ -320,6 +349,7 @@ namespace mulex
 
 	inline void RPCClientThread::callRaw(std::uint16_t procedureid, const std::vector<std::uint8_t>& data, std::vector<std::uint8_t>* retdata)
 	{
+		ZoneScoped;
 		const mulex::Socket& conn = _rpc_socket;
 		mulex::RPCMessageHeader header;
 		if(_rpc_has_custom_id)
@@ -334,20 +364,26 @@ namespace mulex
 		header.msgid = GetNextMessageId();
 		header.payloadsize = static_cast<std::uint32_t>(data.size());
 
-		mulex::SocketResult result;
-		result = mulex::SocketSendBytes(conn, (std::uint8_t*)&header, sizeof(header));
-		if(result == mulex::SocketResult::ERROR)
-		{
-			mulex::LogError("CallRemoteFunction failed to send header data.");
-			return;
-		}
-
 		if(header.payloadsize > 0)
 		{
-			result = mulex::SocketSendBytes(conn, const_cast<std::uint8_t*>(data.data()), header.payloadsize);
+			mulex::SocketResult result;
+			std::vector<std::uint8_t> buffer(sizeof(header) + header.payloadsize);
+			std::memcpy(buffer.data(), &header, sizeof(header));
+			std::memcpy(buffer.data() + sizeof(header), data.data(), header.payloadsize);
+			result = mulex::SocketSendBytes(conn, buffer.data(), sizeof(header) + header.payloadsize);
 			if(result == mulex::SocketResult::ERROR)
 			{
-				mulex::LogError("CallRemoteFunction failed to send payload.");
+				mulex::LogError("CallRemoteFunction failed to send data.");
+				return;
+			}
+		}
+		else
+		{
+			mulex::SocketResult result;
+			result = mulex::SocketSendBytes(conn, (std::uint8_t*)&header, sizeof(header));
+			if(result == mulex::SocketResult::ERROR)
+			{
+				mulex::LogError("CallRemoteFunction failed to send data.");
 				return;
 			}
 		}

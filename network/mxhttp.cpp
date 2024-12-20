@@ -1,6 +1,7 @@
 #include "../mxhttp.h"
 #include "../mxsystem.h"
 #include "../mxlogger.h"
+#include "PerMessageDeflate.h"
 #include "rpc.h"
 #include <rpcspec.inl>
 
@@ -483,7 +484,8 @@ namespace mulex
 			uWS::App().get("/*", [](auto* res, auto* req) {
 				HttpServeFile(res, req);
 			}).ws<WsRpcBridge>("/*", {
-				.compression = uWS::CompressOptions(uWS::DEDICATED_COMPRESSOR_4KB | uWS::DEDICATED_COMPRESSOR),
+				// .compression = uWS::CompressOptions(uWS::DEDICATED_COMPRESSOR_4KB | uWS::DEDICATED_COMPRESSOR),
+				.compression = uWS::DISABLED,
 				.maxPayloadLength = 100 * 1024 * 1024,
 				.idleTimeout = 16,
 				.maxBackpressure = 100 * 1024 * 1024,

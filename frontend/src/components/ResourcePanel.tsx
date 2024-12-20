@@ -11,13 +11,18 @@ const [memUsed, setMemUsed] = createSignal<number>(0);
 
 export const ResourcePanel : Component = () => {
 	const rdb = new MxRdb();
-	rdb.watch('/system/metrics/cpu_usage', (_: string, value: MxGenericType) => {
-		setCpuUsage(value.astype('float64'));
-	});
 
-	rdb.watch('/system/metrics/mem_used', (_: string, value: MxGenericType) => {
-		setMemUsed(Number(value.astype('uint64')) / (1024 * 1024 * 1024));
-	});
+	function watchKeys() {
+		rdb.watch('/system/metrics/cpu_usage', (_: string, value: MxGenericType) => {
+			setCpuUsage(value.astype('float64'));
+		});
+
+		rdb.watch('/system/metrics/mem_used', (_: string, value: MxGenericType) => {
+			setMemUsed(Number(value.astype('uint64')) / (1024 * 1024 * 1024));
+		});
+	}
+
+	watchKeys();
 
 	MxWebsocket.instance.on_connection_change((conn: boolean) => {
 		if(conn) {
@@ -25,6 +30,17 @@ export const ResourcePanel : Component = () => {
 				// To GB
 				setMemTotal(Number(res.astype('uint64')) / (1024 * 1024 * 1024));
 			});
+
+			MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/metrics/mem_used')], 'generic').then((res) => {
+				// To GB
+				setMemUsed(Number(res.astype('uint64')) / (1024 * 1024 * 1024));
+			});
+
+			MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/metrics/cpu_usage')], 'generic').then((res) => {
+				setCpuUsage(res.astype('float64'));
+			});
+
+			watchKeys();
 		}
 	});
 

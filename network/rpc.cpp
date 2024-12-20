@@ -24,6 +24,7 @@ namespace mulex
 
 	RPCGenericType RPCGenericType::FromData(const std::uint8_t* ptr, std::uint64_t size)
 	{
+		ZoneScoped;
 		RPCGenericType rgt;
 		rgt._data.resize(size);
 		std::memcpy(rgt._data.data(), ptr, size);
@@ -32,6 +33,7 @@ namespace mulex
 
 	RPCGenericType RPCGenericType::FromData(const std::vector<std::uint8_t>& buffer)
 	{
+		ZoneScoped;
 		RPCGenericType rgt;
 		rgt._data = std::move(buffer);
 		return rgt;
@@ -49,6 +51,7 @@ namespace mulex
 
 	RPCClientThread::RPCClientThread(const std::string& hostname, std::uint16_t rpcport, std::uint64_t customid)
 	{
+		ZoneScoped;
 		if(customid > 0)
 		{
 			_rpc_has_custom_id = true;
@@ -66,6 +69,7 @@ namespace mulex
 
 	RPCClientThread::~RPCClientThread()
 	{
+		ZoneScoped;
 		_rpc_thread_running.store(false);
 		_rpc_stream->requestUnblock();
 		SocketClose(_rpc_socket);
@@ -74,6 +78,7 @@ namespace mulex
 
 	void RPCClientThread::clientThread(const Socket& socket)
 	{
+		ZoneScoped;
 		std::unique_ptr<SysRecvThread> recvthread = SysStartRecvThread(socket, sizeof(RPCReturnValue), offsetof(RPCReturnValue, payloadsize));
 		SysByteStream& sbs = recvthread->_stream;
 		_rpc_stream = &recvthread->_stream;
@@ -117,6 +122,7 @@ namespace mulex
 
 	void RPCServerThread::serverConnAcceptThread()
 	{
+		ZoneScoped;
 		_server_socket = SocketInit();
 		SocketBindListen(_server_socket, RPC_PORT);
 		if(!SocketSetNonBlocking(_server_socket))
@@ -158,6 +164,7 @@ namespace mulex
 
 	void RPCServerThread::serverThread(const Socket& socket)
 	{
+		ZoneScoped;
 		// NOTE:
 		// This thread will run for every and each client
 		// Make sure RPC calls have locked data when accessing
@@ -211,20 +218,24 @@ namespace mulex
 			response.status = RPCResult::OK;
 			response.payloadsize = ret.size();
 
-			// Acknowledge the execution
-			SocketSendBytes(
-				socket,
-				reinterpret_cast<std::uint8_t*>(&response),
-				sizeof(RPCReturnValue)
-			);
-
 			// Is there a return type
 			if(response.payloadsize > 0)
 			{
+				std::vector<std::uint8_t> buffer(ret.size() + sizeof(RPCReturnValue));
+				std::memcpy(buffer.data(), &response, sizeof(RPCReturnValue));
+				std::memcpy(buffer.data() + sizeof(RPCReturnValue), ret.data(), response.payloadsize);
 				SocketSendBytes(
 					socket,
-					ret.data(),
-					response.payloadsize
+					buffer.data(),
+					response.payloadsize + sizeof(RPCReturnValue)
+				);
+			}
+			else
+			{
+				SocketSendBytes(
+					socket,
+					reinterpret_cast<std::uint8_t*>(&response),
+					sizeof(RPCReturnValue)
 				);
 			}
 		}
@@ -239,6 +250,7 @@ namespace mulex
 
 	RPCServerThread::RPCServerThread()
 	{
+		ZoneScoped;
 		// Ensure we setup the thread spin flag
 		_rpc_thread_running.store(true);
 		_rpc_thread_ready.store(false);
@@ -251,6 +263,7 @@ namespace mulex
 
 	RPCServerThread::~RPCServerThread()
 	{
+		ZoneScoped;
 		_rpc_thread_running.store(false);
 		_rpc_accept_thread->join();
 		// std::for_each(_rpc_stream.begin(), _rpc_stream.end(), [](auto& t){ t.second->requestUnblock(); });

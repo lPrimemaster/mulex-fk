@@ -21,6 +21,8 @@
 
 #include <cstring>
 
+#include <tracy/Tracy.hpp>
+
 #ifdef _WIN32
 	struct WSAGuard
 	{
@@ -51,6 +53,7 @@ namespace mulex
 
 	Socket SocketInit()
 	{
+		ZoneScoped;
 #ifdef _WIN32
 		static WSAGuard _wsaguard;
 #endif
@@ -69,6 +72,7 @@ namespace mulex
 
 	void SocketBindListen(Socket& socket, std::uint16_t port)
 	{
+		ZoneScoped;
 		sockaddr_in serveraddr;
 		serveraddr.sin_family = AF_INET;
 		serveraddr.sin_port = htons(port);
@@ -94,6 +98,7 @@ namespace mulex
 
 	bool SocketSetNonBlocking(const Socket& socket)
 	{
+		ZoneScoped;
 		if(socket._handle < 0) 
 		{
 			return false;
@@ -113,6 +118,7 @@ namespace mulex
 
 	Socket SocketAccept(const Socket& socket, bool* would_block)
 	{
+		ZoneScoped;
 		Socket client;
 		client._error = false;
 		sockaddr_in clientaddr;
@@ -161,9 +167,40 @@ namespace mulex
 		std::uint64_t* rlen
 	)
 	{
+		ZoneScoped;
 #ifdef __unix__
-			std::int64_t res = ::recv(socket._handle, buffer, len, MSG_DONTWAIT);
-			if(rlen) *rlen = 0;
+		std::int64_t res = ::recv(socket._handle, buffer, len, MSG_DONTWAIT);
+		if(rlen) *rlen = 0;
+		if(res > 0)
+		{
+			if(rlen) *rlen = static_cast<std::uint64_t>(res);
+			return SocketResult::OK;
+		}
+		else if(res < 0)
+		{
+			if((errno == EWOULDBLOCK) || (errno == EAGAIN))
+			{
+				return SocketResult::TIMEOUT;
+			}
+
+			LogError("Socket receive error.");
+			return SocketResult::ERROR;
+		}
+		else if(res == 0)
+		{
+			LogWarning("Socket disconnected.");
+			return SocketResult::DISCONNECT;
+		}
+		return SocketResult::OK;
+#else
+		// Windows does not have a non-blocking flag for recv only
+		// And we don't want the whole socket to be non-blocking due to send
+		unsigned long toread;
+		::ioctlsocket(socket._handle, FIONREAD, &toread);
+		if(rlen) *rlen = 0;
+		if(toread > 0)
+		{
+			std::int32_t res = ::recv(socket._handle, reinterpret_cast<char*>(buffer), len, 0);
 			if(res > 0)
 			{
 				if(rlen) *rlen = static_cast<std::uint64_t>(res);
@@ -171,11 +208,6 @@ namespace mulex
 			}
 			else if(res < 0)
 			{
-				if((errno == EWOULDBLOCK) || (errno == EAGAIN))
-				{
-					return SocketResult::TIMEOUT;
-				}
-
 				LogError("Socket receive error.");
 				return SocketResult::ERROR;
 			}
@@ -184,42 +216,18 @@ namespace mulex
 				LogWarning("Socket disconnected.");
 				return SocketResult::DISCONNECT;
 			}
-		return SocketResult::OK;
-#else
-			// Windows does not have a non-blocking flag for recv only
-			// And we don't want the whole socket to be non-blocking due to send
-			unsigned long toread;
-			::ioctlsocket(socket._handle, FIONREAD, &toread);
-			if(rlen) *rlen = 0;
-			if(toread > 0)
-			{
-				std::int32_t res = ::recv(socket._handle, reinterpret_cast<char*>(buffer), len, 0);
-				if(res > 0)
-				{
-					if(rlen) *rlen = static_cast<std::uint64_t>(res);
-					return SocketResult::OK;
-				}
-				else if(res < 0)
-				{
-					LogError("Socket receive error.");
-					return SocketResult::ERROR;
-				}
-				else if(res == 0)
-				{
-					LogWarning("Socket disconnected.");
-					return SocketResult::DISCONNECT;
-				}
-				return SocketResult::OK;
-			}
-			else
-			{
-				return SocketResult::TIMEOUT;
-			}
+			return SocketResult::OK;
+		}
+		else
+		{
+			return SocketResult::TIMEOUT;
+		}
 #endif
 	}
 
 	SocketResult SocketSendBytes(const Socket& socket, std::uint8_t* buffer, std::uint64_t len)
 	{
+		ZoneScoped;
 #ifdef __unix__
 		int ret = ::send(socket._handle, buffer, len, MSG_NOSIGNAL);
 #else
@@ -236,6 +244,7 @@ namespace mulex
 
 	void SocketConnect(Socket& socket, const std::string& hostname, std::uint16_t port)
 	{
+		ZoneScoped;
 		addrinfo hints;
 		addrinfo* result;
 		char ipv4[32]; // NOTE: 16 bytes should be enough
@@ -285,6 +294,7 @@ namespace mulex
 
 	void SocketClose(Socket& socket)
 	{
+		ZoneScoped;
 #ifdef __unix__
 		::close(socket._handle);
 #else

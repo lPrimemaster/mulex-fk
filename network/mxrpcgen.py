@@ -230,6 +230,7 @@ class RPCGenerator:
         anylen = False
         self.buffer.write('#include <cstdint>\n')
         self.buffer.write('#include <vector>\n')
+        self.buffer.write('#include <tracy/Tracy.hpp>\n')
         self._write_newline()
         for file, methods in self.methods.items():
             if len(methods):
@@ -412,6 +413,7 @@ class RPCGenerator:
             'std::vector<std::uint8_t> RPCCallLocally(std::uint16_t pid, '
             'const std::uint8_t* args)\n')
         self._write_indented(1, '{\n')
+        self._write_indented(2, 'ZoneScoped;\n')
         self._write_indented(2, 'std::vector<std::uint8_t> retbuf;\n')
         self._write_indented(2, 'switch(pid)\n')
         self._write_indented(2, '{\n')
