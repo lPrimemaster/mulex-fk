@@ -12,6 +12,7 @@ import { BadgeLabel } from './components/ui/badge-label';
 import { timestamp_tohms } from './lib/utils';
 import { LogTable } from './components/LogTable';
 import { ResourcePanel } from './components/ResourcePanel';
+import { ClientsTable } from './components/ClientsTable';
 
 const [socketStatus, setSocketStatus] = createSignal<boolean>(false);
 const [runStatus, setRunStatus] = createSignal<string>('Stopped');
@@ -168,7 +169,9 @@ const Home: Component = () => {
 					<Card title="Logs">
 						<LogTable/>
 					</Card>
-					<Card title="Clients"/>
+					<Card title="Clients">
+						<ClientsTable/>
+					</Card>
 				</div>
 			</div>
 		</div>

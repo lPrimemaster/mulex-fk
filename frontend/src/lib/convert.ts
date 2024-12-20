@@ -355,6 +355,11 @@ export class MxGenericType
 					element.push(decoder.decode(view.buffer.slice(view.byteOffset + packoffset)).split('\0').shift()); // Null terminate the string
 					packoffset += 512;
 				}
+				else if(type === 'str32') {
+					const decoder = new TextDecoder();
+					element.push(decoder.decode(view.buffer.slice(view.byteOffset + packoffset)).split('\0').shift()); // Null terminate the string
+					packoffset += 32;
+				}
 				else if(type === 'float32') {
 					element.push(view.getFloat32(packoffset, true));
 					packoffset += 4;

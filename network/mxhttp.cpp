@@ -23,9 +23,18 @@ namespace mulex
 	struct WsRpcBridge;
 } // namespace mulex
 
+struct HttpClientInfo
+{
+	mulex::mxstring<32> _ip;
+	std::int64_t  _timestamp;
+	std::uint64_t _identifier;
+};
+
 using UWSType = uWS::WebSocket<false, true, mulex::WsRpcBridge>;
 static std::mutex _mutex;
 static std::set<UWSType*> _active_ws_connections;
+static std::unordered_map<UWSType*, HttpClientInfo> _active_clients_info;
+static std::mutex _aci_lock;
 static std::unordered_map<std::string, std::set<UWSType*>> _active_ws_subscriptions;
 
 namespace mulex
@@ -458,8 +467,17 @@ namespace mulex
 		}
 	}
 
+	static std::uint64_t HttpGetNextClientId()
+	{
+		static std::atomic<std::uint64_t> ccid = 0;
+		return ccid++;
+	}
+
 	void HttpStartServer(std::uint16_t port, bool islocal)
 	{
+		EvtRegister("mxhttp::newclient");
+		EvtRegister("mxhttp::delclient");
+
 		_http_thread = new std::thread([port, islocal](){
 			_ws_loop_thread = uWS::Loop::get(); // Only read is ok
 			uWS::App().get("/*", [](auto* res, auto* req) {
@@ -480,18 +498,39 @@ namespace mulex
 						_active_ws_connections.insert(ws);
 					}
 
+					std::string ip = std::string(ws->getRemoteAddressAsText());
+					std::int64_t ts = SysGetCurrentTime();
+					std::uint64_t id = HttpGetNextClientId();
+
+					std::unique_lock lock_aci(_aci_lock);
+					_active_clients_info[ws] = {
+						._ip = ip,
+						._timestamp = ts,
+						._identifier = id
+					};
+
+					EvtEmit("mxhttp::newclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]), sizeof(HttpClientInfo));
+
 					WsRpcBridge* bridge = ws->getUserData();
+
+					// Ghost client with custom id
+					std::uint64_t custom_id = SysStringHash64(ip + std::to_string(ts) + std::to_string(id));
 
 					// Initialize a local rpc client to push ws requests
 					// NOTE: (Cesar) We can hack into the server rpc/evt threads stack instead of sending a socket request
 					// 				 This will however be harder to do for events I think
 					// 				 I would say it is not worth the efort / problems if the local network call
 					// 				 does not pose any performance / latency problems in the future
-					bridge->_local_experiment._rpc_client = std::make_unique<RPCClientThread>("localhost");
+					bridge->_local_experiment._rpc_client = std::make_unique<RPCClientThread>("localhost", RPC_PORT, custom_id);
 
-					// Ghost client
-					bridge->_local_experiment._evt_client = std::make_unique<EvtClientThread>("localhost", &bridge->_local_experiment, EVT_PORT, true);
-					LogDebug("[mxhttp] New WS connection.");
+					bridge->_local_experiment._evt_client = std::make_unique<EvtClientThread>(
+						"localhost",
+						&bridge->_local_experiment,
+						EVT_PORT,
+						true,
+						custom_id
+					);
+					LogDebug("[mxhttp] New WS connection. [%x]", ws);
 				},
 				.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
 
@@ -566,6 +605,11 @@ namespace mulex
 					// Unsubscribe from all events on this client if any
 					HttpUnsubscribeEventAll(ws);
 
+					std::unique_lock lock_aci(_aci_lock);
+					EvtEmit("mxhttp::delclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]._identifier), sizeof(std::uint64_t));
+
+					_active_clients_info.erase(ws);
+
 					// Delete the local rpc/ect client bridges for this connection
 					bridge->_local_experiment._rpc_client.reset();
 					bridge->_local_experiment._evt_client.reset();
@@ -606,5 +650,19 @@ namespace mulex
 			_http_thread->join();
 			delete _http_thread;
 		}
+	}
+
+	mulex::RPCGenericType HttpGetClients()
+	{
+		std::unique_lock lock_aci(_aci_lock);
+		std::vector<HttpClientInfo> output;
+		output.reserve(_active_clients_info.size());
+
+		for(auto it = _active_clients_info.begin(); it != _active_clients_info.end(); it++)
+		{
+			output.push_back(it->second);
+		}
+
+		return output;
 	}
 } // namespace mulex

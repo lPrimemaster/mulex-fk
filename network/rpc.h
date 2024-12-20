@@ -171,7 +171,7 @@ namespace mulex
 	class RPCClientThread
 	{
 	public:
-		RPCClientThread(const std::string& hostname, std::uint16_t rpcport = RPC_PORT);
+		RPCClientThread(const std::string& hostname, std::uint16_t rpcport = RPC_PORT, std::uint64_t customid = 0x0);
 		~RPCClientThread();
 
 		template<typename T, typename... Args>
@@ -192,6 +192,8 @@ namespace mulex
 		std::atomic<bool> _rpc_thread_running = false;
 		std::atomic<bool> _rpc_thread_ready = false;
 		SysBufferStack _call_return_stack;
+		bool _rpc_has_custom_id = false;
+		std::uint64_t _rpc_custom_id;
 	};
 
 	class RPCServerThread
@@ -221,7 +223,14 @@ namespace mulex
 	{
 		const mulex::Socket& conn = _rpc_socket;
 		mulex::RPCMessageHeader header;
-		header.client = SysGetClientId();
+		if(_rpc_has_custom_id)
+		{
+			header.client = _rpc_custom_id;
+		}
+		else
+		{
+			header.client = SysGetClientId();
+		}
 		header.procedureid = procedureid;
 		header.msgid = GetNextMessageId();
 		if constexpr(sizeof...(args) > 0)
@@ -277,7 +286,14 @@ namespace mulex
 	{
 		const mulex::Socket& conn = _rpc_socket;
 		mulex::RPCMessageHeader header;
-		header.client = SysGetClientId();
+		if(_rpc_has_custom_id)
+		{
+			header.client = _rpc_custom_id;
+		}
+		else
+		{
+			header.client = SysGetClientId();
+		}
 		header.procedureid = procedureid;
 		header.msgid = GetNextMessageId();
 		header.payloadsize = static_cast<std::uint32_t>(SysVargSize<Args...>(args...));
@@ -306,7 +322,14 @@ namespace mulex
 	{
 		const mulex::Socket& conn = _rpc_socket;
 		mulex::RPCMessageHeader header;
-		header.client = SysGetClientId();
+		if(_rpc_has_custom_id)
+		{
+			header.client = _rpc_custom_id;
+		}
+		else
+		{
+			header.client = SysGetClientId();
+		}
 		header.procedureid = procedureid;
 		header.msgid = GetNextMessageId();
 		header.payloadsize = static_cast<std::uint32_t>(data.size());

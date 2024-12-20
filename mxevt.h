@@ -38,7 +38,13 @@ namespace mulex
 	{
 	public:
 		using EvtCallbackFunc = std::function<void(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata)>;
-		EvtClientThread(const std::string& hostname, const Experiment* exp = nullptr, std::uint16_t evtport = EVT_PORT, bool ghost = false);
+		EvtClientThread(
+			const std::string& hostname,
+			const Experiment* exp = nullptr,
+			std::uint16_t evtport = EVT_PORT,
+			bool ghost = false,
+			std::uint64_t customid = 0x0
+		);
 		~EvtClientThread();
 
 		void emit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
@@ -63,6 +69,8 @@ namespace mulex
 		std::map<std::string, std::uint16_t> _evt_registry;
 		std::map<std::uint16_t, EvtCallbackFunc> _evt_callbacks;
 		std::map<std::uint16_t, std::uint8_t*> _evt_userdata;
+		bool _evt_has_custom_id = false;
+		std::uint64_t _evt_custom_id;
 	};
 
 	class EvtServerThread

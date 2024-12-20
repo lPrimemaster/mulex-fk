@@ -24,6 +24,11 @@ export function timestamp_tolocaltime(ts: number): string {
 	return (new Date(Number(ts))).toTimeString().split(' ')[0];
 }
 
+export function timestamp_tolocaldatetime(ts: number): string {
+	const date = new Date(Number(ts));
+	return date.toTimeString().split(' ')[0] + ' ' + date.toDateString();
+}
+
 export function scroll_to_element(element: HTMLDivElement | undefined) {
 	element?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }

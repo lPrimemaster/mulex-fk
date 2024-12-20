@@ -49,13 +49,29 @@ namespace mulex
 		return _client_msg_id++;
 	}
 
-	EvtClientThread::EvtClientThread(const std::string& hostname, const Experiment* exp, std::uint16_t evtport, bool ghost)
+	EvtClientThread::EvtClientThread(const std::string& hostname, const Experiment* exp, std::uint16_t evtport, bool ghost, std::uint64_t customid)
 	{
 		_exp = exp;
 		if(_exp)
 		{
 			LogTrace("[evtclient] Passed in custom experiment dependency.");
 		}
+
+		if(customid > 0)
+		{
+			_evt_has_custom_id = true;
+			_evt_custom_id = customid;
+
+			LogDebug("[evtclient] Client spawned with custom id.");
+			
+			if(!ghost)
+			{
+				LogError("[evtclient] Specified custom client id without being ghost.");
+				LogError("[evtclient] This is not possible.");
+				return;
+			}
+		}
+
 
 		_evt_socket = SocketInit();
 		SocketConnect(_evt_socket, hostname, evtport);
@@ -199,7 +215,14 @@ namespace mulex
 
 		// Make header
 		EvtHeader header;
-		header.client = SysGetClientId();
+		if(_evt_has_custom_id)
+		{
+			header.client = _evt_custom_id;
+		}
+		else
+		{
+			header.client = SysGetClientId();
+		}
 		header.eventid = eid;
 		header.msgid = GetNextEventMessageId();
 		header.payloadsize = static_cast<std::uint32_t>(len);

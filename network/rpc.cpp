@@ -47,8 +47,15 @@ namespace mulex
 		return _client_current_caller.at(std::this_thread::get_id());
 	}
 
-	RPCClientThread::RPCClientThread(const std::string& hostname, std::uint16_t rpcport)
+	RPCClientThread::RPCClientThread(const std::string& hostname, std::uint16_t rpcport, std::uint64_t customid)
 	{
+		if(customid > 0)
+		{
+			_rpc_has_custom_id = true;
+			_rpc_custom_id = customid;
+			LogDebug("[rpcclient] Client spawned with custom id.");
+		}
+
 		_rpc_socket = SocketInit();
 		SocketConnect(_rpc_socket, hostname, rpcport);
 		_rpc_thread_running.store(true);
