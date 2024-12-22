@@ -156,7 +156,7 @@ export const LogTable: Component = () => {
 				const label_type = (log.type == 'error') ? 'error' : (log.type == 'warn') ? 'warning' : 'display';
 				return (
 					<div class={class_style}>
-						<BadgeLabel class="py-0.5 px-1" type="display">{log.timestamp}</BadgeLabel>
+						<BadgeLabel class="py-0.5 px-1 place-content-center" style="width: 4rem;" type="display">{log.timestamp}</BadgeLabel>
 						<BadgeLabel class="py-0.5 px-1 ml-1" type="display">{log.backend}</BadgeLabel>
 						<BadgeLabel class="py-0.5 px-1 ml-1" type={label_type}>{log.type}</BadgeLabel>
 						<span class="ml-1 py-0.5">{log.message}</span>
