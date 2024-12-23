@@ -938,7 +938,7 @@ namespace mulex
 	if (!init)
 	{
 		PdhOpenQuery(nullptr, 0, &cpu_query);
-		PdhAddCounter(cpu_query, L"\\Processor(_Total)\\% Processor Time", 0, &cpu_total);
+		PdhAddCounter(cpu_query, "\\Processor(_Total)\\% Processor Time", 0, &cpu_total);
 		PdhCollectQueryData(cpu_query);
 		init = true;
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
