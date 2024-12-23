@@ -76,6 +76,10 @@ add_subdirectory(examples)
 # Link main
 target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp)
 
+if(WIN32)
+	target_link_libraries(mxmain PRIVATE pdh)
+endif()
+
 # Add testing
 enable_testing()
 add_subdirectory(test)

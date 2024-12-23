@@ -27,6 +27,12 @@ FetchContent_MakeAvailable(uWebSockets_cont)
 message(STATUS ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets)
 file(GLOB_RECURSE uWS_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src/*.c)
 add_library(uSockets ${uWS_SOURCES})
+
+if(WIN32)
+	find_package(libuv CONFIG REQUIRED)
+	target_link_libraries(uSockets PRIVATE $<IF:$<TARGET_EXISTS:libuv::uv_a>,libuv::uv_a,libuv::uv>)
+endif()
+
 target_include_directories(uSockets PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src)
 target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
 
@@ -70,7 +76,12 @@ add_library(mxhttp
 
 find_package(ZLIB REQUIRED)
 
-target_link_libraries(mxhttp uv uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
+if(WIN32)
+	target_link_libraries(mxhttp $<IF:$<TARGET_EXISTS:libuv::uv_a>,libuv::uv_a,libuv::uv>)
+	target_link_libraries(mxhttp uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
+else()
+	target_link_libraries(mxhttp uv uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
+endif()
 
 target_include_directories(mxhttp PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
