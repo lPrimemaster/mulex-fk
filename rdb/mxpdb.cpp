@@ -16,7 +16,7 @@ namespace mulex
 		{
 			// Register the pdb path on rdb
 			pdb_loc = cache + "/pdb.db";
-			pdb = RdbNewEntry("/system/pdbloc", RdbValueType::STRING, pdb_loc.c_str());
+			pdb = RdbNewEntry("/system/pdbloc", RdbValueType::STRING, mxstring<512>(pdb_loc).c_str());
 			if(!pdb)
 			{
 				LogError("[pdb] Failed to register pdb path on rdb.");
@@ -251,7 +251,6 @@ namespace mulex
 		}
 
 		sqlite3_finalize(stmt);
-		LogTrace("[pdb] PdbWriteTable() OK.");
 		return true;
 	}
 

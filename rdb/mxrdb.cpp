@@ -576,7 +576,6 @@ namespace mulex
 
 			if(free_size >= total_size)
 			{
-				RdbEntry* out = reinterpret_cast<RdbEntry*>(_rdb_handle + offset);
 				offset += total_size;
 				free_size -= total_size;
 				_rdb_offset += total_size;
@@ -586,7 +585,7 @@ namespace mulex
 					_rdb_free_blocks.erase(it);
 				}
 
-				return out;
+				return new (_rdb_handle + offset) RdbEntry();
 			}
 		}
 
@@ -606,12 +605,13 @@ namespace mulex
 		// Enough space at the end OK.
 		std::uint64_t offset = _rdb_offset;
 		_rdb_offset += total_size;
-		return reinterpret_cast<RdbEntry*>(_rdb_handle + offset);
+		return new (_rdb_handle + offset) RdbEntry();
 	}
 
 	void RdbFree(RdbEntry* entry)
 	{
 		ZoneScoped;
+		entry->~RdbEntry();
 		std::uint64_t free_offset = RdbCalculateEntryOffset(entry);
 		std::uint64_t free_size = RdbCalculateEntryTotalSize(entry);
 		_rdb_free_blocks.emplace_back(free_offset, free_size);

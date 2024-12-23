@@ -41,7 +41,7 @@ static std::uint64_t _sys_cid = 0x00;
 
 static std::unique_ptr<std::thread> _sys_performance_metrics_thread;
 static std::atomic<bool> _sys_performance_metrics_running;
-static constexpr std::uint64_t SYS_PERF_GATHER_INTERVAL = 5000;
+static constexpr std::uint64_t SYS_PERF_GATHER_INTERVAL = 1000;
 
 namespace mulex
 {
@@ -254,9 +254,11 @@ namespace mulex
 		}
 
 		bool loopback = false;
+		std::uint16_t port = 8080;
 
 		SysAddArgument("name", 'n', true, [](const std::string& expname){ _sys_expname = expname; }, "Set the current experiment name.");
 		SysAddArgument("loopback", 'l', false, [&](const std::string&){ loopback = true; }, "Set the http server on loopback mode only.");
+		SysAddArgument("port", 'p', true, [&](const std::string& portstr){ port = ::atoi(portstr.c_str()); }, "Set the http server listen port.");
 
 		if(!SysParseArguments(argc, argv))
 		{
@@ -303,7 +305,7 @@ namespace mulex
 		// After evt thread init
 		MsgInit();
 
-		HttpStartServer(8080, loopback);
+		HttpStartServer(port, loopback);
 
 		return true;
 	}
