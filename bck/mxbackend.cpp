@@ -4,8 +4,7 @@
 #include "../mxevt.h"
 #include "../mxrun.h"
 
-#include <signal.h>
-static volatile sig_atomic_t stop = 0;
+static const std::atomic<bool>* stop;
 
 namespace mulex
 {
@@ -50,9 +49,7 @@ namespace mulex
 		// So we stop on ctrl-C
 		LogMessage("[mxbackend] Running...");
 		LogMessage("[mxbackend] Press ctrl-C to exit.");
-		mulex::SysRegisterSigintAction([](int s){
-			stop = s;
-		});
+		stop = mulex::SysSetupExitSignal();
 
 		_init_ok = true;
 		_period_ms = 0;
@@ -134,7 +131,7 @@ namespace mulex
 			return;
 		}
 
-		while(!stop)
+		while(!*stop)
 		{
 			std::int64_t looptime = SysGetCurrentTime();
 			periodic();

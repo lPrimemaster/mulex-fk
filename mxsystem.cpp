@@ -382,7 +382,35 @@ namespace mulex
 
 	void SysRegisterSigintAction(SysSigintActionFunc f)
 	{
+#ifdef __linux__
 		::signal(SIGINT, f);
+#else
+		SetConsoleCtrlHandler(f, TRUE);
+#endif
+	}
+
+	const std::atomic<bool>* SysSetupExitSignal()
+	{
+		static std::atomic<bool> signal_flag = false;
+#ifdef __linux__
+		SysRegisterSigintAction([](int sig){ signal_flag.store(sig != 0); });
+#else
+		SysRegisterSigintAction([](DWORD ctrlType) -> BOOL {
+			switch(ctrlType)
+			{
+				case CTRL_C_EVENT: 	   // ctrl-c
+				case CTRL_CLOSE_EVENT: // window close
+				{
+					signal_flag.store(true);
+					return TRUE;
+				}
+				default:
+					return FALSE;
+			}
+			return FALSE;
+		});
+#endif
+		return &signal_flag;
 	}
 
 	SysRecvThread::SysRecvThread(const Socket& socket, std::uint64_t ssize, std::uint64_t sheadersize, std::uint64_t sheaderoffset)

@@ -185,8 +185,13 @@ namespace mulex
 	bool SysConnectToExperiment(const char* hostname, std::uint16_t port = EXP_DEFAULT_PORT);
 	void SysDisconnectFromExperiment();
 
+#ifdef __linux__
 	using SysSigintActionFunc = void(*)(int);
+#else
+	using SysSigintActionFunc = BOOL(*)(DWORD type);
+#endif
 	void SysRegisterSigintAction(SysSigintActionFunc f);
+	const std::atomic<bool>* SysSetupExitSignal();
 
 	bool SysDaemonize();
 	bool SysInitializeExperiment(int argc, char* argv[]);
