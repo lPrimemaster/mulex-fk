@@ -87,7 +87,7 @@ class RPCFileParser:
         return self.rpc_methods
 
     def _load_file(self, filename: str) -> List[str]:
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             return f.readlines()
 
     def _parse_file(self, filename: str) -> List[RPCMethodDetails]:
