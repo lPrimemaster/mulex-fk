@@ -954,6 +954,17 @@ namespace mulex
 		return keys;
 	}
 
+	std::uint8_t RdbGetKeyType(mulex::RdbKeyName key)
+	{
+		ZoneScoped;
+
+		std::shared_lock lock_ops(_rdb_rw_lock);
+		const RdbEntry* entry = RdbFindEntryByNameUnlocked(key);
+
+		std::shared_lock lock_entry(entry->_rw_lock);
+		return static_cast<std::uint8_t>(entry->_type);
+	}
+
 	static inline std::uint64_t RdbSetEntryFlag(std::uint64_t state, RdbEntryFlag flag, bool active)
 	{
 		ZoneScoped;

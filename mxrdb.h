@@ -146,6 +146,7 @@ namespace mulex
 	MX_RPC_METHOD mulex::RPCGenericType RdbListKeys();
 	MX_RPC_METHOD mulex::RPCGenericType RdbListKeyTypes();
 	MX_RPC_METHOD mulex::RPCGenericType RdbListSubkeys(mulex::RdbKeyName dir);
+	MX_RPC_METHOD unsigned char RdbGetKeyType(mulex::RdbKeyName key);
 	MX_RPC_METHOD bool RdbToggleHistory(mulex::RdbKeyName keyname, bool active);
 	MX_RPC_METHOD mulex::RPCGenericType RdbGetHistory(mulex::RdbKeyName keyname, std::uint64_t count);
 
