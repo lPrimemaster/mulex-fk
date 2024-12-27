@@ -160,7 +160,7 @@ namespace mulex
 		MsgFlushSQLQueue();
 
 		const static std::vector<PdbValueType> types = { PdbValueType::INT32, PdbValueType::UINT8, PdbValueType::UINT64, PdbValueType::INT64, PdbValueType::STRING };
-		return PdbReadTable("SELECT * FROM logs ORDER BY timestamp ASC LIMIT " + std::to_string(count) + ";", types);
+		return PdbReadTable("SELECT * FROM logs ORDER BY timestamp DESC LIMIT " + std::to_string(count) + ";", types);
 	}
 
 	void MsgInit()
