@@ -6,6 +6,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function cssColorToRGB(color: string) {
+	const t = document.createElement('div');
+	t.style.color = color;
+	document.body.appendChild(t);
+	const rgb = getComputedStyle(t).color;
+	document.body.removeChild(t);
+	return rgb;
+}
+
 export function timestamp_tohms(ms: number): string {
 	let sec = Math.trunc(ms / 1000);
 	if(sec < 60) return sec.toString() + 's';

@@ -3,7 +3,9 @@ import { createStore } from 'solid-js/store';
 export interface MapStoreAction {
 	add: Function;
 	remove: Function;
+	modify: Function;
 	set: Function;
+	clear: Function;
 };
 
 export function createMapStore<K, V>(values: Map<K, V>): [{ data: Map<K, V> }, MapStoreAction] {
@@ -11,6 +13,12 @@ export function createMapStore<K, V>(values: Map<K, V>): [{ data: Map<K, V> }, M
 
 	const add = (key: K, value: V) => {
 		if(!store.data.has(key)) {
+			setStore((p) => { return { data: new Map<K, V>(p.data).set(key, value) }; });
+		}
+	};
+
+	const modify = (key: K, value: V) => {
+		if(store.data.has(key)) {
 			setStore((p) => { return { data: new Map<K, V>(p.data).set(key, value) }; });
 		}
 	};
@@ -29,6 +37,10 @@ export function createMapStore<K, V>(values: Map<K, V>): [{ data: Map<K, V> }, M
 		setStore(() => { return { data: new Map<K, V>(values)}; });
 	};
 
-	return [store, { add, remove, set }];
+	const clear = () => {
+		setStore(() => { return { data: new Map<K, V>()}; });
+	};
+
+	return [store, { add, modify, remove, set, clear }];
 }
 

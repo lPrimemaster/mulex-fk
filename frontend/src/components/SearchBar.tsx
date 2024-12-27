@@ -36,23 +36,33 @@ export const SearchBarProvider: Component<{ children: JSXElement }> = (props) =>
 	}}>{props.children}</SearchBarContext.Provider>
 };
 
-const SearchBarResultsView: Component<{ matches: Array<string>, dropdown: boolean }> = (props) => {
+const SearchBarResultsView: Component<{ matches: Array<string>, dropdown: boolean, display: Function | undefined }> = (props) => {
 	const { setSelectedItem, setQuery } = useContext(SearchBarContext) as SearchBarContextType;
 	return (
 		<Show when={props.dropdown && props.matches.length > 0}>
-			<div class="absolute z-10 border border-gray-400 rounded-md bg-gray-100 shadow-md mt-2 ml-6">
-				<For each={props.matches}>{(item) =>
-					<div
-						class="m-1 px-3 border rounded-md bg-gray-100 hover:bg-gray-200 active:bg-gray-300 cursor-pointer"
-						onClick={() => { setSelectedItem(item); setQuery('') }}
-					>{item}</div>
-				}</For>
+			<div class="absolute z-10 border border-gray-400 rounded-md bg-white shadow-md mt-12 ml-0 overflow-auto w-full">
+				<Show when={props.display}>
+					<For each={props.matches}>{(item) => {
+						const select = () => { setSelectedItem(item); setQuery(''); };
+						return (
+							<div>{props.display!(item, select)}</div>
+						);
+					}}</For>
+				</Show>
+				<Show when={!props.display}>
+					<For each={props.matches}>{(item) =>
+						<div
+							class="m-1 px-3 border rounded-md bg-white hover:bg-gray-200 shadow-sm active:bg-gray-300 cursor-pointer h-10 place-content-center"
+							onClick={() => { setSelectedItem(item); setQuery(''); }}
+						>{item}</div>
+					}</For>
+				</Show>
 			</div>
 		</Show>
 	);
 };
 
-export const SearchBar: Component<{ items: Array<string>, placeholder?: string, dropdown?: boolean, children?: JSXElement }> = (props) => {
+export const SearchBar: Component<{ items: Array<string>, display?: Function, placeholder?: string, dropdown?: boolean, children?: JSXElement }> = (props) => {
 	const { query, setQuery, setFilteredItems } = useContext(SearchBarContext) as SearchBarContextType;
 	const [flen, setFlen] = createSignal<number>(0);
 
@@ -84,7 +94,7 @@ export const SearchBar: Component<{ items: Array<string>, placeholder?: string, 
 	return (
 		<>
 			<div class="py-0">
-				<div class="flex flex-nowrap w-full h-25 rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border border-gray-400">
+				<div class="flex flex-nowrap w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border border-gray-400">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 24 24"
@@ -107,8 +117,8 @@ export const SearchBar: Component<{ items: Array<string>, placeholder?: string, 
 							<BadgeLabel class="truncate" type={flen() ? "success" : "error"}>{flen()} Matches</BadgeLabel>
 						</div>
 					</Show>
+					<SearchBarResultsView matches={getFilteredItems()} dropdown={props.dropdown ?? true} display={props.display}/>
 				</div>
-				<SearchBarResultsView matches={getFilteredItems()} dropdown={props.dropdown ?? true}/>
 			</div>
 		</>
 	);

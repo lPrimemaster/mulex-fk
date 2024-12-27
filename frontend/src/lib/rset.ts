@@ -4,6 +4,7 @@ export interface SetStoreAction {
 	add: Function;
 	remove: Function;
 	set: Function;
+	clear: Function;
 };
 
 export function createSetStore<T>(values: Array<T> = []): [{ data: Set<T> }, SetStoreAction] {
@@ -29,6 +30,10 @@ export function createSetStore<T>(values: Array<T> = []): [{ data: Set<T> }, Set
 		setStore(() => { return { data: new Set(values)}; });
 	};
 
-	return [store, { add, remove, set }];
+	const clear = () => {
+		setStore(() => { return { data: new Set()}; });
+	};
+
+	return [store, { add, remove, set, clear }];
 }
 

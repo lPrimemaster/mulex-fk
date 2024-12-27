@@ -32,13 +32,18 @@ const Sidebar: Component = () => {
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
 						<NavigationMenuItem>
-							<NavigationMenuTrigger>
+							<NavigationMenuTrigger disabled>
 								Events
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
 						<NavigationMenuItem>
 							<NavigationMenuTrigger>
 								<A href='/rdb'>RDB</A>
+							</NavigationMenuTrigger>
+						</NavigationMenuItem>
+						<NavigationMenuItem>
+							<NavigationMenuTrigger>
+								<A href='/history'>History (Beta)</A>
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
 						<NavigationMenuItem>

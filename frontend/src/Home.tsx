@@ -21,6 +21,25 @@ const [runTimestamp, setRunTimestamp] = createSignal<number>(0);
 
 const Home: Component = () => {
 	const rdb = new MxRdb();
+
+	function watchRunInfo() {
+		rdb.watch('/system/run/status', (_: string, value: MxGenericType) => {
+			setRunStatusFromCode(value.astype('uint8'));
+			if(value.astype('uint8') == 1) {
+				showToast({ title: 'Run ' + runNumber() + ' started.', variant: 'success'});
+			}
+			else if(value.astype('uint8') == 0) {
+				showToast({ title: 'Run ' + runNumber() + ' stopped.', variant: 'error'});
+			}
+		});
+		rdb.watch('/system/run/number', (_: string, value: MxGenericType) => {
+			setRunNumber(value.astype('uint64'));
+		});
+		rdb.watch('/system/run/timestamp', (_: string, value: MxGenericType) => {
+			setRunTimestamp(Number(value.astype('int64')));
+		});
+	}
+
 	const [time, setTime] = createSignal(Date.now() as number);
 	setInterval(() => setTime(Date.now() as number), 1000);
 
@@ -71,23 +90,9 @@ const Home: Component = () => {
 				    const rts = res.astype('int64');
 					setRunTimestamp(Number(rts));
 			  	});
-		}
-	});
 
-	rdb.watch('/system/run/status', (_: string, value: MxGenericType) => {
-		setRunStatusFromCode(value.astype('uint8'));
-		if(value.astype('uint8') == 1) {
-			showToast({ title: 'Run ' + runNumber() + ' started.', variant: 'success'});
+			watchRunInfo();
 		}
-		else if(value.astype('uint8') == 0) {
-			showToast({ title: 'Run ' + runNumber() + ' stopped.', variant: 'error'});
-		}
-	});
-	rdb.watch('/system/run/number', (_: string, value: MxGenericType) => {
-		setRunNumber(value.astype('uint64'));
-	});
-	rdb.watch('/system/run/timestamp', (_: string, value: MxGenericType) => {
-		setRunTimestamp(Number(value.astype('int64')));
 	});
 
 	// If the socket status changes, emit a message on the toaster
@@ -107,6 +112,8 @@ const Home: Component = () => {
 			}
 		})
 	);
+
+	watchRunInfo();
 
 	return (
 		<div>
