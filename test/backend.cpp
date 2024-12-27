@@ -58,6 +58,11 @@ public:
 			LogTrace("value = %d.", value.asType<std::int32_t>());
 		});
 
+		roota["/system/metrics/cpu_usage"].watch([this](const RdbKeyName& key, const RPCGenericType& value) {
+			double cpu = value;
+			log.info("CPU: %.2lf%%", cpu);
+		});
+
 		roota["/system/nested/test"].erase();
 		roota["/system/nested/test"].create(RdbValueType::INT32, 3);
 
@@ -86,6 +91,11 @@ public:
 		config["period_ms"] = ++s;
 		static std::vector<std::uint8_t> buffer(100);
 		buffer.clear();
+
+		// RdbAccess configr;
+		// double cpu = configr["/system/metrics/cpu_usage"];
+		// LogDebug("CPU: %.2lf%%", cpu);
+		
 		dispatchEvent("TestBackend::data", MxEventBuilder(buffer)
 			.add(SysGetCurrentTime())
 			.add(3.14159265358979)
