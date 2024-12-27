@@ -22,6 +22,7 @@ static std::atomic<std::uint64_t> _client_msg_id = 0;
 static std::atomic<std::uint64_t> _client_current_caller = 0;
 
 static std::map<std::string, std::uint16_t> _evt_server_reg;
+static std::shared_mutex _evt_reg_lock;
 static std::atomic<std::uint16_t> _evt_server_reg_next = 0;
 
 // NOTE: (Cesar) Map for eventid -> subscribed clientid list
@@ -514,7 +515,9 @@ namespace mulex
 		_evt_accept_thread->join();
 		_evt_stats_thread->join();
 		std::for_each(_evt_emit_stack.begin(), _evt_emit_stack.end(), [](auto& t){ t.second.requestUnblock(); });
-		// std::for_each(_evt_stream.begin(), _evt_stream.end(), [](auto& t){ t.second->requestUnblock(); });
+#ifdef WIN32
+		std::for_each(_evt_stream.begin(), _evt_stream.end(), [](auto& t){ t.second->requestUnblock(); });
+#endif
 		std::for_each(_evt_emit_thread.begin(), _evt_emit_thread.end(), [](auto& t){ t.second->join(); });
 		std::for_each(_evt_listen_thread.begin(), _evt_listen_thread.end(), [](auto& t){ t.second->join(); });
 		_evt_thread_ready.store(false);
@@ -682,7 +685,11 @@ namespace mulex
 		// We can run into issues if there is a crash on the client side, which we don't control
 		OnClientDisconnect(_evt_client_socket_pair.at(socket._handle));
 
-		_evt_emit_stack.at(socket).requestUnblock();
+		{
+			std::unique_lock<std::mutex> lock(_connections_mutex);
+			_evt_emit_stack.at(socket).requestUnblock();
+			_evt_stream.erase(socket);
+		}
 		recvthread->_handle.join();
 	}
 
@@ -726,6 +733,7 @@ namespace mulex
 
 	bool EvtRegister(string32 name)
 	{
+		std::unique_lock lock(_evt_reg_lock);
 		auto evtrit = _evt_server_reg.find(name.c_str());
 		if(evtrit != _evt_server_reg.end())
 		{
@@ -742,6 +750,7 @@ namespace mulex
 
 	std::uint16_t EvtGetId(mulex::string32 name)
 	{
+		std::shared_lock lock(_evt_reg_lock);
 		auto evtrit = _evt_server_reg.find(name.c_str());
 		if(evtrit != _evt_server_reg.end())
 		{
@@ -830,6 +839,18 @@ namespace mulex
 	void EvtAccumulateClientStatistics(std::uint64_t clientid, std::uint64_t framebytes)
 	{
 		_evt_client_stats[clientid] += framebytes; // Atomic op
+	}
+
+	mulex::RPCGenericType EvtGetAllRegisteredEvents()
+	{
+		std::shared_lock lock(_evt_reg_lock);
+		std::vector<mxstring<512>> output;
+		output.reserve(_evt_server_reg.size());
+		for(const auto& reg : _evt_server_reg)
+		{
+			output.push_back(reg.first);
+		}
+		return output;
 	}
 
 	bool EvtUnsubscribe(mulex::string32 name)

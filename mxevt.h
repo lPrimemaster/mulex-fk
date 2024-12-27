@@ -116,6 +116,8 @@ namespace mulex
 	bool EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
 	void EvtAccumulateClientStatistics(std::uint64_t clientid, std::uint64_t framebytes);
 
+	MX_RPC_METHOD mulex::RPCGenericType EvtGetAllRegisteredEvents();
+
 	template <typename T>
 	inline std::uint64_t EvtDataAppend(std::uint64_t offset, std::vector<std::uint8_t>* buffer, const T& value)
 	{
