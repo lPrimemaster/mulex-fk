@@ -266,7 +266,9 @@ namespace mulex
 		ZoneScoped;
 		_rpc_thread_running.store(false);
 		_rpc_accept_thread->join();
-		// std::for_each(_rpc_stream.begin(), _rpc_stream.end(), [](auto& t){ t.second->requestUnblock(); });
+#ifdef WIN32
+		std::for_each(_rpc_stream.begin(), _rpc_stream.end(), [](auto& t){ t.second->requestUnblock(); });
+#endif
 		std::for_each(_rpc_thread.begin(), _rpc_thread.end(), [](auto& t){ t.second->join(); });
 		_rpc_thread_ready.store(false);
 	}
