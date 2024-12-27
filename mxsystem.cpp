@@ -1,6 +1,7 @@
 #include "mxsystem.h"
 #include <memory>
 #include <signal.h>
+#include "mxlogger.h"
 #include "network/rpc.h"
 #include "mxevt.h"
 #include "mxrdb.h"
@@ -632,6 +633,51 @@ namespace mulex
 	const bool SysByteStream::unblockRequested() const
 	{
 		return _unblock_sig.load();
+	}
+
+	SysFileWatcher::SysFileWatcher(const std::string& dir, std::function<void(const FileOp op, const std::string& filename)> f, std::uint32_t interval)
+	{
+		_watcher_on.store(true);
+		LogDebug("SysFileWatcher: Watching dir <%s>. [interval=%d]", dir.c_str(), interval);
+		_thread = std::make_unique<std::thread>([this, dir, f, interval](){
+			std::unordered_map<std::string, std::filesystem::file_time_type> file_mod_time;
+			while(_watcher_on.load())
+			{
+				for(const auto& file : std::filesystem::recursive_directory_iterator(dir))
+				{
+					const std::string& file_path = file.path().string();
+					const auto& last_write_ts = std::filesystem::last_write_time(file);
+
+					if(file_mod_time.find(file_path) == file_mod_time.end())
+					{
+						// This is a new file
+						file_mod_time[file_path] = last_write_ts;
+						f(FileOp::CREATED, file_path);
+					}
+					else if(file_mod_time[file_path] != last_write_ts)
+					{
+						// This is a modified file
+						file_mod_time[file_path] = last_write_ts;
+						f(FileOp::MODIFIED, file_path);
+					}
+				}
+
+
+				auto fit = file_mod_time.begin();
+				while(fit != file_mod_time.end())
+				{
+					if(!std::filesystem::exists(fit->first))
+					{
+						fit = file_mod_time.erase(fit);
+						f(FileOp::DELETED, fit->first);
+						continue;
+					}
+					fit++;
+				}
+
+				std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+			}
+		});
 	}
 
 	std::int64_t SysGetCurrentTime()

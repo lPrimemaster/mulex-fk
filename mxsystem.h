@@ -160,6 +160,22 @@ namespace mulex
 		std::condition_variable   _notifier;
 	};
 
+	class SysFileWatcher
+	{
+	public:
+		enum class FileOp
+		{
+			CREATED,
+			MODIFIED,
+			DELETED
+		};
+		SysFileWatcher(const std::string& dir, std::function<void(const FileOp op, const std::string& filename)> f, std::uint32_t interval = 1000);
+
+	private:
+		std::unique_ptr<std::thread> _thread;
+		std::atomic<bool> _watcher_on;
+	};
+
 	struct SysRecvThread
 	{
 		SysRecvThread(const Socket& socket, std::uint64_t ssize, std::uint64_t sheadersize, std::uint64_t sheaderoffset);
