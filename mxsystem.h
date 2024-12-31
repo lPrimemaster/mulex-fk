@@ -170,6 +170,7 @@ namespace mulex
 			DELETED
 		};
 		SysFileWatcher(const std::string& dir, std::function<void(const FileOp op, const std::string& filename)> f, std::uint32_t interval = 1000);
+		~SysFileWatcher();
 
 	private:
 		std::unique_ptr<std::thread> _thread;
@@ -226,6 +227,7 @@ namespace mulex
 	std::string SysI64ToHexString(std::uint64_t value);
 	std::vector<std::uint8_t> SysReadBinFile(const std::string& file);
 	void SysWriteBinFile(const std::string& file, const std::vector<std::uint8_t>& data);
+	void SysCopyFile(const std::string& source, const std::string& destination);
 
 	std::uint64_t SysStringHash64(const std::string& key);
 	bool SysMatchPattern(const std::string& pattern, const std::string& target);

@@ -3,6 +3,7 @@
 #include <string>
 #include <thread>
 #include <map>
+#include <set>
 
 #include "network/socket.h"
 #include "network/rpc.h"
@@ -51,6 +52,7 @@ namespace mulex
 		void regist(const std::string& event);
 		void subscribe(const std::string& event, EvtCallbackFunc callback);
 		void unsubscribe(const std::string& event);
+		void unsubscribeAll();
 		std::uint16_t findEvent(const std::string& event);
 
 	private:
@@ -67,6 +69,7 @@ namespace mulex
 		std::atomic<bool> _evt_thread_running = false;
 		std::atomic<bool> _evt_thread_ready = false;
 		std::map<std::string, std::uint16_t> _evt_registry;
+		std::set<std::string> _evt_subscriptions;
 		std::map<std::uint16_t, EvtCallbackFunc> _evt_callbacks;
 		std::map<std::uint16_t, std::uint8_t*> _evt_userdata;
 		bool _evt_has_custom_id = false;

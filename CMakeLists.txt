@@ -1,10 +1,17 @@
 cmake_minimum_required(VERSION 3.10)
 include(FetchContent)
 include(cmake/InternetConnection.cmake)
+include(cmake/BuildManifest.cmake)
+include(cmake/BuildFrontend.cmake)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+# Version configuration
 project(mulex-fk VERSION 0.2.0)
+set(PROJECT_VNAME Barnard)
+
+build_manifest_json()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -80,6 +87,15 @@ if(WIN32)
 	target_link_libraries(mxmain PRIVATE pdh)
 endif()
 
+# Invoke yarn build (pre build)
+build_frontend_yarn()
+
 # Add testing
 enable_testing()
 add_subdirectory(test)
+
+# Generate binary resources (last step)
+set(vite_config_ts ${CMAKE_SOURCE_DIR}/network/vite.config.ts)
+mx_resource_append(${vite_config_ts})
+
+mx_resource_gen()

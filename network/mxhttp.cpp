@@ -15,6 +15,8 @@
 #include <fstream>
 #include <filesystem>
 
+#include <mxres.h>
+
 static us_listen_socket_t* _http_listen_socket = nullptr;
 static std::thread* _http_thread;
 static uWS::Loop* _ws_loop_thread;
@@ -36,7 +38,8 @@ static std::mutex _mutex;
 static std::set<UWSType*> _active_ws_connections;
 static std::unordered_map<UWSType*, HttpClientInfo> _active_clients_info;
 static std::mutex _aci_lock;
-static std::unordered_map<std::string, std::set<UWSType*>> _active_ws_subscriptions;
+// static std::unordered_map<std::string, std::set<UWSType*>> _active_ws_subscriptions;
+static std::unique_ptr<mulex::SysFileWatcher> _transpiler_watch;
 
 namespace mulex
 {
@@ -44,6 +47,100 @@ namespace mulex
 	{
 		Experiment _local_experiment;
 	};
+
+	static bool HttpGenerateViteConfigFile()
+	{
+		std::string serveDir = SysGetExperimentHome();
+		if(!std::filesystem::exists(serveDir + "/vite.config.ts"))
+		{
+			LogDebug("[mxhttp] Plugin <vite.config.ts> does not exist. Creating file...");
+			SysWriteBinFile(serveDir + "/vite.config.ts", ResGetResource("vite.config.ts"));
+		}
+		else
+		{
+			LogTrace("[mxhttp] Plugin <vite.config.ts> found under experiment home.");
+		}
+
+		return true;
+	}
+
+	static bool HttpStartTranspilerThread()
+	{
+		// We transpile with vite (via yarn build, must be installed on server-side)
+		std::string serveDir = SysGetExperimentHome();
+		if(serveDir.empty())
+		{
+			LogError("[mxhttp] Failed to start the realtime transpiler thread. SysGetExperimentHome() failed.");
+			return false;
+		}
+
+		if(!HttpGenerateViteConfigFile())
+		{
+			return false;
+		}
+
+		std::string pluginsDir = serveDir + "/plugins";
+
+#ifdef __linux__
+		std::string command;
+		command += " yarn --cwd '";
+		command += serveDir;
+		command += "' build";
+#else
+		std::string command;
+		command += pluginsDir + "\"";
+		command += " && start yarn build";
+#endif
+
+		if(!std::filesystem::is_directory(pluginsDir) && !std::filesystem::create_directory(pluginsDir))
+		{
+			LogError("[mxhttp] Failed to create/attach to user plugins directory.");
+			return false;
+		}
+
+		if(!RdbFindEntryByName("/system/http/hotswap"))
+		{
+			RdbCreateValueDirect("/system/http/hotswap", RdbValueType::BOOL, 0, true);
+		}
+
+		_transpiler_watch = std::make_unique<SysFileWatcher>(pluginsDir, [command](const SysFileWatcher::FileOp op, const std::string& file) {
+			if(RdbReadValueDirect("/system/http/hotswap").asType<bool>())
+			{
+				std::string filename = std::filesystem::path(file).filename();
+				switch(op) {
+					case SysFileWatcher::FileOp::CREATED:
+					{
+						HttpRegisterUserPlugin(filename);
+						[[fallthrough]];
+					}
+					case SysFileWatcher::FileOp::MODIFIED:
+					{
+						// std::thread([filename, command](){
+						// 	std::system(("ENTRY_FILE=./plugins/" + filename + command).c_str());
+						// }).detach();
+						break;
+					}
+					case SysFileWatcher::FileOp::DELETED:
+					{
+						std::string filename = std::filesystem::path(file).filename();
+						HttpRemoveUserPlugin(filename);
+						break;
+					}
+				}
+			}
+		});
+
+		LogDebug("[mxhttp] Transpiler realtime thread OK.");
+		return true;
+	}
+
+	static void HttpStopTranspilerThread()
+	{
+		if(_transpiler_watch)
+		{
+			_transpiler_watch.reset();
+		}
+	}
 
 	static std::string HttpReadFileFromDisk(const std::string& filepath)
 	{
@@ -69,6 +166,7 @@ namespace mulex
 		if (ext == ".html") return "text/html";
 		if (ext == ".css")  return "text/css";
 		if (ext == ".js")   return "application/javascript";
+		if (ext == ".tsx")  return "application/javascript";
 		if (ext == ".png")  return "image/png";
 		if (ext == ".jpg")  return "image/jpeg";
 		if (ext == ".jpeg") return "image/jpeg";
@@ -379,35 +477,32 @@ namespace mulex
 
 	// uWS already supports publishing/subscribing from topics
 	// Maybe we switch to this eventually??
-	static void HttpSendEvent(const std::string& event, const std::uint8_t* data, std::uint64_t len)
+	static void HttpSendEvent(UWSType* ws, const std::string& event, const std::uint8_t* data, std::uint64_t len)
 	{
 		std::vector<std::uint8_t> data_vector;
 
-		auto eventws = _active_ws_subscriptions.find(event);
-
-		if(eventws == _active_ws_subscriptions.end())
-		{
-			LogError("[mxhttp] Cannot send event. No WS subscribed.");
-			LogError("[mxhttp] This is a bug.");
-			return;
-		}
-
-		if(eventws->second.empty())
-		{
-			return;
-		}
+		// auto eventws = _active_ws_subscriptions.find(event);
+		//
+		// if(eventws == _active_ws_subscriptions.end())
+		// {
+		// 	LogError("[mxhttp] Cannot send event. No WS subscribed.");
+		// 	LogError("[mxhttp] This is a bug.");
+		// 	return;
+		// }
+		//
+		// if(eventws->second.empty())
+		// {
+		// 	return;
+		// }
 
 		data_vector.resize(len);
 		std::memcpy(data_vector.data(), data, len);
 
 		// Move the data vector to the uWS loop thread
-		HttpDeferCall(nullptr, [eventws, dv = std::move(data_vector), event](auto*) {
-			for(auto* ws : eventws->second)
-			{
-				const std::string message = HttpMakeWSEVTMessage(dv, event);
-				LogTrace("[mxhttp] Sending event message to ws.");
-				ws->send(message);
-			}
+		HttpDeferCall(nullptr, [ws, data_vector, event](auto*) {
+			const std::string message = HttpMakeWSEVTMessage(data_vector, event);
+			LogTrace("[mxhttp] Sending event message to ws.");
+			ws->send(message);
 		});
 	}
 
@@ -423,49 +518,24 @@ namespace mulex
 			return;
 		}
 
-		evtclient->subscribe(event, [event](auto* data, auto len, auto* userdata) {
-			HttpSendEvent(event, data, len);
+		evtclient->subscribe(event, [ws, event](auto* data, auto len, auto* userdata) {
+			HttpSendEvent(ws, event, data, len);
 		});
 
 		LogTrace("[mxhttp] HttpSubscribeEvent() OK.");
-		auto eventws = _active_ws_subscriptions.find(event);
-		if(eventws == _active_ws_subscriptions.end())
-		{
-			_active_ws_subscriptions.emplace(event, std::set<UWSType*>{ws});
-			return;
-		}
-		eventws->second.insert(ws);
 	}
 
 	static void HttpUnsubscribeEvent(UWSType* ws, const std::string& event)
 	{
 		WsRpcBridge* bridge = ws->getUserData();
-		auto eventws = _active_ws_subscriptions.find(event);
-		if(eventws == _active_ws_subscriptions.end())
-		{
-			LogError("[mxhttp] Cannot unsubscribe to event <%s>. Not subscribed.", event.c_str());
-			return;
-		}
-		auto wsit = eventws->second.find(ws);
-		if(wsit == eventws->second.end())
-		{
-			LogError("[mxhttp] Cannot unsubscribe to event <%s>. Not subscribed.", event.c_str());
-			return;
-		}
-
 		bridge->_local_experiment._evt_client->unsubscribe(event);
-
 		LogTrace("[mxhttp] HttpUnsubscribeEvent() OK.");
-		eventws->second.erase(wsit);
 	}
 
 	static void HttpUnsubscribeEventAll(UWSType* ws)
 	{
 		WsRpcBridge* bridge = ws->getUserData();
-		for(const auto& event : _active_ws_subscriptions)
-		{
-			HttpUnsubscribeEvent(ws, event.first);
-		}
+		bridge->_local_experiment._evt_client->unsubscribeAll();
 	}
 
 	static std::uint64_t HttpGetNextClientId()
@@ -474,21 +544,69 @@ namespace mulex
 		return ccid++;
 	}
 
-	void HttpStartServer(std::uint16_t port, bool islocal)
+	static bool HttpCopyAppFiles()
 	{
+		// Do this everytime the server starts
+		// in case some of the files were accidentaly modified by the user (e.g. during plugins creation/copy)
+		std::string serveDir = SysGetExperimentHome();
+		std::uint64_t ncopy = 0;
+
+		SysWriteBinFile(serveDir + "/index.html", ResGetResource("index.html"));
+
+		SysWriteBinFile(serveDir + "/index.js", ResGetResource("index.js"));
+		SysWriteBinFile(serveDir + "/index.css", ResGetResource("index.css"));
+		SysWriteBinFile(serveDir + "/favicon.ico", ResGetResource("favicon.ico"));
+
+		return true;
+	}
+
+	bool HttpRegisterUserPlugin(const std::string& plugin)
+	{
+		LogDebug("[mxhttp] Registering user plugin <%s>.", plugin.c_str());
+		return RdbCreateValueDirect(("/system/http/plugins/" + plugin).c_str(), RdbValueType::BOOL, 0, true);
+	}
+
+	void HttpRemoveUserPlugin(const std::string& plugin)
+	{
+		LogDebug("[mxhttp] Removing user plugin <%s>.", plugin.c_str());
+		RdbDeleteValueDirect(("/system/http/plugins/" + plugin).c_str());
+	}
+
+	void HttpStartServer(std::uint16_t port, bool islocal, bool hotswap)
+	{
+
+		if(!HttpCopyAppFiles())
+		{
+			LogError("[mxhttp] Failed to copy app files to experiment cache dir.");
+			return;
+		}
+
 		EvtRegister("mxhttp::newclient");
 		EvtRegister("mxhttp::delclient");
+
+		if(hotswap)
+		{
+			if(!HttpStartTranspilerThread())
+			{
+				LogError("[mxhttp] Failed to start the transpiler watch thread.");
+				return;
+			}
+		}
+		else
+		{
+			LogWarning("[mxhttp] Running without hotswap. User plugins will not build automatically.");
+		}
 
 		_http_thread = new std::thread([port, islocal](){
 			_ws_loop_thread = uWS::Loop::get(); // Only read is ok
 			uWS::App().get("/*", [](auto* res, auto* req) {
 				HttpServeFile(res, req);
 			}).ws<WsRpcBridge>("/*", {
-				// .compression = uWS::CompressOptions(uWS::DEDICATED_COMPRESSOR_4KB | uWS::DEDICATED_COMPRESSOR),
-				.compression = uWS::DISABLED,
-				.maxPayloadLength = 100 * 1024 * 1024,
+				.compression = uWS::CompressOptions(uWS::DEDICATED_COMPRESSOR_4KB | uWS::DEDICATED_COMPRESSOR),
+				// .compression = uWS::DISABLED,
+				.maxPayloadLength = 1024 * 1024 * 1024,
 				.idleTimeout = 16,
-				.maxBackpressure = 100 * 1024 * 1024,
+				.maxBackpressure = 1024 * 1024 * 1024,
 				.closeOnBackpressureLimit = false,
 				.resetIdleTimeoutOnSend = false,
 				.sendPingsAutomatically = true,
@@ -604,8 +722,10 @@ namespace mulex
 				.close = [](auto* ws, int code, std::string_view message) {
 					WsRpcBridge* bridge = ws->getUserData();
 
+					// BUG: (Cesar) This is failing sometimes - the evtserver handles disconnected clients
+					// 				But it would be nice to have some cleaning up when disconnect is clean
 					// Unsubscribe from all events on this client if any
-					HttpUnsubscribeEventAll(ws);
+					// HttpUnsubscribeEventAll(ws);
 
 					std::unique_lock lock_aci(_aci_lock);
 					EvtEmit("mxhttp::delclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]._identifier), sizeof(std::uint64_t));
@@ -615,7 +735,7 @@ namespace mulex
 					// Delete the local rpc/ect client bridges for this connection
 					bridge->_local_experiment._rpc_client.reset();
 					bridge->_local_experiment._evt_client.reset();
-					LogDebug("[mxhttp] Closing WS connection.");
+					LogDebug("[mxhttp] Closed WS connection. [%x]", ws);
 				}
 			}).listen(islocal ? "127.0.0.1" : "0.0.0.0", port, [port, islocal](auto* token) {
 				if(token)
@@ -641,6 +761,9 @@ namespace mulex
 	void HttpStopServer()
 	{
 		LogDebug("[mxhttp] Closing http server.");
+
+		HttpStopTranspilerThread();
+
 		if(_http_listen_socket)
 		{
 			// Defer close all current connections (we don't want to wait on the browser)

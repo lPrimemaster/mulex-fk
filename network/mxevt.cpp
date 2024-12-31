@@ -347,6 +347,7 @@ namespace mulex
 			LogWarning("[evtclient] Subscribing to already subscribed event. Only one callback per event is allowed. Replacing...");
 		}
 		_evt_callbacks[eventid] = callback;
+		_evt_subscriptions.insert(event);
 
 		LogTrace("[evtclient] Subscribed to event <%s> [%d].", event.c_str(), eventid);
 	}
@@ -390,8 +391,17 @@ namespace mulex
 			return;
 		}
 		_evt_callbacks.erase(eid_callbacks);
+		_evt_subscriptions.erase(event);
 
 		LogTrace("[evtclient] Unsubscribed to event <%s> [%d].", event.c_str(), eventid);
+	}
+
+	void EvtClientThread::unsubscribeAll()
+	{
+		for(const auto event : _evt_subscriptions)
+		{
+			unsubscribe(event);
+		}
 	}
 
 	static void SetRdbClientConnectionStatus(std::uint64_t cid, bool connected)

@@ -48,11 +48,18 @@ namespace mulex
 {
 	static void SysAddArgumentI(const std::string& longname, const char shortname, bool needvalue, std::function<void(const std::string&)> action, const std::string& helptxt)
 	{
-		_sys_argscmd_short[shortname] = action;
-		_sys_argscmd_short_reqarg[shortname] = needvalue;
+		if(shortname != 0)
+		{
+			_sys_argscmd_short[shortname] = action;
+			_sys_argscmd_short_reqarg[shortname] = needvalue;
+			_sys_argscmd_helptxt[longname + ":" + std::string(1, shortname)] = helptxt;
+		}
+		else
+		{
+			_sys_argscmd_helptxt[longname] = helptxt;
+		}
 		_sys_argscmd_long[longname] = action;
 		_sys_argscmd_long_reqarg[longname] = needvalue;
-		_sys_argscmd_helptxt[longname + ":" + std::string(1, shortname)] = helptxt;
 	}
 
 	void SysAddArgument(const std::string& longname, const char shortname, bool needvalue, std::function<void(const std::string&)> action, const std::string& helptxt)
@@ -75,10 +82,13 @@ namespace mulex
 			return;
 		}
 
-		if(_sys_argscmd_short.find(shortname) != _sys_argscmd_short.end())
+		if(shortname != 0)
 		{
-			LogError("SysAddArgument: Argument named <%c> already exists.", shortname);
-			return;
+			if(_sys_argscmd_short.find(shortname) != _sys_argscmd_short.end())
+			{
+				LogError("SysAddArgument: Argument named <%c> already exists.", shortname);
+				return;
+			}
 		}
 
 		SysAddArgumentI(longname, shortname, needvalue, action, helptxt);
@@ -90,9 +100,18 @@ namespace mulex
 			std::cout << "Arguments help:" << std::endl;
 			for(const auto& arg : _sys_argscmd_helptxt)
 			{
+				bool no_short = (arg.first.find(":") == std::string::npos);
 				std::string longname  = arg.first.substr(0, arg.first.find(":"));
-				std::string shortname = arg.first.substr(arg.first.find(":")+1);
-				std::cout << "\t-" << shortname << "\t--" << longname << std::endl;
+				if(no_short)
+				{
+					std::cout << "\t\t--" << longname << std::endl;
+				}
+				else
+				{
+					std::string shortname = arg.first.substr(arg.first.find(":")+1);
+					std::cout << "\t-" << shortname << "\t--" << longname << std::endl;
+				}
+
 				if(arg.second.empty())
 				{
 					std::cout << "\t\t" << "<No description provided>" << std::endl;
@@ -256,10 +275,15 @@ namespace mulex
 
 		bool loopback = false;
 		std::uint16_t port = 8080;
+		bool hotswap = true;
 
 		SysAddArgument("name", 'n', true, [](const std::string& expname){ _sys_expname = expname; }, "Set the current experiment name.");
 		SysAddArgument("loopback", 'l', false, [&](const std::string&){ loopback = true; }, "Set the http server on loopback mode only.");
 		SysAddArgument("port", 'p', true, [&](const std::string& portstr){ port = ::atoi(portstr.c_str()); }, "Set the http server listen port.");
+		SysAddArgument("no-hotswap", 0, false, [&](const std::string&){ hotswap = false; },
+			"Disable realtime yarn build of user plugins. "
+			"Useful for manual compilation with other tools."
+		);
 
 		if(!SysParseArguments(argc, argv))
 		{
@@ -306,7 +330,7 @@ namespace mulex
 		// After evt thread init
 		MsgInit();
 
-		HttpStartServer(port, loopback);
+		HttpStartServer(port, loopback, hotswap);
 
 		return true;
 	}
@@ -680,6 +704,12 @@ namespace mulex
 		});
 	}
 
+	SysFileWatcher::~SysFileWatcher()
+	{
+		_watcher_on.store(false);
+		_thread->join();
+	}
+
 	std::int64_t SysGetCurrentTime()
 	{
 		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -919,6 +949,13 @@ namespace mulex
 		}
 
 		out.write(reinterpret_cast<const char*>(data.data()), data.size());
+	}
+
+	void SysCopyFile(const std::string& source, const std::string& destination)
+	{
+		std::ifstream src(source, std::ios::binary);
+		std::ofstream dst(destination, std::ios::binary);
+		dst << src.rdbuf();
 	}
 
 	bool EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
