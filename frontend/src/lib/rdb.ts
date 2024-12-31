@@ -15,6 +15,7 @@ export class MxRdb {
 				const key = MxGenericType.fromData(data).astype('string');
 				const value = MxGenericType.fromData(data.subarray(512), 'generic');
 				callback(key, value);
+				// console.log(response.astype('string'), key, value.astype('float64'), value.astype('uint64'));
 			});
 		});
 	}

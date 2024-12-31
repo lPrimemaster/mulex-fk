@@ -32,6 +32,11 @@ const Sidebar: Component = () => {
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
 						<NavigationMenuItem>
+							<NavigationMenuTrigger>
+								<A href='/project'>Project</A>
+							</NavigationMenuTrigger>
+						</NavigationMenuItem>
+						<NavigationMenuItem>
 							<NavigationMenuTrigger disabled>
 								Events
 							</NavigationMenuTrigger>

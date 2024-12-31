@@ -56,11 +56,11 @@ const Home: Component = () => {
 		setSocketStatus(conn);
 
 		if(conn) {
-			MxWebsocket.instance.rpc_call('mulex::RdbListKeys', [], 'generic').then((res) => {
-				const keys = res.astype('stringarray');
-				const tree = new MxRdbTree(keys);
-				tree.print_tree();
-			});
+			// MxWebsocket.instance.rpc_call('mulex::RdbListKeys', [], 'generic').then((res) => {
+			// 	const keys = res.astype('stringarray');
+			// 	const tree = new MxRdbTree(keys);
+			// 	tree.print_tree();
+			// });
 
 			MxWebsocket.instance.rpc_call(
 				'mulex::RdbReadValueDirect',

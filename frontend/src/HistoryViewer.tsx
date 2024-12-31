@@ -16,7 +16,6 @@ import { BadgeLabel } from './components/ui/badge-label';
 import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip';
 import { Checkbox } from './components/ui/checkbox';
 import { MxRdb } from './lib/rdb';
-import { createStore } from 'solid-js/store';
 
 interface DisplayOptions {
 	color: string;

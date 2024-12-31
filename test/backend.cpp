@@ -63,6 +63,11 @@ public:
 			log.info("CPU: %.2lf%%", cpu);
 		});
 
+		roota["/system/metrics/mem_used"].watch([this](const RdbKeyName& key, const RPCGenericType& value) {
+			std::uint64_t mem = value;
+			log.info("MEM: %llu", mem);
+		});
+
 		roota["/system/nested/test"].erase();
 		roota["/system/nested/test"].create(RdbValueType::INT32, 3);
 
