@@ -166,7 +166,6 @@ namespace mulex
 		if (ext == ".html") return "text/html";
 		if (ext == ".css")  return "text/css";
 		if (ext == ".js")   return "application/javascript";
-		if (ext == ".tsx")  return "application/javascript";
 		if (ext == ".png")  return "image/png";
 		if (ext == ".jpg")  return "image/jpeg";
 		if (ext == ".jpeg") return "image/jpeg";
