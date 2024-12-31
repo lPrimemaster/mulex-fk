@@ -3,14 +3,13 @@ include(FetchContent)
 include(cmake/InternetConnection.cmake)
 include(cmake/BuildManifest.cmake)
 include(cmake/BuildFrontend.cmake)
+include(cmake/InstallMulex.cmake)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 # Version configuration
 project(mulex-fk VERSION 0.2.0)
 set(PROJECT_VNAME Barnard)
-
-build_manifest_json()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -41,6 +40,7 @@ FetchContent_Declare(
 	sqlite3
 	URL https://www.sqlite.org/2024/sqlite-amalgamation-3470000.zip
 	URL_HASH SHA3_256=e35ee48efc24fe58d0e9102034ac0a41e3904641a745e94ab11a841fe9d7355e
+	EXCLUDE_FROM_ALL
 )
 if (NOT sqlite3_POPULATED)
 	FetchContent_Populate(sqlite3)
@@ -52,6 +52,7 @@ FetchContent_Declare(
 	GIT_REPOSITORY https://github.com/wolfpld/tracy.git
 	GIT_TAG v0.11.1
 	GIT_SHALLOW TRUE
+	EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(tracy)
 
@@ -77,6 +78,7 @@ add_subdirectory(network)
 add_subdirectory(rdb)
 add_subdirectory(drv)
 add_subdirectory(run)
+add_subdirectory(bck)
 add_subdirectory(ctargets)
 add_subdirectory(examples)
 
@@ -88,6 +90,7 @@ if(WIN32)
 endif()
 
 # Invoke yarn build (pre build)
+build_manifest_json()
 build_frontend_yarn()
 
 # Add testing
@@ -99,3 +102,6 @@ set(vite_config_ts ${CMAKE_SOURCE_DIR}/network/vite.config.ts)
 mx_resource_append(${vite_config_ts})
 
 mx_resource_gen()
+
+# Finally install everything for the user
+install_mulex()

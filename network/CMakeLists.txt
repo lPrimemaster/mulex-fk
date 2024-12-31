@@ -22,6 +22,7 @@ FetchContent_Declare(uWebSockets_cont
 	GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
 	SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets
 	GIT_SHALLOW ON
+	EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(uWebSockets_cont)
 message(STATUS ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets)
@@ -38,6 +39,7 @@ target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
 
 FetchContent_Declare(aklomp_base64
 	GIT_REPOSITORY https://github.com/aklomp/base64.git
+	EXCLUDE_FROM_ALL
 )
 
 # Disable base64 unneeded settings
@@ -46,6 +48,7 @@ FetchContent_MakeAvailable(aklomp_base64)
 
 FetchContent_Declare(rapidjson
 	GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
+	EXCLUDE_FROM_ALL
 )
 
 # Disable RapidJSON testing (which collides with some of our warnings as errors)

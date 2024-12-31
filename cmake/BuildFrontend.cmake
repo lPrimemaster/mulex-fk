@@ -16,6 +16,7 @@ endmacro()
 
 macro(build_frontend_yarn)
 	# Build frontend at configure time
+	message(STATUS "Building frontend via 'yarn build'...")
 	execute_process(
 		COMMAND yarn build
 		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/frontend

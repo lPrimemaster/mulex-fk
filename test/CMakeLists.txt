@@ -94,13 +94,9 @@ target_include_directories(test_evt PRIVATE
 )
 add_test(test_evt test_evt)
 
-add_executable(test_bck backend.cpp ../bck/mxbackend.cpp ../mxsystem.cpp)
+add_executable(test_bck backend.cpp)
 
-if(WIN32)
-	target_link_libraries(test_bck wsock32 ws2_32 Shlwapi)
-endif()
-
-target_link_libraries(test_bck mxrdb mxhttp mxrpc)
+target_link_libraries(test_bck mxbck)
 
 target_include_directories(test_bck PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
