@@ -81,16 +81,10 @@ namespace mulex
 
 		std::string pluginsDir = serveDir + "/plugins";
 
-#ifdef __linux__
 		std::string command;
 		command += " yarn --cwd '";
 		command += serveDir;
 		command += "' build";
-#else
-		std::string command;
-		command += pluginsDir + "\"";
-		command += " && start yarn build";
-#endif
 
 		if(!std::filesystem::is_directory(pluginsDir) && !std::filesystem::create_directory(pluginsDir))
 		{
@@ -115,9 +109,13 @@ namespace mulex
 					}
 					case SysFileWatcher::FileOp::MODIFIED:
 					{
-						// std::thread([filename, command](){
-						// 	std::system(("ENTRY_FILE=./plugins/" + filename + command).c_str());
-						// }).detach();
+						std::thread([filename, command](){
+#ifdef __linux__
+							std::system(("ENTRY_FILE=./plugins/" + filename + command).c_str());
+#else
+							LogError("[mxhttp] Windows does not yet support frontend file hotswaping.");
+#endif
+						}).detach();
 						break;
 					}
 					case SysFileWatcher::FileOp::DELETED:
