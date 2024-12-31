@@ -18,12 +18,20 @@ macro(build_frontend_yarn)
 	# Build frontend at configure time
 	execute_process(
 		COMMAND yarn build
-		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/frontend/dist/ ${CMAKE_BINARY_DIR}/dist/
 		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/frontend
+		RESULT_VARIABLE yarn_result
+		OUTPUT_VARIABLE yarn_output
+		ERROR_VARIABLE yarn_error
 	)
 
+	if(yarn_result)
+		message(FATAL_ERROR "Yarn build failed with error: ${yarn_error}")
+	else()
+		message(STATUS "Yarn build OK.")
+	endif()
+
 	# Read the files back and embed them into the executable via mxres.h.in
-	file(GLOB_RECURSE files "${CMAKE_BINARY_DIR}/dist/*")
+	file(GLOB_RECURSE files "${CMAKE_SOURCE_DIR}/frontend/dist/*")
 	foreach(file ${files})
 		mx_resource_append(${file})
 	endforeach()
