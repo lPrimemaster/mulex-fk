@@ -1,6 +1,6 @@
 import { Component, For, Show, useContext } from 'solid-js';
 import Sidebar from './components/Sidebar';
-import { MxPlugin, mxGetPluginsAccessor, mxRegisterPlugin } from './lib/plugin';
+import { MxPlugin, mxGetPluginsAccessor } from './lib/plugin';
 import { mxRegisterPluginFromFile } from "./lib/plugin";
 import { MxRdb } from './lib/rdb';
 import { MxGenericType } from './lib/convert';
