@@ -961,6 +961,11 @@ namespace mulex
 		std::shared_lock lock_ops(_rdb_rw_lock);
 		const RdbEntry* entry = RdbFindEntryByNameUnlocked(key);
 
+		if(!entry)
+		{
+			return 0xFF;
+		}
+
 		std::shared_lock lock_entry(entry->_rw_lock);
 		return static_cast<std::uint8_t>(entry->_type);
 	}
