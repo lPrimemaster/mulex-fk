@@ -9,6 +9,7 @@ import { Project } from './Project';
 import { RdbViewer } from './RdbViewer';
 import { LogProvider } from './components/LogTable';
 import { HistoryViewer } from './HistoryViewer';
+import { DynamicRouter, DynamicRouterProvider } from './components/DynamicRouter';
 
 const root = document.getElementById('root');
 
@@ -20,14 +21,17 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 
 render(() => (
 		<>
-			<LogProvider maxLogs={100}>
-				<Router>
-					<Route path='/' component={Home}/>
-					<Route path='/project' component={Project}/>
-					<Route path='/rdb' component={RdbViewer}/>
-					<Route path='/history' component={HistoryViewer}/>
-				</Router>
-				<Toaster/>
-			</LogProvider>
+			<DynamicRouterProvider>
+				<LogProvider maxLogs={100}>
+					<Router>
+						<Route path='/' component={Home}/>
+						<Route path='/project' component={Project}/>
+						<Route path='/rdb' component={RdbViewer}/>
+						<Route path='/history' component={HistoryViewer}/>
+						<DynamicRouter/>
+					</Router>
+					<Toaster/>
+				</LogProvider>
+			</DynamicRouterProvider>
 		</>
 	), root!);
