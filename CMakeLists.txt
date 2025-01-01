@@ -46,6 +46,12 @@ if (NOT sqlite3_POPULATED)
 	FetchContent_Populate(sqlite3)
 endif()
 
+if(PROFILE)
+	set(TRACY_ENABLE ON CACHE BOOL "Enable Tracy" FORCE)
+else()
+	set(TRACY_ENABLE OFF CACHE BOOL "Enable Tracy" FORCE)
+endif()
+
 # Tracy Profiler
 FetchContent_Declare(
 	tracy
@@ -61,9 +67,6 @@ set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
 add_definitions(-D${RPC_CALL_KEYWORD}=)
 set(RPC_SPEC_FILE rpcspec.inl)
 
-if(PROFILE)
-	add_definitions(-DTRACY_ENABLE)
-endif()
 
 # Make sure tracy profiler is installed/linked system wide
 link_libraries(TracyClient)
