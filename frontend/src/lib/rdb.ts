@@ -5,6 +5,8 @@ export class MxRdb {
 	private root: string;
 	private types: Map<string, string>;
 
+	// MxRdb fetches key types automatically for type inference on read/write
+	// leveraging ts type [any]
 	private async getKeyType(key: string) : Promise<string> {
 		if(this.types.has(key)) {
 			return this.types.get(key)!;
@@ -40,7 +42,7 @@ export class MxRdb {
 			console.error('Failed to write key [' + tkey + '].');
 		}
 		else {
-			MxWebsocket.instance.rpc_call('mulex::RdbWriteValueDirect', [MxGenericType.str512(tkey), MxGenericType.fromValue(value, type)]);
+			MxWebsocket.instance.rpc_call('mulex::RdbWriteValueDirect', [MxGenericType.str512(tkey), MxGenericType.fromValue(value, type, 'generic')], 'none');
 		}
 	}
 
@@ -50,7 +52,7 @@ export class MxRdb {
 			MxGenericType.str512(tkey),
 			MxGenericType.uint8(MxGenericType.typeidFromType(type)),
 			MxGenericType.uint64(BigInt(count)),
-			MxGenericType.fromValue(value, type)
+			MxGenericType.fromValue(value, type, 'generic')
 		])).astype('bool');
 
 		if(!ok) {
@@ -60,7 +62,7 @@ export class MxRdb {
 
 	public delete(key: string) {
 		const tkey = this.root + key;
-		MxWebsocket.instance.rpc_call('mulex::RdbDeleteValueDirect', [MxGenericType.str512(tkey)]);
+		MxWebsocket.instance.rpc_call('mulex::RdbDeleteValueDirect', [MxGenericType.str512(tkey)], 'none');
 	}
 
 	public watch(key: string, callback: Function) {

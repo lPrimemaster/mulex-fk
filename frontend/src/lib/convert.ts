@@ -111,7 +111,6 @@ export class MxGenericType
 			let sdata = new BigUint64Array([BigInt(data.length)]);
 			ndata.set(new Uint8Array(sdata.buffer), 0);
 			ndata.set(data, 8);
-			console.log('ndata: ', ndata);
 			return new MxGenericType(ndata, intype);
 		}
 

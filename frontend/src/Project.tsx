@@ -1,4 +1,4 @@
-import { Component, For, Show, useContext } from 'solid-js';
+import { Component, For, Show, createSignal, useContext } from 'solid-js';
 import Sidebar from './components/Sidebar';
 import { MxPlugin, mxGetPluginsAccessor } from './lib/plugin';
 import { mxRegisterPluginFromFile } from "./lib/plugin";
@@ -9,6 +9,8 @@ import Card from './components/Card';
 import { MxDynamicRouterContext, DynamicRouterContext } from './components/DynamicRouter';
 import { createMapStore } from './lib/rmap';
 import { A } from '@solidjs/router';
+import { MxValuePanel } from './components/ValuePanel';
+import { MxValueControl } from './components/ValueControl';
 
 export const Project : Component = () => {
 	let dynamic_plugin_id = 0;
@@ -63,10 +65,20 @@ export const Project : Component = () => {
 		}
 	});
 
+	const [v, sv] = createSignal(0);
+	const [v0, sv0] = createSignal(0);
+
+	setInterval(() => {sv(v() + 1)}, 1000);
+
 	return (
 		<div>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
+				<div class="flex gap-5">
+					<MxValuePanel title="C1" value={3.1415926535} size="xlarge" units="rad"/>
+					<MxValuePanel title="Temperature C1" value={v()} size="xlarge" units="&deg;C" reactive/>
+					<MxValueControl title="C1 setpoint" min={0} value={v0()} description="my setpoint" size="xlarge" increment={0.1} units="Bq" onChange={(val) => {sv0(val)}}/>
+				</div>
 				<div class="flex gap-5 flex-wrap">
 					<Show when={mxGetPluginsAccessor().data.size === 0}>
 						<div class="w-full flex">

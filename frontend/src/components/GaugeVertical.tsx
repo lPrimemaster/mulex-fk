@@ -1,8 +1,8 @@
-import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { Component, For, Show, createMemo } from 'solid-js';
 
 type DisplayMode = 'percentage' | 'absolute';
 
-interface GaugeVerticalProps {
+interface MxGaugeVerticalProps {
 	min: number;
 	max: number;
 	value: number;
@@ -15,7 +15,7 @@ interface GaugeVerticalProps {
 	backgroundColor?: string;
 };
 
-export const GaugeVertical : Component<GaugeVerticalProps> = (props) => {
+export const MxGaugeVertical : Component<MxGaugeVerticalProps> = (props) => {
 	const percentage = createMemo(() => ((props.value - props.min) / (props.max - props.min)) * 100);
 
 	const style = 'flex flex-col-reverse items-center gap-0.5 h-full overflow-hidden' 

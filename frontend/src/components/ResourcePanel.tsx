@@ -1,5 +1,5 @@
 import { Component, createSignal } from 'solid-js';
-import { GaugeVertical } from './GaugeVertical';
+import { MxGaugeVertical } from './GaugeVertical';
 import { MxWebsocket } from '../lib/websocket';
 import { MxGenericType } from '../lib/convert';
 import { MxRdb } from '~/lib/rdb';
@@ -46,10 +46,10 @@ export const ResourcePanel : Component = () => {
 
 	return (
 		<div class="flex gap-5 place-content-center">
-			<GaugeVertical height="200px" width="120px" title="CPU Usage" min={0} max={100} value={cpuUsage()} displayMode="percentage"/>
-			{/*<GaugeVertical height="200px" width="120px" title="CPU Temp" min={0} max={100} value={91} displayMode="absolute" units="&#176;C"/>*/}
-			<GaugeVertical height="200px" width="120px" title="RAM" min={0} max={memTotal()} value={memUsed()} displayMode="absolute" units="GB"/>
-			{/*<GaugeVertical height="200px" width="120px" title="Disk IO" min={0} max={100} value={91} displayMode="percentage" units="GB"/>*/}
+			<MxGaugeVertical height="200px" width="120px" title="CPU Usage" min={0} max={100} value={cpuUsage()} displayMode="percentage"/>
+			{/*<MxGaugeVertical height="200px" width="120px" title="CPU Temp" min={0} max={100} value={91} displayMode="absolute" units="&#176;C"/>*/}
+			<MxGaugeVertical height="200px" width="120px" title="RAM" min={0} max={memTotal()} value={memUsed()} displayMode="absolute" units="GB"/>
+			{/*<MxGaugeVertical height="200px" width="120px" title="Disk IO" min={0} max={100} value={91} displayMode="percentage" units="GB"/>*/}
 		</div>
 	);
 };

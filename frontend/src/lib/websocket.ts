@@ -9,7 +9,7 @@ export class MxWebsocket {
 	private static s_instance: MxWebsocket;
 	private address: string;
 	private on_change: Array<Function>;
-	private event_subscriptions: Map<string, Function>;
+	private event_subscriptions: Map<string, Function | undefined>;
 
 	private setupCallbacks() {
 		this.socket.onopen = async () => {
@@ -123,7 +123,7 @@ export class MxWebsocket {
 		});
 	}
 
-	public async subscribe(event: string, callback: Function) {
+	public async subscribe(event: string, callback: Function | undefined) {
 		const data: string = this.make_evt_message(event, 0);
 		if(!this.isready) {
 			await this.when_ready();
