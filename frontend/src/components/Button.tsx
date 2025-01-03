@@ -23,3 +23,5 @@ export const Button : Component<{ children: JSXElement, type?: string, onClick?:
 		</button>
 	);
 };
+
+export const MxButton = Button;

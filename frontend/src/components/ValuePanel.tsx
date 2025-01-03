@@ -7,6 +7,7 @@ interface MxValuePanelProps {
 	title: string;
 	value: string | number;
 	size: MxValuePanelSize;
+	color?: string;
 	reactive?: boolean;
 	description?: string;
 	units?: string;
@@ -14,8 +15,8 @@ interface MxValuePanelProps {
 };
 
 export const MxValuePanel : Component<MxValuePanelProps> = (props) => {
-	const DEF_COLOR = '#93c5fd'; // bg-blue-300
-	const REC_COLOR = '#fef9c3'; // bg-yellow-100
+	const DEF_COLOR = props.color || '#93c5fd'; // bg-blue-300
+	const REC_COLOR = '#fef9c3'; 				// bg-yellow-100
 
 	const [transition, setTransition] = createSignal<string>('');
 	const [bgColor, setBgColor] = createSignal<string>(DEF_COLOR);
@@ -63,9 +64,18 @@ export const MxValuePanel : Component<MxValuePanelProps> = (props) => {
 				setBgColor(REC_COLOR);
 				setTransition('none');
 				setTimeout(() => {
-					setBgColor(DEF_COLOR);
+					setBgColor(props.color || DEF_COLOR);
 					setTransition('background-color 0.75s');
 				}, 100);
+			}
+		}
+	));
+
+	createEffect(on(
+		() => props.color,
+		() => {
+			if(props.color) {
+				setBgColor(props.color);
 			}
 		}
 	));

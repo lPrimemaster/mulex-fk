@@ -9,4 +9,6 @@ const Card: Component<{title: string, children?: JSXElement}> = (props) => {
 	);
 };
 
+export const MxCard = Card;
+
 export default Card;

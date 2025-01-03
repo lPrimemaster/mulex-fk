@@ -11,6 +11,10 @@ import { createMapStore } from './lib/rmap';
 import { A } from '@solidjs/router';
 import { MxValuePanel } from './components/ValuePanel';
 import { MxValueControl } from './components/ValueControl';
+import { MxButton } from './components/Button';
+import { MxSwitch } from './components/Switch';
+import { MxGaugeVertical } from './components/GaugeVertical';
+import { MxSelector } from './components/Selector';
 
 export const Project : Component = () => {
 	let dynamic_plugin_id = 0;
@@ -67,17 +71,28 @@ export const Project : Component = () => {
 
 	const [v, sv] = createSignal(0);
 	const [v0, sv0] = createSignal(0);
+	const [c, sc] = createSignal('red');
+	const [b, sb] = createSignal(false);
 
 	setInterval(() => {sv(v() + 1)}, 1000);
+	// setInterval(() => sc(c() === 'red' ? 'green' : 'red'), 2000);
 
 	return (
 		<div>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
-				<div class="flex gap-5">
+				<div class="flex gap-5 mb-5">
 					<MxValuePanel title="C1" value={3.1415926535} size="xlarge" units="rad"/>
-					<MxValuePanel title="Temperature C1" value={v()} size="xlarge" units="&deg;C" reactive/>
+					<MxValuePanel title="Temperature C1" color={c()} value={v()} size="xlarge" units="&deg;C" reactive/>
 					<MxValueControl title="C1 setpoint" min={0} value={v0()} description="my setpoint" size="xlarge" increment={0.1} units="Bq" onChange={(val) => {sv0(val)}}/>
+					<MxButton class="font-bold text-4xl">Spin</MxButton>
+					<MxButton type="error" class="font-bold text-4xl">Stop</MxButton>
+					<MxSwitch label="Lock" value={b()} onChange={sb}/>
+				</div>
+				<div class="flex gap-5">
+					<MxGaugeVertical min={0} max={100} value={50} width="128px" height="200px" title="Gauge"/>
+					<MxGaugeVertical min={0} max={2000} value={1036} width="200px" height="200px" title="Pressure" units="mbar" displayMode="absolute"/>
+					<MxSelector title="Operation Mode" value="Silent" size="xlarge" onSelect={(v) => { console.log(v) }} options={['Silent', 'Loud', 'XtraLoud']}/>
 				</div>
 				<div class="flex gap-5 flex-wrap">
 					<Show when={mxGetPluginsAccessor().data.size === 0}>
