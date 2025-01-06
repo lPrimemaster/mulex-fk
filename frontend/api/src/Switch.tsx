@@ -1,5 +1,5 @@
 import { Component } from 'solid-js';
-import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from './ui/switch';
+import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from './components/ui/switch';
 
 interface MxSwitchProps {
 	label: string;

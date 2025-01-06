@@ -6,7 +6,7 @@ import { MxWebsocket } from './lib/websocket';
 import { showToast } from './components/ui/toast';
 import { MxRdbTree } from './lib/rdbtree';
 import { MxGenericType } from './lib/convert';
-import { Button } from './components/Button';
+import { MxButton } from 'mulex-api';
 import { MxRdb } from './lib/rdb';
 import { BadgeLabel } from './components/ui/badge-label';
 import { timestamp_tohms } from './lib/utils';
@@ -122,7 +122,7 @@ const Home: Component = () => {
 				<div class="columns-1 xl:columns-2 gap-5">
 					<Card title="Status">
 						<div class="grid grid-cols-4 grid-rows-4 gap-1">
-							<Button
+							<MxButton
 								class="col-span-2 row-span-2 m-1"
 								onClick={() => {
 									MxWebsocket.instance.rpc_call('mulex::RunStart').then((res: MxGenericType) => {
@@ -133,22 +133,22 @@ const Home: Component = () => {
 									});
 								}}
 								disabled={runStatus() == 'Running'}
-							>Start Run</Button>
-							<Button
+							>Start Run</MxButton>
+							<MxButton
 								class="col-span-1 row-span-2 row-start-3 m-1"
 								onClick={() => {
 									MxWebsocket.instance.rpc_call('mulex::RunStop', [], 'none');
 								}}
 								disabled={runStatus() != 'Running'}
-							>Stop Run</Button>
-							<Button
+							>Stop Run</MxButton>
+							<MxButton
 								class="col-span-1 row-span-2 row-start-3 m-1"
 								onClick={() => {
 									MxWebsocket.instance.rpc_call('mulex::RunReset', [], 'none');
 								}}
 								disabled={runStatus() != 'Stopped'}
 								type="error"
-							>Reset Run</Button>
+							>Reset Run</MxButton>
 							<div class="col-span-2 mx-5 grid grid-cols-2 gap-5 text-right">
 								<span>Server</span>
 								<BadgeLabel type={socketStatus() ? "success" : "error"}>{socketStatus() ? 'Connected' : 'Disconnected'}</BadgeLabel>

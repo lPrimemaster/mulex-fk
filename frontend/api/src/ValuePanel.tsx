@@ -1,5 +1,5 @@
 import { Component, Show, createEffect, createSignal, on } from 'solid-js';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip';
 
 type MxValuePanelSize = 'small' | 'medium' | 'large' | 'xlarge';
 

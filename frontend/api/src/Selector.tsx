@@ -1,5 +1,5 @@
 import { Component, For, Show, createSignal } from 'solid-js';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip';
 
 type MxSelectorSize = 'small' | 'medium' | 'large' | 'xlarge';
 
@@ -14,7 +14,6 @@ interface MxSelectorProps {
 };
 
 export const MxSelector : Component<MxSelectorProps> = (props) => {
-
 	const [activeItem, setActiveItem] = createSignal<string>(props.value);
 	const [open, setOpen] = createSignal<boolean>(false);
 

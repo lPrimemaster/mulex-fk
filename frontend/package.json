@@ -26,6 +26,8 @@
     "@zag-js/solid": "^0.77.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "deps": "^1.0.0",
+    "mulex-api": "file:./api",
     "solid-js": "^1.8.11",
     "solid-transition-group": "^0.2.3",
     "tailwind-merge": "^2.5.4",

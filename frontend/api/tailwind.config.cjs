@@ -1,10 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ["variant", [".dark &", '[data-kb-theme="dark"] &']],
-  content: [
-	  "./src/**/*.{ts,tsx}",
-	  "node_modules/mulex-api/src/*.{js,jsx,ts,tsx}"
-  ],
+  content: ["./src/**/*.{ts,tsx}"],
   prefix: "",
   theme: {
     container: {

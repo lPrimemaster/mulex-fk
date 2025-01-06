@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar';
 import { Plot } from './components/Plot';
 import 'uplot/dist/uPlot.min.css';
 import { cssColorToRGB } from './lib/utils';
-import { Button } from './components/Button';
+import { MxButton } from 'mulex-api';
 import Card from './components/Card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog';
 import { createMapStore } from './lib/rmap';
@@ -249,19 +249,19 @@ const HistoryPlotManager : Component = () => {
 						</SearchBarProvider>
 					</div>
 					<DialogFooter>
-						<Button onClick={() => {
+						<MxButton onClick={() => {
 							displaysActions.add(displayName(), Array.from(selectedKeysData.data.values()));
 							setDisplayName('');
 							setOpenHPM(false);
 							selectedKeysAction.clear();
 							selectedKeysDataActions.clear();
-						}} disabled={!valid()}>Done</Button>
-						<Button onClick={() => {
+						}} disabled={!valid()}>Done</MxButton>
+						<MxButton onClick={() => {
 							setDisplayName('');
 							setOpenHPM(false);
 							selectedKeysAction.clear();
 							selectedKeysDataActions.clear();
-						}} type="error">Cancel</Button>
+						}} type="error">Cancel</MxButton>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
@@ -359,8 +359,8 @@ const HistoryPlot : Component<{name: string, options: Array<DisplayOptions>}> = 
 				</div>
 				<Show when={isHover()}>
 					<div class="flex gap-5">
-						<Button>Change</Button>
-						<Button type="error">Remove</Button>
+						<MxButton>Change</MxButton>
+						<MxButton type="error">Remove</MxButton>
 					</div>
 				</Show>
 			</Card>

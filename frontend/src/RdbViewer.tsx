@@ -13,7 +13,7 @@ import { MxRdb } from './lib/rdb';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table';
 import { ComboSimple } from './components/ComboSimple';
 import { Transition } from 'solid-transition-group';
-import { Button } from './components/Button';
+import { MxButton } from 'mulex-api';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog';
 import { scroll_to_element, array_chunkify } from './lib/utils';
 import { TextField, TextFieldLabel, TextFieldInput, TextFieldErrorMessage } from './components/ui/text-field';
@@ -206,9 +206,9 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 						</Table>
 					</div>
 					<div class="flex flex-row-reverse mx-10 gap-2">
-						<Button onClick={() => { setSelectedItem(''); }}>Close</Button>
-						<Button type="error" disabled={path().includes('system')} onClick={() => setOpenDelete(true) }>Delete</Button>
-						<Button disabled={path().includes('system')} onClick={ () => setOpenEdit(true) }>Edit</Button>
+						<MxButton onClick={() => { setSelectedItem(''); }}>Close</MxButton>
+						<MxButton type="error" disabled={path().includes('system')} onClick={() => setOpenDelete(true) }>Delete</MxButton>
+						<MxButton disabled={path().includes('system')} onClick={ () => setOpenEdit(true) }>Edit</MxButton>
 					</div>
 					<Dialog open={openEdit()} onOpenChange={setOpenEdit}>
 						<DialogTrigger/>
@@ -223,14 +223,14 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 								</TextField>
 							</div>
 							<DialogFooter>
-								<Button onClick={() => {
+								<MxButton onClick={() => {
 									MxWebsocket.instance.rpc_call('mulex::RdbWriteValueDirect', [
 										MxGenericType.str512(path() + '/' + name()),
 										MxGenericType.fromValue(writeValue(), type().toLowerCase(), 'generic')
 									], 'none');
 									setOpenEdit(false);
-								}}>Save</Button>
-								<Button onClick={setOpenEdit}>Cancel</Button>
+								}}>Save</MxButton>
+								<MxButton onClick={setOpenEdit}>Cancel</MxButton>
 							</DialogFooter>
 						</DialogContent>
 					</Dialog>
@@ -246,14 +246,14 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 								Backends depending on it might stop working properly!
 							</div>
 							<DialogFooter>
-								<Button type="error" onClick={() => {
+								<MxButton type="error" onClick={() => {
 									MxWebsocket.instance.rpc_call('mulex::RdbDeleteValueDirect',
 																  [MxGenericType.str512(path() + '/' + name())],
 																  'none');
 									setOpenDelete(false);
 									setSelectedItem('');
-								}}>Delete</Button>
-								<Button onClick={setOpenDelete}>Cancel</Button>
+								}}>Delete</MxButton>
+								<MxButton onClick={setOpenDelete}>Cancel</MxButton>
 							</DialogFooter>
 						</DialogContent>
 					</Dialog>
@@ -418,7 +418,7 @@ export const RdbViewer: Component = () => {
 						*/}
 						<div class="flex">
 							<Dialog open={newKeyDialogOpen()} onOpenChange={setNewKeyDialogOpen}>
-								<DialogTrigger as={Button}>New Key</DialogTrigger>
+								<DialogTrigger as={MxButton}>New Key</DialogTrigger>
 								<DialogContent class="overflow-visible">
 									<DialogHeader>
 										<DialogTitle class="text-center">Create Key</DialogTitle>
@@ -502,14 +502,14 @@ export const RdbViewer: Component = () => {
 									</TextField>
 									*/}
 									<DialogFooter>
-										<Button onClick={() => createRdbEntry()} disabled={!validKey() || !validValue()}>Create</Button>
-										<Button onClick={() => setNewKeyDialogOpen(false)}>Cancel</Button>
+										<MxButton onClick={() => createRdbEntry()} disabled={!validKey() || !validValue()}>Create</MxButton>
+										<MxButton onClick={() => setNewKeyDialogOpen(false)}>Cancel</MxButton>
 									</DialogFooter>
 								</DialogContent>
 							</Dialog>
 						</div>
 						<div class="flex">
-							<Button onClick={() => setHideSystemKeys(!hideSystemKeys())}>{hideSystemKeys() ? 'Show' : 'Hide'} System Keys</Button>
+							<MxButton onClick={() => setHideSystemKeys(!hideSystemKeys())}>{hideSystemKeys() ? 'Show' : 'Hide'} System Keys</MxButton>
 						</div>
 						<div class="flex py-1">
 							<span>Total keys</span>

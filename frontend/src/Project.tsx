@@ -9,13 +9,7 @@ import Card from './components/Card';
 import { MxDynamicRouterContext, DynamicRouterContext } from './components/DynamicRouter';
 import { createMapStore } from './lib/rmap';
 import { A } from '@solidjs/router';
-import { MxValuePanel } from './components/ValuePanel';
-import { MxValueControl } from './components/ValueControl';
-import { MxButton } from './components/Button';
-import { MxSwitch } from './components/Switch';
-import { MxGaugeVertical } from './components/GaugeVertical';
-import { MxSelector } from './components/Selector';
-
+import { MxValuePanel, MxValueControl, MxButton, MxSwitch, MxGaugeVertical, MxSelector } from 'mulex-api';
 export const Project : Component = () => {
 	let dynamic_plugin_id = 0;
 	const { addRoute } = useContext(DynamicRouterContext) as MxDynamicRouterContext;

@@ -1,5 +1,5 @@
 import { Component, createSignal } from 'solid-js';
-import { MxGaugeVertical } from './GaugeVertical';
+import { MxGaugeVertical } from 'mulex-api';
 import { MxWebsocket } from '../lib/websocket';
 import { MxGenericType } from '../lib/convert';
 import { MxRdb } from '~/lib/rdb';
