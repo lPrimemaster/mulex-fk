@@ -111,6 +111,13 @@ namespace mulex
 		}
 #endif
 
+		// Remove all of the plugins and re-add user might have deleted files when mxmain was down
+		std::vector<RdbKeyName> prev_plugins = RdbListSubkeys("/system/http/plugins/");
+		for(const auto pplugin : prev_plugins)
+		{
+			HttpRemoveUserPlugin(pplugin.c_str());
+		}
+
 		_plugins_watch = std::make_unique<SysFileWatcher>(pluginsDir, [serveDir](const SysFileWatcher::FileOp op, const std::string& file) {
 			if(RdbReadValueDirect("/system/http/hotswap").asType<bool>())
 			{
