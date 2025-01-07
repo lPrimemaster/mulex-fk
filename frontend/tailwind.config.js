@@ -2,8 +2,7 @@
 export default {
   darkMode: ["variant", [".dark &", '[data-kb-theme="dark"] &']],
   content: [
-	  "./src/**/*.{ts,tsx}",
-	  "node_modules/mulex-api/src/*.{js,jsx,ts,tsx}"
+	  "./src/**/*.{ts,tsx}"
   ],
   prefix: "",
   theme: {

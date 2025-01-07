@@ -9,11 +9,13 @@ import Card from './components/Card';
 import { MxDynamicRouterContext, DynamicRouterContext } from './components/DynamicRouter';
 import { createMapStore } from './lib/rmap';
 import { A } from '@solidjs/router';
-import { MxValuePanel, MxValueControl, MxButton, MxSwitch, MxGaugeVertical, MxSelector } from 'mulex-api';
+import { check_condition } from './lib/utils';
+
 export const Project : Component = () => {
 	let dynamic_plugin_id = 0;
 	const { addRoute } = useContext(DynamicRouterContext) as MxDynamicRouterContext;
 	const [ dynamicRoutes, dynamicRoutesActions ] = createMapStore<string, string>(new Map<string, string>());
+	let transpiler_on: boolean | undefined = undefined;
 
 	function generatePluginPage(plugin: MxPlugin) {
 		const RenderPlug : Component = () => {
@@ -29,37 +31,42 @@ export const Project : Component = () => {
 		return RenderPlug;
 	}
 
-	function getPluginJsPath(key: string) {
-		const filename = key.split('/').pop()!;
-		const path = './../mxp.comp/mxp.es.' + filename.split('.').shift() + '.js';
-		return path;
+	MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/http/online_transpiler')], 'generic').then((res) => {
+		transpiler_on = res.astype('bool');
+	});
+
+	async function getPluginJsPath(key: string) {
+		await check_condition(() => transpiler_on !== undefined);
+
+		if(transpiler_on) {
+			const filename = key.split('/').pop()!;
+			const path = './../mxp.comp/mxp.es.' + filename.split('.').shift() + '.js';
+			return path;
+		}
+		else {
+			const filename = key.split('/').pop()!;
+			const path = './../plugins/' + filename.split('.').shift() + '.js';
+			return path;
+		}
 	}
 
-	async function registerPluginFromFile(path: string) {
+	async function registerPluginFromFile(key: string) {
+		const path = await getPluginJsPath(key);
 		const plugin = await mxRegisterPluginFromFile(path);
 		const plugin_route = '/plugin' + dynamic_plugin_id++;
 		addRoute(plugin_route, generatePluginPage(plugin));
 		dynamicRoutesActions.add(plugin.id, plugin_route);
 	}
 
-	// async function registerPlugin(plugin: MxPlugin) {
-	// 	mxRegisterPlugin(plugin);
-	// 	const plugin_route = '/plugin' + dynamic_plugin_id++;
-	// 	addRoute(plugin_route, generatePluginPage(plugin));
-	// 	dynamicRoutesActions.add(plugin.id, plugin_route);
-	// }
-
 	const rdb = new MxRdb();
 	rdb.watch('/system/http/plugins/*', (key: string, _: MxGenericType) => {
-		const path = getPluginJsPath(key);
-		registerPluginFromFile(path);
+		registerPluginFromFile(key);
 	});
 
 	MxWebsocket.instance.rpc_call('mulex::RdbListSubkeys', [MxGenericType.str512('/system/http/plugins/')], 'generic').then((res) => {
 		const keys = res.astype('stringarray');
 		for(const key of keys) {
-			const path = getPluginJsPath(key);
-			registerPluginFromFile(path);
+			registerPluginFromFile(key);
 		}
 	});
 
@@ -75,7 +82,7 @@ export const Project : Component = () => {
 		<div>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
-				<div class="flex gap-5 mb-5">
+			{/*<div class="flex gap-5 mb-5">
 					<MxValuePanel title="C1" value={3.1415926535} size="xlarge" units="rad"/>
 					<MxValuePanel title="Temperature C1" color={c()} value={v()} size="xlarge" units="&deg;C" reactive/>
 					<MxValueControl title="C1 setpoint" min={0} value={v0()} description="my setpoint" size="xlarge" increment={0.1} units="Bq" onChange={(val) => {sv0(val)}}/>
@@ -87,7 +94,7 @@ export const Project : Component = () => {
 					<MxGaugeVertical min={0} max={100} value={50} width="128px" height="200px" title="Gauge"/>
 					<MxGaugeVertical min={0} max={2000} value={1036} width="200px" height="200px" title="Pressure" units="mbar" displayMode="absolute"/>
 					<MxSelector title="Operation Mode" value="Silent" size="xlarge" onSelect={(v) => { console.log(v) }} options={['Silent', 'Loud', 'XtraLoud']}/>
-				</div>
+				</div>*/}
 				<div class="flex gap-5 flex-wrap">
 					<Show when={mxGetPluginsAccessor().data.size === 0}>
 						<div class="w-full flex">

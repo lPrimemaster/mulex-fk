@@ -16,7 +16,6 @@ export class MxRpc {
 		const res = await MxWebsocket.instance.rpc_call('mulex::RpcGetAllCalls', [], 'generic');
 		const methods = array_chunkify<string>(res.astype('stringarray'), 2);
 
-		console.log(methods);
 		for(const method of methods) {
 			// Assume all methods start with the mulex:: namespace
 			const func = method[0].split('::').pop()!;

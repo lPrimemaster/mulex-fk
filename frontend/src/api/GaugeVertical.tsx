@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo } from 'solid-js';
 
 type DisplayMode = 'percentage' | 'absolute';
 

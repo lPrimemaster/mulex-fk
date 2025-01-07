@@ -13,7 +13,7 @@ import { MxRdb } from './lib/rdb';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table';
 import { ComboSimple } from './components/ComboSimple';
 import { Transition } from 'solid-transition-group';
-import { MxButton } from 'mulex-api';
+import { MxButton } from './api/Button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog';
 import { scroll_to_element, array_chunkify } from './lib/utils';
 import { TextField, TextFieldLabel, TextFieldInput, TextFieldErrorMessage } from './components/ui/text-field';

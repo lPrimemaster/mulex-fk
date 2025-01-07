@@ -17,6 +17,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(LTRACE "Enable/Disable trace logging." OFF)
 option(PROFILE "Enable/Disable profiling with tracy." OFF)
 option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." ON)
+option(ONLINE_TRANSPILER "Enable/Disable realtime transpiler for plugins. This is recommended OFF." OFF)
+
+if(ONLINE_TRANSPILER)
+	add_definitions(-DONLINE_TRANSPILER)
+endif()
 
 if(LTRACE)
 	add_definitions(-DLTRACE)
@@ -84,6 +89,7 @@ add_subdirectory(run)
 add_subdirectory(bck)
 add_subdirectory(ctargets)
 add_subdirectory(examples)
+add_subdirectory(plug)
 
 # Link main
 target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp)
@@ -91,6 +97,11 @@ target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp)
 if(WIN32)
 	target_link_libraries(mxmain PRIVATE pdh)
 endif()
+
+target_compile_definitions(mxmain PUBLIC L2FILE)
+
+# Clear resources from 'plug'
+mx_resource_clear()
 
 # Invoke yarn build (pre build)
 build_manifest_json()
@@ -101,6 +112,7 @@ enable_testing()
 add_subdirectory(test)
 
 # Generate binary resources (last step)
+
 set(vite_config_ts ${CMAKE_SOURCE_DIR}/network/vite.config.ts)
 mx_resource_append(${vite_config_ts})
 

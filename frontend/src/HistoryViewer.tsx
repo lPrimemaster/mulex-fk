@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar';
 import { Plot } from './components/Plot';
 import 'uplot/dist/uPlot.min.css';
 import { cssColorToRGB } from './lib/utils';
-import { MxButton } from 'mulex-api';
+import { MxButton } from './api/Button';
 import Card from './components/Card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog';
 import { createMapStore } from './lib/rmap';

@@ -1,6 +1,6 @@
 import { Component, JSXElement } from 'solid-js';
 
-export const Button : Component<{ children: JSXElement, type?: string, onClick?: Function, disabled?: boolean, class?: string }> = (props) => {
+export const MxButton : Component<{ children: JSXElement, type?: string, onClick?: Function, disabled?: boolean, class?: string }> = (props) => {
 
 	let baseatr = `cursor-pointer
 				   disabled:cursor-not-allowed
@@ -23,5 +23,3 @@ export const Button : Component<{ children: JSXElement, type?: string, onClick?:
 		</button>
 	);
 };
-
-export const MxButton = Button;

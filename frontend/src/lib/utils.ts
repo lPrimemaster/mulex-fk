@@ -15,6 +15,10 @@ export function cssColorToRGB(color: string) {
 	return rgb;
 }
 
+export async function check_condition(cond: () => boolean, delay: number = 100) {
+	while(!cond()) await new Promise(resolve => setTimeout(resolve, delay));
+}
+
 export function timestamp_tohms(ms: number): string {
 	let sec = Math.trunc(ms / 1000);
 	if(sec < 60) return sec.toString() + 's';
