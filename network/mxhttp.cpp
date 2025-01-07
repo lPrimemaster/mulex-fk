@@ -39,7 +39,7 @@ static std::set<UWSType*> _active_ws_connections;
 static std::unordered_map<UWSType*, HttpClientInfo> _active_clients_info;
 static std::mutex _aci_lock;
 // static std::unordered_map<std::string, std::set<UWSType*>> _active_ws_subscriptions;
-static std::unique_ptr<mulex::SysFileWatcher> _transpiler_watch;
+static std::unique_ptr<mulex::SysFileWatcher> _plugins_watch;
 
 namespace mulex
 {
@@ -64,27 +64,29 @@ namespace mulex
 		return true;
 	}
 
-	static bool HttpStartTranspilerThread()
+	static bool HttpStartWatcherThread()
 	{
 		// We transpile with vite (via yarn build, must be installed on server-side)
 		std::string serveDir = SysGetExperimentHome();
 		if(serveDir.empty())
 		{
+#ifdef ONLINE_TRANSPILER
 			LogError("[mxhttp] Failed to start the realtime transpiler thread. SysGetExperimentHome() failed.");
+#else
+			LogError("[mxhttp] Failed to start the realtime plugin watcher thread. SysGetExperimentHome() failed.");
+#endif
 			return false;
 		}
 
+#ifdef ONLINE_TRANSPILER
 		if(!HttpGenerateViteConfigFile())
 		{
 			return false;
 		}
+#endif
 
 		std::string pluginsDir = serveDir + "/plugins";
 
-		std::string command;
-		command += " yarn --cwd '";
-		command += serveDir;
-		command += "' build";
 
 		if(!std::filesystem::is_directory(pluginsDir) && !std::filesystem::create_directory(pluginsDir))
 		{
@@ -97,9 +99,26 @@ namespace mulex
 			RdbCreateValueDirect("/system/http/hotswap", RdbValueType::BOOL, 0, true);
 		}
 
-		_transpiler_watch = std::make_unique<SysFileWatcher>(pluginsDir, [command](const SysFileWatcher::FileOp op, const std::string& file) {
+#ifdef ONLINE_TRANSPILER
+		if(!RdbCreateValueDirect("/system/http/online_transpiler", RdbValueType::BOOL, 0, true))
+		{
+			RdbWriteValueDirect("/system/http/online_transpiler", true);
+		}
+#else
+		if(!RdbCreateValueDirect("/system/http/online_transpiler", RdbValueType::BOOL, 0, false))
+		{
+			RdbWriteValueDirect("/system/http/online_transpiler", false);
+		}
+#endif
+
+		_plugins_watch = std::make_unique<SysFileWatcher>(pluginsDir, [serveDir](const SysFileWatcher::FileOp op, const std::string& file) {
 			if(RdbReadValueDirect("/system/http/hotswap").asType<bool>())
 			{
+#ifdef ONLINE_TRANSPILER
+				std::string command = " yarn --cwd '";
+				command += serveDir;
+				command += "' build";
+#endif
 				std::string filename = std::filesystem::path(file).filename();
 				switch(op) {
 					case SysFileWatcher::FileOp::CREATED:
@@ -109,6 +128,7 @@ namespace mulex
 					}
 					case SysFileWatcher::FileOp::MODIFIED:
 					{
+#ifdef ONLINE_TRANSPILER
 						std::thread([filename, command](){
 #ifdef __linux__
 							std::system(("ENTRY_FILE=./plugins/" + filename + command).c_str());
@@ -116,6 +136,7 @@ namespace mulex
 							LogError("[mxhttp] Windows does not yet support frontend file hotswaping.");
 #endif
 						}).detach();
+#endif
 						break;
 					}
 					case SysFileWatcher::FileOp::DELETED:
@@ -128,15 +149,15 @@ namespace mulex
 			}
 		});
 
-		LogDebug("[mxhttp] Transpiler realtime thread OK.");
+		LogDebug("[mxhttp] Plugin watcher realtime thread OK.");
 		return true;
 	}
 
 	static void HttpStopTranspilerThread()
 	{
-		if(_transpiler_watch)
+		if(_plugins_watch)
 		{
-			_transpiler_watch.reset();
+			_plugins_watch.reset();
 		}
 	}
 
@@ -583,15 +604,15 @@ namespace mulex
 
 		if(hotswap)
 		{
-			if(!HttpStartTranspilerThread())
+			if(!HttpStartWatcherThread())
 			{
-				LogError("[mxhttp] Failed to start the transpiler watch thread.");
+				LogError("[mxhttp] Failed to start the plugin watcher thread.");
 				return;
 			}
 		}
 		else
 		{
-			LogWarning("[mxhttp] Running without hotswap. User plugins will not build automatically.");
+			LogWarning("[mxhttp] Running without hotswap. User plugins will not build automatically if online transpilation is on.");
 		}
 
 		_http_thread = new std::thread([port, islocal](){

@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "rpc.h"
+#include <mutex>
 #include <rpcspec.inl>
 
 #include "../mxlogger.h"
@@ -271,5 +272,22 @@ namespace mulex
 #endif
 		std::for_each(_rpc_thread.begin(), _rpc_thread.end(), [](auto& t){ t.second->join(); });
 		_rpc_thread_ready.store(false);
+	}
+
+	mulex::RPCGenericType RpcGetAllCalls()
+	{
+		static std::mutex _mtx;
+		std::unique_lock lock(_mtx);
+
+		static std::vector<mulex::mxstring<512>> method_signatures;
+		if(method_signatures.empty())
+		{
+			for(const auto& method : RPCGetMethods())
+			{
+				method_signatures.push_back(method);
+			}
+		}
+
+		return method_signatures;
 	}
 }

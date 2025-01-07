@@ -276,6 +276,23 @@ class RPCGenerator:
             self._write_indented(0, '}\n')
             self._write_newline()
 
+    def _generate_name_list(self, idt: List[Tuple[RPCMethodDetails, int, int]]) -> None:
+        # Generate a std::vector with all the keys
+        self._write_newline()
+        self._write_indented(0, 'namespace\n')
+        self._write_indented(0, '{\n')
+        self._write_indented(1, 'std::vector<std::string> RPCGetMethods()\n')
+        self._write_indented(1, '{\n')
+        self._write_indented(2, 'static const std::vector<std::string> _list = {\n')
+        for mname, _, _ in idt:
+            self._write_indented(3, f'\"{mname.fullname}\",\n')
+            self._write_indented(3, f'\"{mname.rettype.fulltypename}\",\n')
+        self._write_indented(2, '};\n')
+        self._write_indented(2, 'return _list;\n')
+        self._write_indented(1, '}\n')
+        self._write_indented(0, '}\n')
+        self._write_newline()
+
     def _generate_case(self, idt: Tuple[RPCMethodDetails, int, int]) -> None:
         method, mid, _ = idt
         self._write_indented(3, f'case {mid}:\n')
@@ -434,6 +451,7 @@ class RPCGenerator:
         self._generate_includes()
         ids = self._generate_ids()
         self._generate_name_lookup(ids)
+        self._generate_name_list(ids)
         self._generate_call_lookup(ids)
         self._write_file(filename)
 

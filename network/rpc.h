@@ -393,4 +393,7 @@ namespace mulex
 			*retdata = _call_return_stack.pop();
 		}
 	}
+
+	MX_RPC_METHOD mulex::RPCGenericType RpcGetAllCalls();
+
 } // namespace mulex
