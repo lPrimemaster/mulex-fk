@@ -59,7 +59,11 @@ namespace mulex
 		if constexpr(std::is_same_v<Policy, detail::LogTracePolicy>) return;
 #endif
 		constexpr bool kLogToStdOut = true;
+#ifdef L2FILE
 		constexpr bool kLogToFile = true;
+#else
+		constexpr bool kLogToFile = false;
+#endif
 		constexpr bool kLogToTracy = true;
 
 		va_list vargs, vargscpy;
