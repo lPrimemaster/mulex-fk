@@ -70,12 +70,12 @@ export const Project : Component = () => {
 		}
 	});
 
-	const [v, sv] = createSignal(0);
-	const [v0, sv0] = createSignal(0);
-	const [c, sc] = createSignal('red');
-	const [b, sb] = createSignal(false);
+	// const [v, sv] = createSignal(0);
+	// const [v0, sv0] = createSignal(0);
+	// const [c, sc] = createSignal('red');
+	// const [b, sb] = createSignal(false);
 
-	setInterval(() => {sv(v() + 1)}, 1000);
+	// setInterval(() => {sv(v() + 1)}, 1000);
 	// setInterval(() => sc(c() === 'red' ? 'green' : 'red'), 2000);
 
 	return (

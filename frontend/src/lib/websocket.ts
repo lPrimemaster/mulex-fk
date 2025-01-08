@@ -53,7 +53,6 @@ export class MxWebsocket {
 			this.deferred_p = new Map<number, [Function, string]>();
 			this.isready = false;
 			this.waiting_p = new Array<Function>();
-			// this.on_change = new Array<Function>();
 
 			// Attempt reconnect
 			setTimeout(() => {
