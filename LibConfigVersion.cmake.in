@@ -1,0 +1,5 @@
+set(@LIB_TARGET@_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
+set(@LIB_TARGET@_VERSION_MINOR ${CMAKE_PROJECT_VERSION_MINOR})
+
+# include(CMakeFindDependencyMacro)
+# find_dependency(@LIB_TARGET@)

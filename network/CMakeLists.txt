@@ -1,4 +1,5 @@
 include(ExternalProject)
+include(../cmake/InstallMulex.cmake)
 
 configure_file(mxrpcgen.py ../mxrpcgen.py)
 
@@ -28,13 +29,14 @@ FetchContent_MakeAvailable(uWebSockets_cont)
 message(STATUS ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets)
 file(GLOB_RECURSE uWS_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src/*.c)
 add_library(uSockets ${uWS_SOURCES})
+install_target(uSockets NONE)
 
 if(WIN32)
 	find_package(libuv CONFIG REQUIRED)
 	target_link_libraries(uSockets PRIVATE $<IF:$<TARGET_EXISTS:libuv::uv_a>,libuv::uv_a,libuv::uv>)
 endif()
 
-target_include_directories(uSockets PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src)
+target_include_directories(uSockets PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src)
 target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
 
 FetchContent_Declare(aklomp_base64
@@ -45,6 +47,7 @@ FetchContent_Declare(aklomp_base64
 # Disable base64 unneeded settings
 set(BASE64_BUILD_CLI OFF CACHE INTERNAL "")
 FetchContent_MakeAvailable(aklomp_base64)
+# install_target(base64 NONE)
 
 FetchContent_Declare(rapidjson
 	GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
@@ -56,8 +59,9 @@ set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "")
 set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "")
 set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "")
 FetchContent_MakeAvailable(rapidjson)
+# install_target(RapidJSON NONE)
 
-add_library(mxrpc
+add_library(MxRpc
 	rpc.cpp
 	socket.cpp
 	mxevt.cpp
@@ -66,30 +70,36 @@ add_library(mxrpc
 )
 
 if(WIN32)
-	target_link_libraries(mxrpc wsock32 ws2_32 Shlwapi)
+	target_link_libraries(MxRpc wsock32 ws2_32 Shlwapi)
 endif()
 
-target_include_directories(mxrpc PRIVATE
+target_include_directories(MxRpc PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
 
-add_library(mxhttp
+add_library(mxrpc ALIAS MxRpc)
+install_target(MxRpc network/rpc.h)
+
+add_library(MxHttp
 	mxhttp.cpp
 )
 
 find_package(ZLIB REQUIRED)
 
 if(WIN32)
-	target_link_libraries(mxhttp $<IF:$<TARGET_EXISTS:libuv::uv_a>,libuv::uv_a,libuv::uv>)
-	target_link_libraries(mxhttp uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
+	target_link_libraries(MxHttp PRIVATE $<IF:$<TARGET_EXISTS:libuv::uv_a>,libuv::uv_a,libuv::uv>)
+	target_link_libraries(MxHttp PRIVATE uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
 else()
-	target_link_libraries(mxhttp uv uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
+	target_link_libraries(MxHttp PRIVATE uv uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
 endif()
 
-target_include_directories(mxhttp PRIVATE
+target_include_directories(MxHttp PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/uWebSockets/src
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>/uWebSockets/uSockets/src
 	${rapidjson_SOURCE_DIR}/include
 	${aklomp_base64_SOURCE_DIR}/include
 )
+
+add_library(mxhttp ALIAS MxHttp)
+install_target(MxHttp mxhttp.h)
