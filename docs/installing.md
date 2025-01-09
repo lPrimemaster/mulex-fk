@@ -30,6 +30,8 @@ After this just call your prefered build tool and install (e.g. using make):
 ```sh
 make -j8 && make install
 ```
+> :warning: Installing might require sudo/administrative rights
+
 If everything was configured properly you should now be able to type:
 ```sh
 mxmain --help
