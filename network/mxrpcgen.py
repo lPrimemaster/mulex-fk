@@ -242,15 +242,21 @@ class RPCGenerator:
 
     def _generate_ids(self) -> List[Tuple[RPCMethodDetails, int, int]]:
         id_table = []
+        mids = []
         id = 0
         anym = False
+
         for methods in self.methods.values():
             for method in methods:
                 anym = True
                 mid = self._generate_method_id_name(method.fullname)
-                id_table.append((method, mid, id))
-                self.buffer.write(f'#define {mid} {id}\n')
-                id += 1
+                mids.append((method, mid))
+
+        for method, mid in sorted(mids, key=lambda k: k[1]):
+            id_table.append((method, mid, id))
+            self.buffer.write(f'#define {mid} {id}\n')
+            id += 1
+
         if anym:
             self._write_newline()
         return id_table
