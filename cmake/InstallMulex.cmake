@@ -5,6 +5,9 @@ macro(install_mulex)
 	# Common includes
 	install(FILES network/socket.h DESTINATION include/network)
 	install(FILES network/rpc.h DESTINATION include/network)
+
+	file(GLOB COMMON_HEADERS ${CMAKE_SOURCE_DIR}/*.h)
+	install(FILES ${COMMON_HEADERS} DESTINATION include)
 endmacro()
 
 macro(install_target target header)
