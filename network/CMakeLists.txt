@@ -78,7 +78,7 @@ target_include_directories(MxRpc PRIVATE
 )
 
 add_library(mxrpc ALIAS MxRpc)
-install_target(MxRpc network/rpc.h)
+install_target(MxRpc network/rpc.h network)
 
 add_library(MxHttp
 	mxhttp.cpp

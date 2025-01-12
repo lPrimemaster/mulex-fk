@@ -18,6 +18,15 @@ option(LTRACE "Enable/Disable trace logging." OFF)
 option(PROFILE "Enable/Disable profiling with tracy." OFF)
 option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." ON)
 option(ONLINE_TRANSPILER "Enable/Disable realtime transpiler for plugins. This is recommended OFF." OFF)
+option(BUILD_TESTS "Build tests." OFF)
+option(BUILD_EXAMPLES "Build examples." OFF)
+option(BUILD_CTARGETS "Build extra targets." OFF)
+
+# Use vcpkg if we are on windows
+if(WIN32)
+	message(WARNING "On windows, all packages must be installed as x64-mingw-dynamic if using vcpkg.")
+	set(VCPKG_TARGET_TRIPLET "x64-mingw-dynamic" CACHE STRING "Vcpkg target triplet.")
+endif()
 
 if(ONLINE_TRANSPILER)
 	add_definitions(-DONLINE_TRANSPILER)
@@ -81,21 +90,32 @@ add_executable(mxmain
 	main.cpp
 )
 
+# Set global windows libs
+if(WIN32)
+	set(WINDOWS_GLIBS pdh)
+endif()
+
 # Add mulex functionalities
 add_subdirectory(network)
 add_subdirectory(rdb)
 add_subdirectory(drv)
 add_subdirectory(run)
 add_subdirectory(bck)
-add_subdirectory(ctargets)
-add_subdirectory(examples)
 add_subdirectory(plug)
+
+if(BUILD_CTARGETS)
+	add_subdirectory(ctargets)
+endif()
+
+if(BUILD_EXAMPLES)
+	add_subdirectory(examples)
+endif()
 
 # Link main
 target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp)
 
 if(WIN32)
-	target_link_libraries(mxmain PRIVATE pdh)
+	target_link_libraries(mxmain PRIVATE ${WINDOWS_GLIBS})
 endif()
 
 target_compile_definitions(mxmain PUBLIC L2FILE)
@@ -108,10 +128,12 @@ build_manifest_json()
 build_frontend_yarn()
 
 # Add testing
-enable_testing()
-add_subdirectory(test)
+if(BUILD_TESTS)
+	enable_testing()
+	add_subdirectory(test)
+endif()
 
-# Generate binary resources (last step)
+# Generate binary resources (last configure step)
 
 set(vite_config_ts ${CMAKE_SOURCE_DIR}/network/vite.config.ts)
 mx_resource_append(${vite_config_ts})

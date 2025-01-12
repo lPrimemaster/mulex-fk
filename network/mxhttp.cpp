@@ -126,7 +126,7 @@ namespace mulex
 				command += serveDir;
 				command += "' build";
 #endif
-				std::string filename = std::filesystem::path(file).filename();
+				std::string filename = std::filesystem::path(file).filename().string();
 				switch(op) {
 					case SysFileWatcher::FileOp::CREATED:
 					{
@@ -148,7 +148,7 @@ namespace mulex
 					}
 					case SysFileWatcher::FileOp::DELETED:
 					{
-						std::string filename = std::filesystem::path(file).filename();
+						std::string filename = std::filesystem::path(file).filename().string();
 						HttpRemoveUserPlugin(filename);
 						break;
 					}

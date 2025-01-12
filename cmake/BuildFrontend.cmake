@@ -31,19 +31,27 @@ endmacro()
 macro(build_frontend_yarn)
 	# Build frontend at configure time
 	message(STATUS "Building frontend via 'yarn build'...")
-	execute_process(
-		COMMAND yarn build
-		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/frontend
-		RESULT_VARIABLE yarn_result
-		OUTPUT_VARIABLE yarn_output
-		ERROR_VARIABLE yarn_error
-	)
 
-	if(yarn_result)
-		message(FATAL_ERROR "Yarn build failed with error: ${yarn_error}")
+	if(WIN32)
+		set(YARN_CMD cmd.exe /C yarn)
 	else()
-		message(STATUS "Yarn build OK.")
+		set(YARN_CMD yarn)
 	endif()
+
+	if(NOT EXISTS ${CMAKE_SOURCE_DIR}/frontend/node_modules/)
+		message(STATUS "Fetching node dependencies...")
+		execute_process(
+			COMMAND ${YARN_CMD}
+			WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/frontend
+			COMMAND_ECHO STDOUT
+		)
+	endif()
+
+	execute_process(
+		COMMAND ${YARN_CMD} build
+		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/frontend
+		COMMAND_ECHO STDOUT
+	)
 
 	# Read the files back and embed them into the executable via mxres.h.in
 	file(GLOB_RECURSE files "${CMAKE_SOURCE_DIR}/frontend/dist/*")
