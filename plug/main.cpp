@@ -116,10 +116,60 @@ static bool PlugCreateWorkspace(const std::filesystem::path& path)
 	return PlugUnpackFiles(path);
 }
 
+static bool PlugBuildPlugin(const std::string& exp, const std::filesystem::path& path)
+{
+	std::string exp_dir = std::string(SysGetCacheDir()) + "/" + exp;
+
+	if(!std::filesystem::is_directory(exp_dir))
+	{
+		LogError("[mxplug] The specified experiment could no be found under mxcache.");
+		LogError("[mxplug] Looked under <%s>.", exp_dir.c_str());
+		return false;
+	}
+
+	if(!std::filesystem::is_directory(exp_dir + "/plugins"))
+	{
+		LogError("[mxplug] Found experiment directory but could not find /plugins directory inside.");
+		LogError("[mxplug] Looked under <%s>.", exp_dir.c_str());
+		return false;
+	}
+
+	if(!std::filesystem::is_regular_file(path / "package.json"))
+	{
+		LogError("[mxplug] No plugin found to build under <%s>.", path.c_str());
+		return false;
+	}
+
+	if(!std::filesystem::is_directory(path / "node_modules"))
+	{
+		LogMessage("[mxplug] node_modules not found. Configuring dependencies...");
+		if(std::system((std::string("yarn --cwd ") + path.string()).c_str()) != 0)
+		{
+			LogError("[mxplug] Yarn configure command returned with non zero.");
+			LogError("[mxplug] Check yarn output.");
+			return false;
+		}
+	}
+
+	if(std::system((std::string("yarn --cwd ") + path.string() + " build").c_str()) != 0)
+	{
+		LogError("[mxplug] Yarn build command returned with non zero.");
+		LogError("[mxplug] Check yarn output.");
+		return false;
+	}
+
+	std::filesystem::copy(path / "dist", exp_dir + "/plugins", std::filesystem::copy_options::overwrite_existing | std::filesystem::copy_options::recursive);
+
+	LogMessage("[mxplug] Plugin built for experiment.");
+	LogMessage("[mxplug] Copied file under <%s>.", (exp_dir + "/plugins").c_str());
+	return true;
+}
+
 int main(int argc, char* argv[])
 {
 	Mode mode = Mode::UNKNOWN;
 	auto path = std::filesystem::current_path();
+	std::string experiment;
 
 	SysAddArgument("new", 0, false, [&](const std::string&) {
 		if(mode != Mode::UNKNOWN)
@@ -130,14 +180,16 @@ int main(int argc, char* argv[])
 		mode = Mode::NEW;
 	}, "Create a new plugin project under the current directory (if empty).");
 
-	SysAddArgument("build", 0, false, [&](const std::string&) {
+	SysAddArgument("build", 0, true, [&](const std::string& exp) {
 		if(mode != Mode::UNKNOWN)
 		{
 			LogError("[mxplug] Cannot specify --new and --build at the same time.");
 			::exit(0);
 		}
+
+		experiment = exp;
 		mode = Mode::BUILD;
-	}, "Build the plugin under the working directory (if any).");
+	}, "Build the plugin under for the given experiment.");
 
 	SysAddArgument("cwd", 0, true, [&](const std::string& dir) {
 		path = std::filesystem::path(dir);
@@ -164,7 +216,14 @@ int main(int argc, char* argv[])
 			break;
 		}
 		case Mode::BUILD:
+		{
+			if(!PlugBuildPlugin(experiment, path))
+			{
+				LogError("[mxplug] Failed to build plugin.");
+				return 0;
+			}
 			break;
+		}
 		case Mode::UNKNOWN:
 			return 0;
 	}
