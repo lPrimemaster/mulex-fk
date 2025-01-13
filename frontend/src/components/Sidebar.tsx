@@ -58,7 +58,7 @@ const Sidebar: Component = () => {
 						</NavigationMenuItem>
 					</NavigationMenu>
 				</div>
-				<footer class="p-5" style="position:fixed; bottom:0"><small>Version Luhman</small></footer>
+				<footer class="p-5" style="position:fixed; bottom:0"><small>Version {__APP_VNAME__}</small></footer>
 			</div>
 			<About show={showAbout()} setShow={setShowAbout}/>
 		</div>
