@@ -7,6 +7,11 @@ nav:
   - Brief: index.md
   - Instalation: installing.md
   - Getting Started: getting_started.md
+  - RDB: rdb.md
+  - PDB: pdb.md
+  - Events: events.md
+  - Backends: backends.md
+  - Plugins: plugins.md
 markdown_extensions:
   - attr_list
   - pymdownx.emoji:

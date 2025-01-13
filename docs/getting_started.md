@@ -32,7 +32,7 @@ This page also allows for the user to create a new key. Try clicking on a table 
 variable info is. This pane updates in realtime. You can for example look under `/system/metrics/cpu_usage`.
 This page also allows to edit/remove existing keys (as long as they're not system keys).
 
-More on the RDB [here]().
+More on the RDB [here](rdb.md).
 
 ### History page
 > :warning: This page is still a work in progress.
@@ -118,21 +118,21 @@ To create a new plugin workspace go to an empty directory and type
 ```sh
 mxplug --new
 ```
-This command creates a simple plugin template for you to populate. To compile it use any node package tool. I like `yarn` so will be using it but you can
-replace it with your own.
-To compile just run
+This command creates a simple plugin template for you to populate. To compile it use any node package tool. I like `yarn` so will be using it but you will be able
+to replace it with your own in the future.
+To compile just run (requires yarn)
 ```sh
-yarn && yarn build
+mxplug --build <experiment_name>
 ```
+under the plugin root directory.
 
-You should now have a `dist/plugin.js` file. Go to the project page on the frontend and look at where the plugin path for your experiment is located.
-Typically
+This will build and install (copy) the compiled javascript plugin to the experiment cache folder. Typically
 
 - `/home/<user>/.mxcache/<exp_name>/plugins/` on Linux
 - `%LocalAppData%/mxcache/<exp_name>/plugins/` on Windows
 
-Place the `plugin.js` file under this directory and reload the frontend page. Navigate to the project page and look at the new plugin.
+Reload the frontend page. Navigate to the project page and look at the new plugin.
 
 That's it! You just created your first mulex frontend plugin!
 
-This completes the quick start tutorial. For more info check the rest of the documentation on [plugins]() and [backends]().
+This completes the quick start tutorial. For more info check the rest of the documentation on [plugins](plugins.md) and [backends](backends.md).
