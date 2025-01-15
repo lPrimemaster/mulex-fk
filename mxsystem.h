@@ -1,10 +1,12 @@
 #pragma once
+#include <queue>
 #include <vector>
 #include <cstdint>
 #include <optional>
 #include <condition_variable>
 #include <thread>
 #include <stack>
+#include <queue>
 #include <shared_mutex>
 #include <functional>
 #include "network/socket.h"
@@ -175,6 +177,37 @@ namespace mulex
 	private:
 		std::unique_ptr<std::thread> _thread;
 		std::atomic<bool> _watcher_on;
+	};
+
+	struct SysAsyncTask
+	{
+		using Job = std::function<void()>;
+		Job 		 _job;
+		std::int64_t _scheduled_exec;
+		std::int64_t _interval;
+
+		inline bool operator>(const SysAsyncTask& other) const
+		{
+			return _scheduled_exec > other._scheduled_exec;
+		}
+	};
+
+	class SysAsyncEventLoop
+	{
+	public:
+		SysAsyncEventLoop();
+		~SysAsyncEventLoop();
+		void schedule(SysAsyncTask::Job job, std::int64_t delay = 0, std::int64_t interval = 0);
+
+	private:
+		void schedule(SysAsyncTask& task);
+
+	private:
+		std::priority_queue<SysAsyncTask, std::vector<SysAsyncTask>, std::greater<>> _queue;
+		std::atomic<bool> _running;
+		std::mutex _mutex;
+		std::condition_variable _cv;
+		std::thread _handle;
 	};
 
 	struct SysRecvThread

@@ -6,7 +6,7 @@ add_executable(mxplug
 )
 
 # Link main
-target_link_libraries(mxplug PRIVATE mxrpc mxrdb mxdrv mxhttp)
+target_link_libraries(mxplug PRIVATE mxrpc mxrdb mxdrv mxhttp mxbck)
 
 if(WIN32)
 	target_link_libraries(mxplug PRIVATE pdh)

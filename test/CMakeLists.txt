@@ -23,7 +23,7 @@ if(WIN32)
 	target_link_libraries(test_rpc wsock32 ws2_32 Shlwapi)
 endif()
 
-target_link_libraries(test_rpc mxrdb mxhttp mxrpc)
+target_link_libraries(test_rpc mxrdb mxhttp mxrpc mxbck)
 
 target_include_directories(test_rpc PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
@@ -36,7 +36,7 @@ if(WIN32)
 	target_link_libraries(test_rdb wsock32 ws2_32 Shlwapi)
 endif()
 
-target_link_libraries(test_rdb mxrdb mxhttp mxrpc)
+target_link_libraries(test_rdb mxrdb mxhttp mxrpc mxbck)
 
 target_include_directories(test_rdb PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
@@ -54,7 +54,7 @@ if(USB_SUPPORT)
 	find_package(libusb REQUIRED)
 endif()
 
-target_link_libraries(test_drv PRIVATE mxdrv mxrdb mxhttp mxrpc)
+target_link_libraries(test_drv PRIVATE mxdrv mxrdb mxhttp mxrpc mxbck)
 
 target_include_directories(test_drv PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
@@ -73,7 +73,7 @@ if(WIN32)
 	target_link_libraries(test_argparse wsock32 ws2_32 Shlwapi)
 endif()
 
-target_link_libraries(test_argparse mxrdb mxhttp mxrpc)
+target_link_libraries(test_argparse mxrdb mxhttp mxrpc mxbck)
 
 target_include_directories(test_argparse PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
@@ -87,7 +87,7 @@ if(WIN32)
 	target_link_libraries(test_evt wsock32 ws2_32 Shlwapi)
 endif()
 
-target_link_libraries(test_evt mxrdb mxhttp mxrpc)
+target_link_libraries(test_evt mxrdb mxhttp mxrpc mxbck)
 
 target_include_directories(test_evt PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
@@ -109,6 +109,6 @@ if(WIN32)
 	target_link_libraries(test_ksmatch wsock32 ws2_32 Shlwapi)
 endif()
 
-target_link_libraries(test_ksmatch mxrdb mxhttp mxrpc)
+target_link_libraries(test_ksmatch mxrdb mxhttp mxrpc mxbck)
 
 add_test(test_ksmatch test_ksmatch)

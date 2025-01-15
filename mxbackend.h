@@ -2,16 +2,27 @@
 #include "mxevt.h"
 #include "mxrdb.h"
 #include "mxmsg.h"
+#include "mxsystem.h"
+#include "network/rpc.h"
 #include <string>
 
 namespace mulex
 {
+	enum class BckUserRpcStatus : std::uint8_t
+	{
+		OK,
+		EMIT_FAILED,
+		NO_SUCH_BACKEND
+	};
+
+	MX_RPC_METHOD mulex::BckUserRpcStatus BckCallUserRpc(mulex::string32 evt, mulex::RPCGenericType data);
+
 	class MxBackend
 	{
+	public:
+		virtual ~MxBackend();
 	protected:
 		MxBackend(int argc, char* argv[]);
-		virtual ~MxBackend();
-		virtual void periodic() {  };
 
 		// Events
 		void dispatchEvent(const std::string& evt, const std::uint8_t* data, std::uint64_t size);
@@ -20,16 +31,37 @@ namespace mulex
 		void subscribeEvent(const std::string& evt, EvtClientThread::EvtCallbackFunc func);
 		void unsubscribeEvent(const std::string& evt);
 
-		// Event helper
+		// User RPC
+		template<std::derived_from<MxBackend> D>
+		void registerUserRpc(void (D::* func)(const std::vector<std::uint8_t>&))
+		{
+			_user_rpc = static_cast<void(MxBackend::*)(const std::vector<std::uint8_t>&)>(func);
+		}
+
+		// Start/stop
+		template<std::derived_from<MxBackend> D>
+		void registerRunStartStop(void (D::* start)(std::uint64_t), void (D::* stop)(std::uint64_t))
+		{
+			_user_run_start = static_cast<void(MxBackend::*)(std::uint64_t)>(start);
+			_user_run_stop = static_cast<void(MxBackend::*)(std::uint64_t)>(stop);
+		}
+
+	private:
+		// User RPC
+		void userRpcInternal(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* udata);
+		void registerUserRpcEvent();
 
 	protected:
-		virtual void onRunStart(std::uint64_t runno);
-		virtual void onRunStop(std::uint64_t runno);
-		void deferExec(std::function<void()> wrapfunc);
+		// Execution defer
+		template<std::derived_from<MxBackend> D>
+		void deferExec(void (D::* func)(void), std::int64_t delay = 0, std::int64_t interval = 0)
+		{
+			_io.schedule(std::bind(static_cast<void(MxBackend::*)(void)>(func), this), delay, interval);
+		}
 
 	public:
-		void startEventLoop();
-		void eventLoop();
+		void init();
+		void deferExec(std::function<void()> func, std::int64_t delay = 0, std::int64_t interval = 0);
 
 	protected:
 		RdbAccess rdb;
@@ -41,8 +73,15 @@ namespace mulex
 		bool _init_ok = false;
 		const Experiment* _experiment = nullptr;
 
-		// Periodic polling
-		std::int32_t _period_ms;
+		// Backend's async loop
+		SysAsyncEventLoop _io;
+
+		// User rpc function
+		void (MxBackend::* _user_rpc)(const std::vector<std::uint8_t>&) = nullptr;
+
+		// User start/stop
+		void (MxBackend::* _user_run_start)(std::uint64_t) = nullptr;
+		void (MxBackend::* _user_run_stop)(std::uint64_t) = nullptr;
 	};
 
 	template<typename T>

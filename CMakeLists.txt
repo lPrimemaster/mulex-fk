@@ -112,7 +112,7 @@ if(BUILD_EXAMPLES)
 endif()
 
 # Link main
-target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp)
+target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp mxbck)
 
 if(WIN32)
 	target_link_libraries(mxmain PRIVATE ${WINDOWS_GLIBS})

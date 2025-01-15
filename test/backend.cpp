@@ -73,21 +73,32 @@ public:
 
 		roota["/system/nested/failtest"].erase();
 		roota["/system/nested/failtest"].create(RdbValueType::INT32, 4);
+
+		deferExec(&TestBackend::periodic, 0, 1000);
+		registerUserRpc(&TestBackend::userRpc);
+		registerRunStartStop(&TestBackend::onRunStart, &TestBackend::onRunStop);
 	}
 
-	virtual void onRunStart(std::uint64_t runno) override
+	void onRunStart(std::uint64_t runno)
 	{
 		subscribeEvent("TestBackend::data", [](auto* data, auto len, auto* udata){
 			LogTrace("Got event with len: %llu", len);
 		});
 	}
 
-	virtual void onRunStop(std::uint64_t runno) override
+	void onRunStop(std::uint64_t runno)
 	{
 		unsubscribeEvent("TestBackend::data");
 	}
 
-	virtual void periodic() override
+	void userRpc(const std::vector<std::uint8_t>& data)
+	{
+		// This function gets called when someone calls
+		// BckCallUserRpc("test_bck", some_data);
+		log.info("User RPC called!");
+	}
+
+	void periodic()
 	{
 		// RdbAccess config = getConfigRdbRoot();
 		std::string ekey = "/user/" + std::string(SysGetBinaryName()) + "/config/";
@@ -100,18 +111,19 @@ public:
 		// RdbAccess configr;
 		// double cpu = configr["/system/metrics/cpu_usage"];
 		// LogDebug("CPU: %.2lf%%", cpu);
+
+		log.info("Hello from deferred period function.");
 		
 		dispatchEvent("TestBackend::data", MxEventBuilder(buffer)
 			.add(SysGetCurrentTime())
 			.add(3.14159265358979)
 		);
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
 };
 
 int main(int argc, char* argv[])
 {
 	TestBackend backend(argc, argv);
-	backend.startEventLoop();
+	backend.init();
 	return 0;
 }

@@ -1,5 +1,6 @@
 #include "mxsystem.h"
 #include <memory>
+#include <mutex>
 #include <signal.h>
 #include "mxlogger.h"
 #include "network/rpc.h"
@@ -708,6 +709,92 @@ namespace mulex
 	{
 		_watcher_on.store(false);
 		_thread->join();
+	}
+
+	SysAsyncEventLoop::SysAsyncEventLoop()
+	{
+		_running.store(true);
+		_handle = std::thread([this]() {
+			while(true)
+			{
+				SysAsyncTask task;
+
+				{
+					std::unique_lock<std::mutex> lock(_mutex);
+					if(_queue.empty() && _running.load())
+					{
+						_cv.wait(lock);
+					}
+
+					// If a stop command was issued
+					if(_queue.empty() && !_running.load())
+					{
+						break; // Similar to requestUnblock()
+					}
+
+					const std::int64_t now = SysGetCurrentTime();
+					if(!_queue.empty() && _queue.top()._scheduled_exec <= now)
+					{
+						task = _queue.top();
+						_queue.pop();
+					}
+					else if(!_queue.empty())
+					{
+						_cv.wait_until(lock, std::chrono::sys_time{std::chrono::milliseconds(_queue.top()._scheduled_exec)});
+						continue;
+					}
+				}
+
+				if(task._job) // NOTE: (Cesar) Superfluous check but guards against things like std::function<void()>()
+				{
+					task._job();
+					if(task._interval > 0)
+					{
+						// This is a recurring task, reschedule excluding for task self time
+						task._scheduled_exec += task._interval;
+						schedule(task);
+					}
+				}
+			}
+		});
+	}
+
+	SysAsyncEventLoop::~SysAsyncEventLoop()
+	{
+		{
+			// Locking allows for condition variable to evaluate
+			std::unique_lock<std::mutex> lock(_mutex);
+			_running.store(false);
+
+			// Clear the queue
+			// We don't want to wait on scheduled tasks when a close was requested
+			while(!_queue.empty()) { _queue.pop(); };
+		}
+		_cv.notify_all();
+
+		LogDebug("SysAsyncEventLoop: Waiting for async tasks...");
+		if(_handle.joinable())
+		{
+			_handle.join();
+		}
+	}
+
+	void SysAsyncEventLoop::schedule(SysAsyncTask& task)
+	{
+		std::unique_lock<std::mutex> lock(_mutex);
+		_queue.push(std::move(task));
+		_cv.notify_all();
+	}
+
+	void SysAsyncEventLoop::schedule(SysAsyncTask::Job job, std::int64_t delay, std::int64_t interval)
+	{
+		std::unique_lock<std::mutex> lock(_mutex);
+		_queue.push({
+			._job = std::move(job),
+			._scheduled_exec = SysGetCurrentTime() + delay,
+			._interval = interval
+		});
+		_cv.notify_all();
 	}
 
 	std::int64_t SysGetCurrentTime()

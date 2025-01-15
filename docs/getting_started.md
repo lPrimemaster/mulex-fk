@@ -72,6 +72,7 @@ public:
 	MyBackend(int argc, char* argv[]) : MxBackend(argc, argv)
 	{
 		log.info("Hello from MyBackend!");
+        deferExec(&MyBackend::periodic, 0, 1000); // Run every 1000 ms, starting now
 	}
 
 	virtual void onRunStart(std::uint64_t runno) override
@@ -84,10 +85,9 @@ public:
         log.info("MyBackend seen run stop %llu.", runno);
 	}
 
-	virtual void periodic() override
+	void periodic() override
 	{
         log.info("MyBackend looping periodic...");
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
 };
 ```
@@ -97,7 +97,7 @@ Afterwards just start its event loop on your main.
 int main(int argc, char* argv[])
 {
 	MyBackend backend(argc, argv);
-	backend.startEventLoop();
+	backend.init();
 	return 0;
 }
 ```
