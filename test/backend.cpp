@@ -100,17 +100,12 @@ public:
 
 	void periodic()
 	{
-		// RdbAccess config = getConfigRdbRoot();
 		std::string ekey = "/user/" + std::string(SysGetBinaryName()) + "/config/";
 		RdbAccess config(ekey);
 		std::int32_t s = config["period_ms"];
 		config["period_ms"] = ++s;
 		static std::vector<std::uint8_t> buffer(100);
 		buffer.clear();
-
-		// RdbAccess configr;
-		// double cpu = configr["/system/metrics/cpu_usage"];
-		// LogDebug("CPU: %.2lf%%", cpu);
 
 		log.info("Hello from deferred period function.");
 		

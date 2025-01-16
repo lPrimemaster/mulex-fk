@@ -51,16 +51,14 @@ namespace mulex
 		void userRpcInternal(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* udata);
 		void registerUserRpcEvent();
 
-	protected:
+	public:
+		void init();
 		// Execution defer
 		template<std::derived_from<MxBackend> D>
 		void deferExec(void (D::* func)(void), std::int64_t delay = 0, std::int64_t interval = 0)
 		{
 			_io.schedule(std::bind(static_cast<void(MxBackend::*)(void)>(func), this), delay, interval);
 		}
-
-	public:
-		void init();
 		void deferExec(std::function<void()> func, std::int64_t delay = 0, std::int64_t interval = 0);
 
 	protected:
