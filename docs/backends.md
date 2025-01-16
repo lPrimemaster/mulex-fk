@@ -153,6 +153,7 @@ external API. E.g.:
 // Not thread-safe nor keeping the data lifetime
 // Just here to illustrate
 void* data = 0;
+int data_len = 0;
 
 void my_func(/* api specific args, e.g. */void* api_data, int api_data_len, void* userdata)
 {
@@ -164,6 +165,7 @@ void my_func(/* api specific args, e.g. */void* api_data, int api_data_len, void
     // save the data somewhere and access it on the onExternalAPITrigger
     // method
     data = api_data;
+    data_len = api_data_len;
     // deferExec is thread-safe
     bck->deferExec(&MyBackend::onExternalAPITrigger);
 }
@@ -183,7 +185,7 @@ public:
         // Access data somehow ... Do some work ...
 
         // Or, e.g., dispatch an event
-        dispatchEvent("externalAPI_data", data);
+        dispatchEvent("externalAPI_data", data, data_len);
     }
 };
 
