@@ -45,6 +45,7 @@ int main(int argc, char* argv[])
 {
     MyBackend bck(argc, argv);
     bck.init();
+    bck.spin();
     return 0;
 }
 ```
@@ -196,6 +197,8 @@ int main(int argc, char* argv[])
 
     ExternalAPIFuncRegisterCallback(my_func, &bck /* as user data e.g. */);
 
+    bck.spin();
+
     return 0;
 }
 ```
@@ -234,3 +237,22 @@ rpc.then((handle) => {
 
 The plugin containing this code will call the backend user rpc function
 as long as it is connected to the mx system.
+
+## Setting custom arguments
+Let's say you want to add some custom argument as to where some config
+file is and don't want to use the RDB/PDB for that. The backend
+executable accepts custom arguments. They can be added via the
+`SysAddArgument` function. It must be called before the constructor of
+`MxBackend`. Here's an example:
+
+```cpp
+int main(int argc, char* argv[])
+{
+    SysAddArgument("my-arg-kebab-case", 0, true,
+                   [](const std::string& value){ mulex::LogDebug("Got arg value: %s", value.c_str()); },
+                   "My argument help text.");
+    MyBackend bck(argc, argv);
+    // ...
+    return 0;
+}
+```

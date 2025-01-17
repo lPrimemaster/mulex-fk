@@ -73,19 +73,20 @@ public:
 	{
 		log.info("Hello from MyBackend!");
         deferExec(&MyBackend::periodic, 0, 1000); // Run every 1000 ms, starting now
+        registerRunStartStop(&MyBackend::onRunStart, &MyBackend::onRunStop);
 	}
 
-	virtual void onRunStart(std::uint64_t runno) override
+	void onRunStart(std::uint64_t runno)
 	{
         log.info("MyBackend seen run start %llu.", runno);
 	}
 
-	virtual void onRunStop(std::uint64_t runno) override
+	void onRunStop(std::uint64_t runno)
 	{
         log.info("MyBackend seen run stop %llu.", runno);
 	}
 
-	void periodic() override
+	void periodic()
 	{
         log.info("MyBackend looping periodic...");
 	}
@@ -98,6 +99,7 @@ int main(int argc, char* argv[])
 {
 	MyBackend backend(argc, argv);
 	backend.init();
+    backend.spin();
 	return 0;
 }
 ```
