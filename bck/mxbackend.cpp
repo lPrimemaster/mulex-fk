@@ -52,12 +52,6 @@ namespace mulex
 
 	MxBackend::~MxBackend()
 	{
-		while(!*stop)
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-			std::this_thread::yield();
-		}
-
 		if(_init_ok)
 		{
 			_experiment = nullptr;
@@ -179,5 +173,14 @@ namespace mulex
 
 		// Register user rpc call function
 		registerUserRpcEvent();
+	}
+
+	void MxBackend::spin()
+	{
+		while(!*stop)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			std::this_thread::yield();
+		}
 	}
 } // namespace mulex

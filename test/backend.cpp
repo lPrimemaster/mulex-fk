@@ -118,7 +118,10 @@ public:
 
 int main(int argc, char* argv[])
 {
+	SysAddArgument("custom-arg", 0, false, [](const std::string&) {}, "My custom arg.");
+
 	TestBackend backend(argc, argv);
 	backend.init();
+	backend.spin();
 	return 0;
 }
