@@ -70,20 +70,9 @@ namespace mulex
 		std::string serveDir = SysGetExperimentHome();
 		if(serveDir.empty())
 		{
-#ifdef ONLINE_TRANSPILER
-			LogError("[mxhttp] Failed to start the realtime transpiler thread. SysGetExperimentHome() failed.");
-#else
 			LogError("[mxhttp] Failed to start the realtime plugin watcher thread. SysGetExperimentHome() failed.");
-#endif
 			return false;
 		}
-
-#ifdef ONLINE_TRANSPILER
-		if(!HttpGenerateViteConfigFile())
-		{
-			return false;
-		}
-#endif
 
 		std::string pluginsDir = serveDir + "/plugins";
 
@@ -94,23 +83,6 @@ namespace mulex
 			return false;
 		}
 
-		if(!RdbFindEntryByName("/system/http/hotswap"))
-		{
-			RdbCreateValueDirect("/system/http/hotswap", RdbValueType::BOOL, 0, true);
-		}
-
-#ifdef ONLINE_TRANSPILER
-		if(!RdbCreateValueDirect("/system/http/online_transpiler", RdbValueType::BOOL, 0, true))
-		{
-			RdbWriteValueDirect("/system/http/online_transpiler", true);
-		}
-#else
-		if(!RdbCreateValueDirect("/system/http/online_transpiler", RdbValueType::BOOL, 0, false))
-		{
-			RdbWriteValueDirect("/system/http/online_transpiler", false);
-		}
-#endif
-
 		// Remove all of the plugins and re-add user might have deleted files when mxmain was down
 		std::vector<RdbKeyName> prev_plugins = RdbListSubkeys("/system/http/plugins/");
 		for(const auto pplugin : prev_plugins)
@@ -119,39 +91,25 @@ namespace mulex
 		}
 
 		_plugins_watch = std::make_unique<SysFileWatcher>(pluginsDir, [serveDir](const SysFileWatcher::FileOp op, const std::string& file) {
-			if(RdbReadValueDirect("/system/http/hotswap").asType<bool>())
+			std::string filename = std::filesystem::path(file).filename().string();
+			switch(op)
 			{
-#ifdef ONLINE_TRANSPILER
-				std::string command = " yarn --cwd '";
-				command += serveDir;
-				command += "' build";
-#endif
-				std::string filename = std::filesystem::path(file).filename().string();
-				switch(op) {
-					case SysFileWatcher::FileOp::CREATED:
-					{
-						HttpRegisterUserPlugin(filename);
-						[[fallthrough]];
-					}
-					case SysFileWatcher::FileOp::MODIFIED:
-					{
-#ifdef ONLINE_TRANSPILER
-						std::thread([filename, command](){
-#ifdef __linux__
-							std::system(("ENTRY_FILE=./plugins/" + filename + command).c_str());
-#else
-							LogError("[mxhttp] Windows does not yet support frontend file hotswaping.");
-#endif
-						}).detach();
-#endif
-						break;
-					}
-					case SysFileWatcher::FileOp::DELETED:
-					{
-						std::string filename = std::filesystem::path(file).filename().string();
-						HttpRemoveUserPlugin(filename);
-						break;
-					}
+				case SysFileWatcher::FileOp::CREATED:
+				{
+					HttpRegisterUserPlugin(filename);
+					break;
+				}
+				case SysFileWatcher::FileOp::MODIFIED:
+				{
+					// TODO: (Cesar) Send some flag to reload the file
+					// 				 without the need to reload the webapp
+					break;
+				}
+				case SysFileWatcher::FileOp::DELETED:
+				{
+					std::string filename = std::filesystem::path(file).filename().string();
+					HttpRemoveUserPlugin(filename);
+					break;
 				}
 			}
 		});
@@ -160,7 +118,7 @@ namespace mulex
 		return true;
 	}
 
-	static void HttpStopTranspilerThread()
+	static void HttpStopWatcherThread()
 	{
 		if(_plugins_watch)
 		{
@@ -500,25 +458,9 @@ namespace mulex
 		});
 	}
 
-	// uWS already supports publishing/subscribing from topics
-	// Maybe we switch to this eventually??
 	static void HttpSendEvent(UWSType* ws, const std::string& event, const std::uint8_t* data, std::uint64_t len)
 	{
 		std::vector<std::uint8_t> data_vector;
-
-		// auto eventws = _active_ws_subscriptions.find(event);
-		//
-		// if(eventws == _active_ws_subscriptions.end())
-		// {
-		// 	LogError("[mxhttp] Cannot send event. No WS subscribed.");
-		// 	LogError("[mxhttp] This is a bug.");
-		// 	return;
-		// }
-		//
-		// if(eventws->second.empty())
-		// {
-		// 	return;
-		// }
 
 		data_vector.resize(len);
 		std::memcpy(data_vector.data(), data, len);
@@ -597,7 +539,7 @@ namespace mulex
 		RdbDeleteValueDirect(("/system/http/plugins/" + plugin).c_str());
 	}
 
-	void HttpStartServer(std::uint16_t port, bool islocal, bool hotswap)
+	void HttpStartServer(std::uint16_t port, bool islocal)
 	{
 
 		if(!HttpCopyAppFiles())
@@ -609,17 +551,10 @@ namespace mulex
 		EvtRegister("mxhttp::newclient");
 		EvtRegister("mxhttp::delclient");
 
-		if(hotswap)
+		if(!HttpStartWatcherThread())
 		{
-			if(!HttpStartWatcherThread())
-			{
-				LogError("[mxhttp] Failed to start the plugin watcher thread.");
-				return;
-			}
-		}
-		else
-		{
-			LogWarning("[mxhttp] Running without hotswap. User plugins will not build automatically if online transpilation is on.");
+			LogError("[mxhttp] Failed to start the plugin watcher thread.");
+			return;
 		}
 
 		_http_thread = new std::thread([port, islocal](){
@@ -787,7 +722,7 @@ namespace mulex
 	{
 		LogDebug("[mxhttp] Closing http server.");
 
-		HttpStopTranspilerThread();
+		HttpStopWatcherThread();
 
 		if(_http_listen_socket)
 		{

@@ -276,15 +276,10 @@ namespace mulex
 
 		bool loopback = false;
 		std::uint16_t port = 8080;
-		bool hotswap = true;
 
 		SysAddArgument("name", 'n', true, [](const std::string& expname){ _sys_expname = expname; }, "Set the current experiment name.");
 		SysAddArgument("loopback", 'l', false, [&](const std::string&){ loopback = true; }, "Set the http server on loopback mode only.");
 		SysAddArgument("port", 'p', true, [&](const std::string& portstr){ port = ::atoi(portstr.c_str()); }, "Set the http server listen port.");
-		SysAddArgument("no-hotswap", 0, false, [&](const std::string&){ hotswap = false; },
-			"Disable realtime yarn build of user plugins. "
-			"Useful for manual compilation with other tools."
-		);
 
 		if(!SysParseArguments(argc, argv))
 		{
@@ -331,7 +326,7 @@ namespace mulex
 		// After evt thread init
 		MsgInit();
 
-		HttpStartServer(port, loopback, hotswap);
+		HttpStartServer(port, loopback);
 
 		return true;
 	}

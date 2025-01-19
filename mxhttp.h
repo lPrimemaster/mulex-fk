@@ -4,7 +4,7 @@
 
 namespace mulex
 {
-	void HttpStartServer(std::uint16_t port, bool islocal, bool hotswap);
+	void HttpStartServer(std::uint16_t port, bool islocal);
 	void HttpStopServer();
 
 	MX_RPC_METHOD mulex::RPCGenericType HttpGetClients();
