@@ -60,6 +60,7 @@ static bool PlugUnpackFiles(const std::filesystem::path& path)
 
 	std::filesystem::create_directories("src/api");
 	PlugWriteFile("components::Button.tsx", "src/api/Button.tsx");
+	PlugWriteFile("components::Plot.tsx", "src/api/Plot.tsx");
 	PlugWriteFile("components::GaugeVertical.tsx", "src/api/GaugeVertical.tsx");
 	PlugWriteFile("components::Selector.tsx", "src/api/Selector.tsx");
 	PlugWriteFile("components::Switch.tsx", "src/api/Switch.tsx");

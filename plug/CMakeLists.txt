@@ -27,6 +27,7 @@ mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/utils.ts lib)
 
 # Package components
 mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Button.tsx components)
+mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Plot.tsx components)
 mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/GaugeVertical.tsx components)
 mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Selector.tsx components)
 mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Switch.tsx components)

@@ -1,6 +1,6 @@
 import { Component, useContext, createSignal, For, Show, createEffect, on, onMount } from 'solid-js';
 import Sidebar from './components/Sidebar';
-import { Plot } from './components/Plot';
+import { RdbPlot } from './components/RdbPlot';
 import 'uplot/dist/uPlot.min.css';
 import { cssColorToRGB } from './lib/utils';
 import { MxButton } from './api/Button';
@@ -350,7 +350,7 @@ const HistoryPlot : Component<{name: string, options: Array<DisplayOptions>}> = 
 		>
 			<Card title={props.name}>
 				<div class="mb-7">
-					<Plot options={{
+					<RdbPlot options={{
 						width: 0,
 						height: 0,
 						series: getSeries()

@@ -1,4 +1,5 @@
-import { Component, For, Show, createSignal, useContext } from 'solid-js';
+import { Component, createSignal, For, Show, useContext } from 'solid-js';
+import { MxGenericPlot, MxHistogramPlot, MxScatterPlot } from './api/Plot';
 import Sidebar from './components/Sidebar';
 import { MxPlugin, mxGetPluginsAccessor } from './lib/plugin';
 import { mxRegisterPluginFromFile } from "./lib/plugin";
@@ -70,31 +71,46 @@ export const Project : Component = () => {
 		}
 	});
 
-	// const [v, sv] = createSignal(0);
-	// const [v0, sv0] = createSignal(0);
-	// const [c, sc] = createSignal('red');
-	// const [b, sb] = createSignal(false);
+	const [x, setx] = createSignal<number>(0);
 
-	// setInterval(() => {sv(v() + 1)}, 1000);
-	// setInterval(() => sc(c() === 'red' ? 'green' : 'red'), 2000);
+	setInterval(() => setx(x() + 1), 1000);
 
 	return (
 		<div>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
-			{/*<div class="flex gap-5 mb-5">
-					<MxValuePanel title="C1" value={3.1415926535} size="xlarge" units="rad"/>
-					<MxValuePanel title="Temperature C1" color={c()} value={v()} size="xlarge" units="&deg;C" reactive/>
-					<MxValueControl title="C1 setpoint" min={0} value={v0()} description="my setpoint" size="xlarge" increment={0.1} units="Bq" onChange={(val) => {sv0(val)}}/>
-					<MxButton class="font-bold text-4xl">Spin</MxButton>
-					<MxButton type="error" class="font-bold text-4xl">Stop</MxButton>
-					<MxSwitch label="Lock" value={b()} onChange={sb}/>
-				</div>
-				<div class="flex gap-5">
-					<MxGaugeVertical min={0} max={100} value={50} width="128px" height="200px" title="Gauge"/>
-					<MxGaugeVertical min={0} max={2000} value={1036} width="200px" height="200px" title="Pressure" units="mbar" displayMode="absolute"/>
-					<MxSelector title="Operation Mode" value="Silent" size="xlarge" onSelect={(v) => { console.log(v) }} options={['Silent', 'Loud', 'XtraLoud']}/>
-				</div>*/}
+				{
+				// <div>
+				// 	<Card title="plot">
+				// 		<MxGenericPlot series={
+				// 			[{}, { label: 'MySeries', stroke: 'black', scale: 'K' }, { label: 'other', stroke: 'green', scale: 'K' }]
+				// 		}
+				// 		x={[1546300800, 1546387200]} y={[[x(), 5], [x() + 1, 1]]} 
+				// 		scales={{ x: { time: false }, K: { auto: false, range: [0, 100] }}}
+				// 		axes={[{ label: 'Time' }, { scale: 'K', values: (_, t) => t.map(r => r + ' K'), label: 'Temperature'}]}
+				// 		class="h-56 w-full mb-5"/>
+				// 	</Card>
+				// 	<Card title="plot">
+				// 		<MxHistogramPlot series={
+				// 			[{}, { label: 'MySeries', stroke: 'black', scale: 'K', fill: 'red' }]
+				// 		}
+				// 		x={[1, 2, 3, 4, 5]} y={[[x(), x() + 1, x() + 2, x() + 3, x() + 4]]}
+				// 		scales={{ x: { time: false }, K: { auto: false, range: [0, 100] }}}
+				// 		axes={[{ label: 'Time' }, { scale: 'K', values: (_, t) => t.map(r => r + ' K'), label: 'Temperature'}]}
+				// 		class="h-56 w-full mb-5"/>
+				// 	</Card>
+				// 	<Card title="plot">
+				// 		<MxScatterPlot series={
+				// 			[{}, { label: 'MySeries', stroke: 'black', scale: 'K', fill: 'red' }]
+				// 		}
+				// 		x={[1, 2, 3, 4, 5]} y={[[x(), x() + 1, x() + 2, x() + 3, x() + 4]]} 
+				// 		scales={{ x: { time: false }, K: { auto: false, range: [0, 100] }}}
+				// 		axes={[{ label: 'Time' }, { scale: 'K', values: (_, t) => t.map(r => r + ' K'), label: 'Temperature'}]}
+				// 		cursor={{ points: { fill: (u, s) => '#0000', size: 12.5}, sync: { key: '' }}}
+				// 		class="h-56 w-full mb-5"/>
+				// 	</Card>
+				// </div>
+				}
 				<div class="flex gap-5 flex-wrap">
 					<Show when={mxGetPluginsAccessor().data.size === 0}>
 						<div class="w-full flex">
