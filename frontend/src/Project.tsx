@@ -16,7 +16,6 @@ export const Project : Component = () => {
 	let dynamic_plugin_id = 0;
 	const { addRoute } = useContext(DynamicRouterContext) as MxDynamicRouterContext;
 	const [ dynamicRoutes, dynamicRoutesActions ] = createMapStore<string, string>(new Map<string, string>());
-	let transpiler_on: boolean | undefined = undefined;
 
 	function generatePluginPage(plugin: MxPlugin) {
 		const RenderPlug : Component = () => {
@@ -32,23 +31,10 @@ export const Project : Component = () => {
 		return RenderPlug;
 	}
 
-	MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/http/online_transpiler')], 'generic').then((res) => {
-		transpiler_on = res.astype('bool');
-	});
-
 	async function getPluginJsPath(key: string) {
-		await check_condition(() => transpiler_on !== undefined);
-
-		if(transpiler_on) {
-			const filename = key.split('/').pop()!;
-			const path = './../mxp.comp/mxp.es.' + filename.split('.').shift() + '.js';
-			return path;
-		}
-		else {
-			const filename = key.split('/').pop()!;
-			const path = './../plugins/' + filename.split('.').shift() + '.js';
-			return path;
-		}
+		const filename = key.split('/').pop()!;
+		const path = './../plugins/' + filename.split('.').shift() + '.js';
+		return path;
 	}
 
 	async function registerPluginFromFile(key: string) {
@@ -118,7 +104,8 @@ export const Project : Component = () => {
 								class="items-center w-full border-4 border-dashed rounded-md h-20 m-2 place-content-center gap-2 text-gray-400 bg-white"
 							>
 								<div class="text-center">No Plugins Found.</div>
-								<div class="text-center">Place your plugins under <code>&lt;expCacheDir&gt;/plugins/&lt;myPlugin&gt;.tsx</code></div>
+								<div class="text-center">Place your plugins under <code>&lt;expCacheDir&gt;/plugins/&lt;myPlugin&gt;.js</code></div>
+								<div class="text-center">Or use `mxplug` to compile.</div>
 							</div>
 						</div>
 					</Show>
