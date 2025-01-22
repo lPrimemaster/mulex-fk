@@ -38,31 +38,40 @@ export const MxGenericPlot : Component<MxPlotProps> = (props) => {
 	}
 
 	onMount(() => {
-		_updateMaxExtents();
+		const awaitContainer = () => {
+			if(container) {
+				_updateMaxExtents();
 
-		const options = {
-			 width: maxWidth(),
-			height: maxHeight(),
-			series: props.series,
-			scales: props.scales,
-			  axes: props.axes,
-			 bands: props.bands,
-			cursor: props.cursor
+				const options = {
+					 width: maxWidth(),
+					height: maxHeight(),
+					series: props.series,
+					scales: props.scales,
+					  axes: props.axes,
+					 bands: props.bands,
+					cursor: props.cursor
+				};
+
+				uplot = new uPlot(options, formattedData(), container);
+				window.addEventListener('resize', _updateMaxExtents);
+
+				createEffect(() => {
+					if(uplot) {
+						uplot.setData(formattedData());
+					}
+				});
+
+				onCleanup(() => {
+					uplot.destroy();
+					window.removeEventListener('resize', _updateMaxExtents);
+				});
+			}
+			else {
+				setTimeout(awaitContainer, 10);
+			}
 		};
 
-		uplot = new uPlot(options, formattedData(), container);
-		window.addEventListener('resize', _updateMaxExtents);
-
-		createEffect(() => {
-			if(uplot) {
-				uplot.setData(formattedData());
-			}
-		});
-
-		onCleanup(() => {
-			uplot.destroy();
-			window.removeEventListener('resize', _updateMaxExtents);
-		});
+		awaitContainer();
 	});
 
 	return (
