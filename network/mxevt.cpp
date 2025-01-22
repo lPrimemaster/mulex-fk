@@ -73,7 +73,6 @@ namespace mulex
 			}
 		}
 
-
 		_evt_socket = SocketInit();
 		SocketConnect(_evt_socket, hostname, evtport);
 		_evt_thread_running.store(true);
