@@ -442,7 +442,8 @@ namespace mulex
 
 	static void HttpDeferCall(decltype(_active_ws_connections)::key_type ws, std::function<void(decltype(_active_ws_connections)::key_type)> func)
 	{
-		_ws_loop_thread->defer([&ws, func]() {
+		_ws_loop_thread->defer([ws, func]() {
+			LogTrace("[mxhttp] Calling defer within ws thread.");
 			func(ws);
 		});
 	}
@@ -689,6 +690,11 @@ namespace mulex
 
 					std::unique_lock lock_aci(_aci_lock);
 					EvtEmit("mxhttp::delclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]._identifier), sizeof(std::uint64_t));
+
+					{
+						std::lock_guard<std::mutex> lock(_mutex);
+						_active_ws_connections.erase(ws);
+					}
 
 					_active_clients_info.erase(ws);
 
