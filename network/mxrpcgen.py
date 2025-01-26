@@ -324,6 +324,8 @@ class RPCGenerator:
                            '"RPC parameter type must be '
                            'trivially copyable. But is of type: '
                            f'{arg.typename.fulltypename}");\n')
+            # We require args, nullptr guard
+            self._write_indented(4, 'if(!args) return {};\n')
 
         # Argument offsets
         if len(method.args) > 1:
