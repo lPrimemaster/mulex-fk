@@ -54,7 +54,7 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 	const [isActive, setIsActive] = createSignal<boolean>(false);
 	const [openEdit, setOpenEdit] = createSignal<boolean>(false);
 	const [openDelete, setOpenDelete] = createSignal<boolean>(false);
-	const [writeValue, setWriteValue] = createSignal<string | number>('');
+	const [writeValue, setWriteValue] = createSignal<string | boolean>('');
 	const [extendRawView, setExtendRawView] = createSignal<boolean>(false);
 	const rdb = new MxRdb();
 	let last_resolve = true;
@@ -62,6 +62,22 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 
 	if(props.ref) {
 		props.ref = element_ref;
+	}
+
+	function editValidator(): boolean {
+		if(isNaN(Number(writeValue())) && type() != 'STRING') {
+			return false;
+		}
+
+		if(!isNaN(Number(writeValue())) &&
+			type() != 'FLOAT32' &&
+			type() != 'FLOAT64' &&
+			type() != 'STRING' &&
+			!Number.isInteger(Number(writeValue()))) {
+			return false;
+		}
+
+		return true;
 	}
 
 	createEffect((previous: string) => {
@@ -217,9 +233,34 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 								<DialogTitle class="text-center">Edit '{name()}'</DialogTitle>
 							</DialogHeader>
 							<div class="grid gap-5 py-5">
-								<TextField onChange={setWriteValue} class="grid grid-cols-4 items-center gap-5">
+								<TextField
+									onChange={setWriteValue}
+									validationState={editValidator() ? 'valid' : 'invalid'}
+									class="grid grid-cols-4 items-center gap-5">
 									<TextFieldLabel class="text-right">Value</TextFieldLabel>
-									<TextFieldInput value={value()} class="col-span-3" type={type() === 'string' ? 'text' : 'number'}/>
+									<Show when={type() != 'BOOL'}>
+										<TextFieldInput value={value()} class="col-span-3" type="text"/>
+										<TextFieldErrorMessage>
+											<Show when={isNaN(Number(writeValue())) && type() != 'STRING'}>
+												Cannot input a string on non-string input type.
+											</Show>
+											<Show when={
+												!isNaN(Number(writeValue())) &&
+												type() != 'FLOAT32' &&
+												type() != 'FLOAT64' &&
+												type() != 'STRING' &&
+												!Number.isInteger(Number(writeValue()))
+											}>
+												Cannot use floating point values on integer types.
+											</Show>
+										</TextFieldErrorMessage>
+									</Show>
+									<Show when={type() == 'BOOL'}>
+										<ComboSimple data={[
+											{ label: 'True' , value: true , disabled: false },
+											{ label: 'False', value: false, disabled: false }
+										]} placeholder="" default={value() === 'true' ? 'True' : 'False'} onSelect={(v: boolean) => { setWriteValue(v); }}/>
+									</Show>
 								</TextField>
 							</div>
 							<DialogFooter>
@@ -229,7 +270,7 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 										MxGenericType.fromValue(writeValue(), type().toLowerCase(), 'generic')
 									], 'none');
 									setOpenEdit(false);
-								}}>Save</MxButton>
+								}} disabled={!editValidator()}>Save</MxButton>
 								<MxButton onClick={setOpenEdit}>Cancel</MxButton>
 							</DialogFooter>
 						</DialogContent>
