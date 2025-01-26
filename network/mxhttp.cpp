@@ -442,6 +442,11 @@ namespace mulex
 
 	static void HttpDeferCall(decltype(_active_ws_connections)::key_type ws, std::function<void(decltype(_active_ws_connections)::key_type)> func)
 	{
+		{
+			std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
+			if(_active_ws_connections.find(ws) == _active_ws_connections.end()) return;
+		}
+
 		_ws_loop_thread->defer([ws, func]() {
 			LogTrace("[mxhttp] Calling defer within ws thread.");
 			func(ws);
@@ -691,16 +696,18 @@ namespace mulex
 					std::unique_lock lock_aci(_aci_lock);
 					EvtEmit("mxhttp::delclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]._identifier), sizeof(std::uint64_t));
 
-					{
-						std::lock_guard<std::mutex> lock(_mutex);
-						_active_ws_connections.erase(ws);
-					}
 
 					_active_clients_info.erase(ws);
 
 					// Delete the local rpc/ect client bridges for this connection
 					bridge->_local_experiment._rpc_client.reset();
 					bridge->_local_experiment._evt_client.reset();
+
+					{
+						std::lock_guard<std::mutex> lock(_mutex);
+						_active_ws_connections.erase(ws);
+					}
+
 					LogDebug("[mxhttp] Closed WS connection. [%x]", ws);
 				}
 			}).listen(islocal ? "127.0.0.1" : "0.0.0.0", port, [port, islocal](auto* token) {
