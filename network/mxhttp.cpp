@@ -442,10 +442,10 @@ namespace mulex
 
 	static void HttpDeferCall(decltype(_active_ws_connections)::key_type ws, std::function<void(decltype(_active_ws_connections)::key_type)> func)
 	{
-		{
-			std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
-			if(_active_ws_connections.find(ws) == _active_ws_connections.end()) return;
-		}
+		// {
+		// 	std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
+		// 	if(_active_ws_connections.find(ws) == _active_ws_connections.end()) return;
+		// }
 
 		_ws_loop_thread->defer([ws, func]() {
 			LogTrace("[mxhttp] Calling defer within ws thread.");
