@@ -746,7 +746,7 @@ namespace mulex
 		auto evtrit = _evt_server_reg.find(name.c_str());
 		if(evtrit != _evt_server_reg.end())
 		{
-			LogError("[evtserver] Cannot register event <%s>. Already exists.", name.c_str());
+			LogTrace("[evtserver] Cannot register event <%s>. Already exists.", name.c_str());
 			return false;
 		}
 

@@ -633,7 +633,7 @@ namespace mulex
 
 		if(RdbFindEntryByNameUnlocked(key))
 		{
-			LogError("[rdb] Cannot create already existing key.");
+			LogTrace("[rdb] Cannot create already existing key.");
 			return nullptr;
 		}
 
