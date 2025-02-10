@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, on } from 'solid-js';
+import { Component, createSignal, createEffect, on, onMount } from 'solid-js';
 import Sidebar from './components/Sidebar'
 import Card from './components/Card';
 import BackendStatusTable from './components/BackendStatusTable';
@@ -14,7 +14,7 @@ import { ResourcePanel } from './components/ResourcePanel';
 import { ClientsTable } from './components/ClientsTable';
 import { Hello } from 'mulex-api';
 
-const [socketStatus, setSocketStatus] = createSignal<boolean>(false);
+const [socketStatus, setSocketStatus] = createSignal<boolean>(true);
 const [runStatus, setRunStatus] = createSignal<string>('Stopped');
 const [runNumber, setRunNumber] = createSignal<number>(0);
 const [runTimestamp, setRunTimestamp] = createSignal<number>(0);
@@ -54,46 +54,47 @@ const Home: Component = () => {
 
 	MxWebsocket.instance.on_connection_change((conn: boolean) => {
 		setSocketStatus(conn);
+	});
 
-		if(conn) {
+		// if(conn) {
 			// MxWebsocket.instance.rpc_call('mulex::RdbListKeys', [], 'generic').then((res) => {
 			// 	const keys = res.astype('stringarray');
 			// 	const tree = new MxRdbTree(keys);
 			// 	tree.print_tree();
 			// });
 
-			MxWebsocket.instance.rpc_call(
-				'mulex::RdbReadValueDirect',
-			    [MxGenericType.str512('/system/run/status')],
-			    'generic').then((res: MxGenericType) => {
-				    const rstatus = res.astype('uint8');
-				    // Status MEMO:
-				    // 0 - Stopped
-				    // 1 - Running
-				    // 2 - Starting
-				  	// 3 - Stopping
-					setRunStatusFromCode(rstatus);
-			  	});
+	// onMount(() => {
+		MxWebsocket.instance.rpc_call(
+			'mulex::RdbReadValueDirect',
+			[MxGenericType.str512('/system/run/status')],
+			'generic').then((res: MxGenericType) => {
+				const rstatus = res.astype('uint8');
+				// Status MEMO:
+				// 0 - Stopped
+				// 1 - Running
+				// 2 - Starting
+				// 3 - Stopping
+				setRunStatusFromCode(rstatus);
+			});
 
-			MxWebsocket.instance.rpc_call(
-				'mulex::RdbReadValueDirect',
-			    [MxGenericType.str512('/system/run/number')],
-			    'generic').then((res: MxGenericType) => {
-				    const rnumber = res.astype('uint64');
-					setRunNumber(Number(rnumber));
-			  	});
+		MxWebsocket.instance.rpc_call(
+			'mulex::RdbReadValueDirect',
+			[MxGenericType.str512('/system/run/number')],
+			'generic').then((res: MxGenericType) => {
+				const rnumber = res.astype('uint64');
+				setRunNumber(Number(rnumber));
+			});
 
-			MxWebsocket.instance.rpc_call(
-				'mulex::RdbReadValueDirect',
-			    [MxGenericType.str512('/system/run/timestamp')],
-			    'generic').then((res: MxGenericType) => {
-				    const rts = res.astype('int64');
-					setRunTimestamp(Number(rts));
-			  	});
+		MxWebsocket.instance.rpc_call(
+			'mulex::RdbReadValueDirect',
+			[MxGenericType.str512('/system/run/timestamp')],
+			'generic').then((res: MxGenericType) => {
+				const rts = res.astype('int64');
+				setRunTimestamp(Number(rts));
+			});
 
-			watchRunInfo();
-		}
-	});
+		watchRunInfo();
+	// });
 
 	// If the socket status changes, emit a message on the toaster
 	let skipToastInit = true;

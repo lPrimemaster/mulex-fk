@@ -1,4 +1,4 @@
-import { Component, For, Show, createSignal } from 'solid-js';
+import { Component, For, Show, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { MxWebsocket } from '../lib/websocket';
 import { MxRdb } from '../lib/rdb';
@@ -55,24 +55,26 @@ const BackendStatusTable: Component = () => {
 		return key.replace('/system/backends/', '').split('/').shift() as string;
 	}
 
-	MxWebsocket.instance.on_connection_change((conn: boolean) => {
-		if(conn) {
-			MxWebsocket.instance.rpc_call('mulex::RdbListSubkeys', [MxGenericType.str512('/system/backends/*/name')], 'generic').then((data) => {
-				const client_status: Array<string> = data.astype('stringarray');
+	// MxWebsocket.instance.on_connection_change((conn: boolean) => {
+	// 	if(conn) {
+	onMount(() => {
+		MxWebsocket.instance.rpc_call('mulex::RdbListSubkeys', [MxGenericType.str512('/system/backends/*/name')], 'generic').then((data) => {
+			const client_status: Array<string> = data.astype('stringarray');
 
-				client_status
-					.map((x) => {
-						// Return the client id
-						return extract_backend_name(x);
-					})
-					.forEach((x) => {
-						create_client_status(x).then((status: BackendStatus) => {
-							setBackends(x, () => status);
-						});
+			client_status
+				.map((x) => {
+					// Return the client id
+					return extract_backend_name(x);
+				})
+				.forEach((x) => {
+					create_client_status(x).then((status: BackendStatus) => {
+						setBackends(x, () => status);
 					});
-			});
-		}
+				});
+		});
 	});
+	// 	}
+	// });
 
 	const rdb = new MxRdb();
 

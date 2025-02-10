@@ -1,4 +1,4 @@
-import { Component, createSignal } from 'solid-js';
+import { Component, createSignal, onMount } from 'solid-js';
 import { MxGaugeVertical } from '../api/GaugeVertical';
 import { MxWebsocket } from '../lib/websocket';
 import { MxGenericType } from '../lib/convert';
@@ -24,25 +24,27 @@ export const ResourcePanel : Component = () => {
 
 	watchKeys();
 
-	MxWebsocket.instance.on_connection_change((conn: boolean) => {
-		if(conn) {
-			MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/metrics/mem_total')], 'generic').then((res) => {
-				// To GB
-				setMemTotal(Number(res.astype('uint64')) / (1024 * 1024 * 1024));
-			});
+	// MxWebsocket.instance.on_connection_change((conn: boolean) => {
+	// 	if(conn) {
+	onMount(() => {
+		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/metrics/mem_total')], 'generic').then((res) => {
+			// To GB
+			setMemTotal(Number(res.astype('uint64')) / (1024 * 1024 * 1024));
+		});
 
-			MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/metrics/mem_used')], 'generic').then((res) => {
-				// To GB
-				setMemUsed(Number(res.astype('uint64')) / (1024 * 1024 * 1024));
-			});
+		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/metrics/mem_used')], 'generic').then((res) => {
+			// To GB
+			setMemUsed(Number(res.astype('uint64')) / (1024 * 1024 * 1024));
+		});
 
-			MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/metrics/cpu_usage')], 'generic').then((res) => {
-				setCpuUsage(res.astype('float64'));
-			});
+		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/metrics/cpu_usage')], 'generic').then((res) => {
+			setCpuUsage(res.astype('float64'));
+		});
 
-			watchKeys();
-		}
+		watchKeys();
 	});
+	// 	}
+	// });
 
 	return (
 		<div class="flex gap-5 place-content-center">

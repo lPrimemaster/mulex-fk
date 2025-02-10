@@ -178,9 +178,11 @@ namespace mulex
 		std::string respath = serveDir + urlPath;
 		if(!std::filesystem::is_regular_file(respath))
 		{
-			LogError("[mxhttp] Failed to serve files. Resource <%s> not found.", respath.c_str());
-			res->writeStatus("404 Not Found")->end("<h1>404 - File Not Found<h1>");
-			return false;
+			urlPath = "/index.html";
+			respath = serveDir + urlPath;
+			// LogError("[mxhttp] Failed to serve files. Resource <%s> not found.", respath.c_str());
+			// res->writeStatus("404 Not Found")->end("<h1>404 - File Not Found<h1>");
+			// return false;
 		}
 
 		std::string data = HttpReadFileFromDisk(respath);

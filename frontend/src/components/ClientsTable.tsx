@@ -1,4 +1,4 @@
-import { Component, For } from 'solid-js';
+import { Component, For, onMount } from 'solid-js';
 import { MxWebsocket } from '~/lib/websocket';
 import { MxGenericType } from '~/lib/convert';
 import { createMapStore } from '~/lib/rmap';
@@ -60,20 +60,22 @@ export const ClientsTable : Component = () => {
 
 	watchClients();
 
-	MxWebsocket.instance.on_connection_change((conn: boolean) => {
-		if(conn) {
-			MxWebsocket.instance.rpc_call('mulex::HttpGetClients', [], 'generic').then((data: MxGenericType) => {
-				const client_list = data.unpack(['str32', 'int64', 'uint64']);
+	// MxWebsocket.instance.on_connection_change((conn: boolean) => {
+	// 	if(conn) {
+	onMount(() => {
+		MxWebsocket.instance.rpc_call('mulex::HttpGetClients', [], 'generic').then((data: MxGenericType) => {
+			const client_list = data.unpack(['str32', 'int64', 'uint64']);
 
-				clientsActions.set(new Map<string, ClientInfo>());
-				for(const client of client_list) {
-					addClient(client);
-				}
-			});
+			clientsActions.set(new Map<string, ClientInfo>());
+			for(const client of client_list) {
+				addClient(client);
+			}
+		});
 
-			watchClients();
-		}
+		watchClients();
 	});
+	// 	}
+	// });
 
 	return (
 		<div>
