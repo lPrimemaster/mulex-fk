@@ -688,8 +688,8 @@ namespace mulex
 				{
 					if(!std::filesystem::exists(fit->first))
 					{
-						fit = file_mod_time.erase(fit);
 						f(FileOp::DELETED, fit->first);
+						fit = file_mod_time.erase(fit);
 						continue;
 					}
 					fit++;
