@@ -9,6 +9,7 @@ export interface MxDynamicRoute {
 export interface MxDynamicRouterContext {
 	routes: Accessor<Array<MxDynamicRoute>>;
 	addRoute: (path: string, component: Component) => void;
+	removeRoute: (path: string) => void;
 };
 
 export const DynamicRouterContext = createContext<MxDynamicRouterContext>();
@@ -19,7 +20,20 @@ export const DynamicRouterProvider : Component<{ children: JSXElement }> = (prop
 		setRoutes((p) => [...p, { path: '/dynamic' + path, component: component }]);
 	};
 
-	return <DynamicRouterContext.Provider value={{ routes: routes, addRoute: addRoute }}>{props.children}</DynamicRouterContext.Provider>
+	const removeRoute = (path: string) => {
+		setRoutes((p) => {
+			const element = p.find(route => route.path == '/dynamic' + path);
+			if(element) {
+				const idx = p.indexOf(element, 0);
+				if(idx > -1) {
+					return p.splice(idx, 1);
+				}
+			}
+			return p;
+		});
+	};
+
+	return <DynamicRouterContext.Provider value={{ routes: routes, addRoute: addRoute, removeRoute: removeRoute }}>{props.children}</DynamicRouterContext.Provider>
 };
 
 export const DynamicRouter : Component = () => {

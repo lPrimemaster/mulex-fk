@@ -1,5 +1,5 @@
-import { JSX, Component, JSXElement } from 'solid-js';
-import { createMapStore } from './rmap';
+import { JSX, Component, JSXElement, createSignal } from 'solid-js';
+// import { createMapStore } from './rmap';
 
 export interface MxPlugin {
 	id: string;
@@ -8,10 +8,20 @@ export interface MxPlugin {
 	render: (() => JSX.Element) | Component;
 };
 
-const [plugins, pluginsActions] = createMapStore<string, MxPlugin>(new Map<string, MxPlugin>());
+// const [plugins, pluginsActions] = createMapStore<string, MxPlugin>(new Map<string, MxPlugin>());
+export const [plugins, setPlugins] = createSignal<Map<string, MxPlugin>>(new Map<string, MxPlugin>());
 
 export function mxRegisterPlugin(plugin: MxPlugin) {
-	pluginsActions.add(plugin.id, plugin);
+	// pluginsActions.add(plugin.id, plugin);
+	console.log('Adding: ', plugin.id);
+	setPlugins((p) => new Map<string, MxPlugin>(p).set(plugin.id, plugin));
+}
+
+export function mxDeletePlugin(filename: string) {
+	// The filename is the id
+	// pluginsActions.remove(filename);
+	console.log('Removing: ', filename);
+	setPlugins((p) => { const np = new Map<string, MxPlugin>(p); np.delete(filename); return np; });
 }
 
 export async function mxRegisterPluginFromFile(filename: string) {
@@ -26,7 +36,7 @@ export async function mxRegisterPluginFromFile(filename: string) {
 	return plugin;
 }
 
-export function mxGetPluginsAccessor() : { data: Map<string, MxPlugin> } {
-	return plugins;
-}
+// export function mxGetPluginsAccessor() : { data: Map<string, MxPlugin> } {
+// 	return plugins;
+// }
 
