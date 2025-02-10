@@ -8,8 +8,8 @@ include(cmake/InstallMulex.cmake)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 # Version configuration
-project(mulex-fk VERSION 0.3.2)
-set(PROJECT_VNAME Luhman)
+project(mulex-fk VERSION 0.4.0)
+set(PROJECT_VNAME Wise)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
