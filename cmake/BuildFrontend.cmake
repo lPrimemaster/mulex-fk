@@ -58,4 +58,7 @@ macro(build_frontend_yarn)
 	foreach(file ${files})
 		mx_resource_append(${file})
 	endforeach()
+
+	# Add the favicon
+	mx_resource_append("${CMAKE_SOURCE_DIR}/frontend/src/assets/favicon.ico")
 endmacro()

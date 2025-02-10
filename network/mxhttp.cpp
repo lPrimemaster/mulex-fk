@@ -152,6 +152,7 @@ namespace mulex
 		if (ext == ".png")  return "image/png";
 		if (ext == ".jpg")  return "image/jpeg";
 		if (ext == ".jpeg") return "image/jpeg";
+		if (ext == ".ico")  return "image/x-icon";
 		return "text/plain";
 	}
 

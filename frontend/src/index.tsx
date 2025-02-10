@@ -10,8 +10,7 @@ import { RdbViewer } from './RdbViewer';
 import { LogProvider } from './components/LogTable';
 import { HistoryViewer } from './HistoryViewer';
 import { DynamicRouter, DynamicRouterProvider } from './components/DynamicRouter';
-import { MetaProvider } from '@solidjs/meta';
-import metadata from './lib/metadata';
+import { MetaProvider, Link } from '@solidjs/meta';
 
 const root = document.getElementById('root');
 
@@ -23,6 +22,7 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 
 render(() => (
 		<MetaProvider>
+			<Link rel="icon" href="/favicon.ico"/>
 			<DynamicRouterProvider>
 				<LogProvider maxLogs={100}>
 					<Router>
