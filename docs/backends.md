@@ -229,11 +229,30 @@ void MyBackend::my_rpc(const std::vector<std::uint8_t>& data)
 const rpc = MxRpc.Create();
 rpc.then((handle) => {
     handle.BckCallUserRpc([
-        MxGenericType.str32('MyBackend::rpc'),
+        MxGenericType.str32('my_backend'), // Executable name (as listed in home page)
         MxGenericType.int32(42, 'generic') // Custom data
     ]);
 });
 ```
+
+You can also bundle multiple data with the help of the `MxGenericType.makeData` and `MxGenericType.concatData` functions.
+
+```ts
+const rpc = MxRpc.Create();
+rpc.then((handle) => {
+
+    const data = MxGenericType.concatData([
+        MxGenericType.int8(42),
+        MxGenericType.f32(3.141592654)
+    ]);
+
+    handle.BckCallUserRpc([
+        MxGenericType.str32('my_backend'), // Executable name (as listed in home page)
+        MxGenericType.makeData(data, 'generic') // Custom data
+    ]);
+});
+```
+Of course proper data handling must take place at the backend user function.
 
 The plugin containing this code will call the backend user rpc function
 as long as it is connected to the mx system.
