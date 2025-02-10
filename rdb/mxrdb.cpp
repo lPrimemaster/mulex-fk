@@ -693,7 +693,7 @@ namespace mulex
 			return false;
 		}
 
-		RdbEmitWatchMatchCondition(key, entry);
+		// RdbEmitWatchMatchCondition(key, entry);
 
 		_rdb_offset_map.erase(key.c_str());
 		RdbFree(entry);
