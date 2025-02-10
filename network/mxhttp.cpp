@@ -178,11 +178,10 @@ namespace mulex
 		std::string respath = serveDir + urlPath;
 		if(!std::filesystem::is_regular_file(respath))
 		{
+			// If the file is not found then route back to index.html
+			// solidjs router will figure out the route from the full url
 			urlPath = "/index.html";
 			respath = serveDir + urlPath;
-			// LogError("[mxhttp] Failed to serve files. Resource <%s> not found.", respath.c_str());
-			// res->writeStatus("404 Not Found")->end("<h1>404 - File Not Found<h1>");
-			// return false;
 		}
 
 		std::string data = HttpReadFileFromDisk(respath);
@@ -457,7 +456,7 @@ namespace mulex
 	static void HttpDeferCallAll(std::function<void(decltype(_active_ws_connections)::key_type)> func)
 	{
 		_ws_loop_thread->defer([&func]() {
-			std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
+			// std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
 			for(auto* ws : _active_ws_connections)
 			{
 				func(ws);
@@ -729,6 +728,8 @@ namespace mulex
 					LogError("[mxhttp] Failed to listen on port %d.", port);
 				}
 			}).run();
+
+			LogDebug("[mxhttp] Server graceful shutdown.");
 		});
 	}
 
