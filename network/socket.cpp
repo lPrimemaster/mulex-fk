@@ -195,10 +195,18 @@ namespace mulex
 #else
 		// Windows does not have a non-blocking flag for recv only
 		// And we don't want the whole socket to be non-blocking due to send
-		unsigned long toread;
-		::ioctlsocket(socket._handle, FIONREAD, &toread);
+		fd_set readfds;
+		FD_ZERO(&readfds);
+		FD_SET(socket._handle, &readfds);
+
+		timeval timeout;
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 500000;
+
+		int toread = ::select(0, &readfds, nullptr, nullptr, &timeout);
 		if(rlen) *rlen = 0;
-		if(toread > 0)
+
+		if(toread > 0 && FD_ISSET(socket._handle, &readfds))
 		{
 			std::int32_t res = ::recv(socket._handle, reinterpret_cast<char*>(buffer), len, 0);
 			if(res > 0)
@@ -217,6 +225,11 @@ namespace mulex
 				return SocketResult::DISCONNECT;
 			}
 			return SocketResult::OK;
+		}
+		else if(toread < 0)
+		{
+			LogError("Socket receive error.");
+			return SocketResult::ERROR;
 		}
 		else
 		{
