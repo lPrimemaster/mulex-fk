@@ -9,6 +9,18 @@ export class MxGenericType
 							  // 'generic' for size + byte-by-byte repr
 	}
 
+	static makeData(data: Uint8Array, intype: string = 'native') : MxGenericType {
+		// Append size before the intype if the type is generic
+		if(intype === 'generic') {
+			let ndata = new Uint8Array(data.length + 8); // 64-bit unsigned size
+			let sdata = new BigUint64Array([BigInt(data.length)]);
+			ndata.set(new Uint8Array(sdata.buffer), 0);
+			ndata.set(data, 8);
+			return new MxGenericType(ndata, intype);
+		}
+		return new MxGenericType(data, intype);
+	}
+
 	static fromData(data: Uint8Array, intype: string = 'native') : MxGenericType {
 		return new MxGenericType(data, intype);
 	}
