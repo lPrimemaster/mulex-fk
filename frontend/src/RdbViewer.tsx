@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { scroll_to_element, array_chunkify } from './lib/utils';
 import { TextField, TextFieldLabel, TextFieldInput, TextFieldErrorMessage } from './components/ui/text-field';
 import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip';
+import { DynamicTitle } from './components/DynamicTitle';
 
 class RdbStats {
 	read: number;
@@ -416,6 +417,7 @@ export const RdbViewer: Component = () => {
 
 	return (
 		<div>
+			<DynamicTitle title="RDB"/>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
 				<SearchBarProvider>

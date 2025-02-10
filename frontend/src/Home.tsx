@@ -12,7 +12,7 @@ import { timestamp_tohms } from './lib/utils';
 import { LogTable } from './components/LogTable';
 import { ResourcePanel } from './components/ResourcePanel';
 import { ClientsTable } from './components/ClientsTable';
-import { Hello } from 'mulex-api';
+import { DynamicTitle } from './components/DynamicTitle';
 
 const [socketStatus, setSocketStatus] = createSignal<boolean>(true);
 const [runStatus, setRunStatus] = createSignal<string>('Stopped');
@@ -118,6 +118,7 @@ const Home: Component = () => {
 
 	return (
 		<div>
+			<DynamicTitle title="Home"/>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
 				<div class="columns-1 xl:columns-2 gap-5">

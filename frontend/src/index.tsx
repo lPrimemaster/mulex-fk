@@ -1,5 +1,5 @@
 /* @refresh reload */
-import { render } from 'solid-js/web';
+import { render, Show } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { Toaster } from '~/components/ui/toast';
 
@@ -10,6 +10,8 @@ import { RdbViewer } from './RdbViewer';
 import { LogProvider } from './components/LogTable';
 import { HistoryViewer } from './HistoryViewer';
 import { DynamicRouter, DynamicRouterProvider } from './components/DynamicRouter';
+import { MetaProvider } from '@solidjs/meta';
+import metadata from './lib/metadata';
 
 const root = document.getElementById('root');
 
@@ -20,7 +22,7 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 }
 
 render(() => (
-		<>
+		<MetaProvider>
 			<DynamicRouterProvider>
 				<LogProvider maxLogs={100}>
 					<Router>
@@ -33,5 +35,5 @@ render(() => (
 					<Toaster/>
 				</LogProvider>
 			</DynamicRouterProvider>
-		</>
+		</MetaProvider>
 	), root!);

@@ -1,5 +1,4 @@
-import { Component, createSignal, For, Show, useContext } from 'solid-js';
-import { MxGenericPlot, MxHistogramPlot, MxScatterPlot } from './api/Plot';
+import { Component, For, Show, useContext } from 'solid-js';
 import Sidebar from './components/Sidebar';
 import { MxPlugin, mxRegisterPluginFromFile, mxDeletePlugin, plugins } from './lib/plugin';
 import { MxRdb } from './lib/rdb';
@@ -9,7 +8,7 @@ import Card from './components/Card';
 import { MxDynamicRouterContext, DynamicRouterContext } from './components/DynamicRouter';
 import { createMapStore } from './lib/rmap';
 import { A } from '@solidjs/router';
-import { check_condition } from './lib/utils';
+import { DynamicTitle } from './components/DynamicTitle';
 
 export const Project : Component = () => {
 	const { addRoute, removeRoute } = useContext(DynamicRouterContext) as MxDynamicRouterContext;
@@ -19,6 +18,7 @@ export const Project : Component = () => {
 		const RenderPlug : Component = () => {
 			return (
 				<div>
+					<DynamicTitle title={plugin.name}/>
 					<Sidebar/>
 					<div class="p-5 ml-36 mr-auto">
 						<plugin.render/>
@@ -77,6 +77,7 @@ export const Project : Component = () => {
 
 	return (
 		<div>
+			<DynamicTitle title="Project"/>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
 				<div class="flex gap-5 flex-wrap">

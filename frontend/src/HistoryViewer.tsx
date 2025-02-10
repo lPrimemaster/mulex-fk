@@ -16,6 +16,7 @@ import { BadgeLabel } from './components/ui/badge-label';
 import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip';
 import { Checkbox } from './components/ui/checkbox';
 import { MxRdb } from './lib/rdb';
+import { DynamicTitle } from './components/DynamicTitle';
 
 interface DisplayOptions {
 	color: string;
@@ -371,6 +372,7 @@ const HistoryPlot : Component<{name: string, options: Array<DisplayOptions>}> = 
 export const HistoryViewer : Component = () => {
 	return (
 		<div>
+			<DynamicTitle title="History"/>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
 				<div class="container">
