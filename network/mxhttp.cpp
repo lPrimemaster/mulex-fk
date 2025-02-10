@@ -107,7 +107,6 @@ namespace mulex
 				}
 				case SysFileWatcher::FileOp::DELETED:
 				{
-					std::string filename = std::filesystem::path(file).filename().string();
 					HttpRemoveUserPlugin(filename);
 					break;
 				}
