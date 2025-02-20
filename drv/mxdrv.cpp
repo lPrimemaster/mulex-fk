@@ -128,7 +128,7 @@ namespace mulex
 		tty.c_cflag |= (CLOCAL | CREAD);
 		tty.c_cflag &= ~(PARENB | PARODD);
 		tty.c_cflag |= args.parity;
-		tty.c_cflag &= ~CSTOP;
+		tty.c_cflag &= ~CSTOPB;
 		tty.c_cflag &= ~CRTSCTS;
 
 		if(tcsetattr(output._handle, TCSANOW, &tty) != 0)
