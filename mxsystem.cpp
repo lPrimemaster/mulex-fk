@@ -21,6 +21,7 @@
 #else
 #include <fcntl.h>
 #include <sys/sysinfo.h>
+#include <unistd.h>
 #endif
 
 #include <tracy/Tracy.hpp>
