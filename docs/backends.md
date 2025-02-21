@@ -282,7 +282,7 @@ will appear on the project's frontend page. This is usefull to
 quickly the state of a backend to the user. Here's how to do it:
 
 ```cpp
-void some_method()
+void MxBackend::some_method()
 {
     // ...
     // Status name followed by a custom RGB triplet
