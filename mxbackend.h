@@ -46,6 +46,9 @@ namespace mulex
 			_user_run_stop = static_cast<void(MxBackend::*)(std::uint64_t)>(stop);
 		}
 
+		// Set the backend custom status flag
+		void setStatus(const std::string& status, const std::string& color);
+
 	private:
 		// User RPC
 		void userRpcInternal(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* udata);

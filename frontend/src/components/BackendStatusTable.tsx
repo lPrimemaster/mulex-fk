@@ -15,14 +15,18 @@ class BackendStatus {
 	evt_upload_speed: number;
 	evt_download_speed: number;
 	uptime: number;
+	user_status: string;
+	user_color: string;
 
-	constructor(name: string, host: string, connected: boolean, time: number) {
+	constructor(name: string, host: string, connected: boolean, time: number, ustatus: string, ucolor: string) {
 		this.name = name;
 		this.host = host;
 		this.connected = connected;
 		this.evt_upload_speed = 0;
 		this.evt_download_speed = 0;
 		this.uptime = time;
+		this.user_status = ustatus;
+		this.user_color = ucolor;
 	}
 };
 
@@ -47,8 +51,12 @@ const BackendStatusTable: Component = () => {
 		const cconn: boolean = (await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [entry], 'generic')).astype('bool');
 		entry = MxGenericType.str512(`/system/backends/${clientid}/last_connect_time`);
 		const ctime: number = (await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [entry], 'generic')).astype('int64');
+		entry = MxGenericType.str512(`/system/backends/${clientid}/user_status/text`);
+		const ustatus: string = (await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [entry], 'generic')).astype('string');
+		entry = MxGenericType.str512(`/system/backends/${clientid}/user_status/color`);
+		const ucolor: string = (await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [entry], 'generic')).astype('int64');
 
-		return new BackendStatus(cname, chost, cconn, Number(ctime));
+		return new BackendStatus(cname, chost, cconn, Number(ctime), ustatus, ucolor);
 	}
 
 	function extract_backend_name(key: string): string {
@@ -83,6 +91,7 @@ const BackendStatusTable: Component = () => {
 		const cid = extract_backend_name(key);
 		let prev = { ...backends[cid] };
 		prev.connected = value.astype('bool');
+		prev.user_status = 'None';
 
 		const conkey = '/system/backends/' + cid + '/last_connect_time';
 		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(conkey)], 'generic').then((res: MxGenericType) => {
@@ -119,6 +128,19 @@ const BackendStatusTable: Component = () => {
 				prev.evt_upload_speed = res.astype('uint32');
 				setBackends(cid, () => prev);
 			}
+		});
+	});
+
+	// Connection user status
+	rdb.watch('/system/backends/*/user_status/text', (key: string, value: MxGenericType) => {
+		const cid = extract_backend_name(key);
+		let prev = { ...backends[cid] };
+		prev.user_status = value.astype('string');
+
+		const conkey = '/system/backends/' + cid + '/user_status/color';
+		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(conkey)], 'generic').then((res: MxGenericType) => {
+			prev.user_color = res.astype('string');
+			setBackends(cid, () => prev);
 		});
 	});
 
@@ -171,14 +193,17 @@ const BackendStatusTable: Component = () => {
 					<For each={Object.keys(backends)}>{(clientid: string) =>
 						<TableRow>
 							<TableCell class="p-0">{backends[clientid].name}</TableCell>
-								<TableCell class="p-0">
-								<Show when={backends[clientid].connected}>
+							<TableCell class="p-0">
+								<Show when={backends[clientid].connected && backends[clientid].user_status === 'None'}>
 									<BadgeLabel type="success">Connected</BadgeLabel>
+								</Show>
+								<Show when={backends[clientid].connected && backends[clientid].user_status !== 'None'}>
+									<BadgeLabel type="success">{backends[clientid].user_status}</BadgeLabel>
 								</Show>
 								<Show when={!backends[clientid].connected}>
 									<BadgeLabel type="error">Disconnected</BadgeLabel>
 								</Show>
-								</TableCell>
+							</TableCell>
 							<TableCell class="p-0">
 								{backends[clientid].host}
 							</TableCell>

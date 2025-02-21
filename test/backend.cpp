@@ -76,6 +76,9 @@ public:
 
 		// deferExec(&TestBackend::periodic, 0, 1000);
 		registerUserRpc(&TestBackend::userRpc);
+
+		deferExec([this](){ setStatus("MyStatus", "#ff0000"); log.info("Done."); }, 3000);
+
 		// registerRunStartStop(&TestBackend::onRunStart, &TestBackend::onRunStop);
 	}
 

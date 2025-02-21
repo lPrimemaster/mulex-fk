@@ -432,6 +432,16 @@ namespace mulex
 			RdbWriteValueDirect(root_key + "last_connect_time", time);
 		}
 
+		if(!RdbNewEntry(root_key + "user_status/text", RdbValueType::STRING, "None"))
+		{
+			RdbWriteValueDirect(root_key + "user_status/text", mxstring<512>("None"));
+		}
+
+		if(!RdbNewEntry(root_key + "user_status/color", RdbValueType::STRING, "#000000"))
+		{
+			RdbWriteValueDirect(root_key + "user_status/color", mxstring<512>("#000000"));
+		}
+
 		std::uint32_t init = 0;
 		RdbNewEntry(root_key + "statistics/event/read" , RdbValueType::UINT32, &init);
 		RdbNewEntry(root_key + "statistics/event/write", RdbValueType::UINT32, &init);
@@ -484,6 +494,10 @@ namespace mulex
 			_evt_client_ghost.erase(cid);
 			return; // Don't set the status
 		}
+
+		// Reset custom status
+		RdbWriteValueDirect("/system/backends/" + SysI64ToHexString(cid) + "/user_status/text" , mxstring<512>("None"));
+		RdbWriteValueDirect("/system/backends/" + SysI64ToHexString(cid) + "/user_status/color", mxstring<512>("#000000"));
 
 		SetRdbClientConnectionStatus(cid, false);
 

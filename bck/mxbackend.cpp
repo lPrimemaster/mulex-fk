@@ -115,6 +115,14 @@ namespace mulex
 		}
 	}
 
+	void MxBackend::setStatus(const std::string& status, const std::string& color)
+	{
+		// This only happens on non-ghost backends so one can call the SysGetClientId function
+		static const std::string root_key = "/system/backends/" + SysI64ToHexString(SysGetClientId()) + "/";
+		rdb[root_key + "user_status/text"] = mxstring<512>(status);
+		rdb[root_key + "user_status/color"] = mxstring<512>(color);
+	}
+
 	void MxBackend::deferExec(std::function<void()> func, std::int64_t delay, std::int64_t interval)
 	{
 		_io.schedule(func, delay, interval);
