@@ -275,3 +275,18 @@ int main(int argc, char* argv[])
     return 0;
 }
 ```
+
+## Setting custom status
+The `MxBackend` interface allows you to set a custom status that
+will appear on the project's frontend page. This is usefull to
+quickly the state of a backend to the user. Here's how to do it:
+
+```cpp
+void some_method()
+{
+    // ...
+    // Status name followed by a custom RGB triplet
+    setStatus("MyCustomStatus", "#ff0000");
+}
+```
+The custom status is reset upon backend disconnect / exit.
