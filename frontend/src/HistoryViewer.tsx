@@ -34,6 +34,51 @@ const [displays, displaysActions] = createMapStore<string, Array<DisplayOptions>
 const [displayName, setDisplayName] = createSignal<string>('');
 const [rdbKeyTypes, rdbKeyTypesAction] = createMapStore<string, number>(new Map<string, number>());
 
+function saveEntries() : void {
+	// console.log('Saving entries...');
+	localStorage.setItem('hpm_keys', JSON.stringify(Array.from(displays.data.entries())));
+	// const hpm_keys = localStorage.getItem('hpm_keys');
+	// if(hpm_keys) {
+	// 	const dict = new Map<string, Array<DisplayOptions>>(JSON.parse(hpm_keys));
+	// 	console.log(dict);
+	// }
+}
+
+function loadEntries() : void {
+	// console.log('Loading entries...');
+	const hpm_keys = localStorage.getItem('hpm_keys');
+	if(hpm_keys) {
+
+		MxWebsocket.instance.rpc_call('mulex::RdbListKeys', [], 'generic').then((data) => {
+			const rdbkeys: Array<string> = data.astype('stringarray');
+
+			// This function provides the types on the same order as RdbListKeys
+			MxWebsocket.instance.rpc_call('mulex::RdbListKeyTypes', [], 'generic').then((data) => {
+				const rdbkeytypes: Array<number> = data.astype('uint8');
+
+				for(let i = 0; i < rdbkeys.length; i++) {
+					rdbKeyTypesAction.add(rdbkeys[i], rdbkeytypes[i]);
+				}
+
+				const dict = new Map<string, Array<DisplayOptions>>(JSON.parse(hpm_keys));
+				// console.log(dict);
+
+				// // Skip if empty
+				// if(Object.keys(dict).length === 0) {
+				// 	return;
+				// }
+
+				for(const k of dict) {
+					displaysActions.add(k[0], k[1]);
+					// console.log(k[0]);
+					// console.log(k[1]);
+				}
+			});
+		});
+
+	}
+}
+
 const HistoryPlotRDBSearcher : Component<{ validityHandler: Function }> = (props) => {
 	const [rdbKeys, rdbKeysAction] = createSetStore<string>();
 	const { selectedItem, setSelectedItem } = useContext(SearchBarContext) as SearchBarContextType;
@@ -236,6 +281,7 @@ const [openHPM, setOpenHPM] = createSignal<boolean>(false);
 
 const HistoryPlotManager : Component = () => {
 	const [valid, setValid] = createSignal<boolean>(false);
+
 	return (
 		<div>
 			<Dialog open={openHPM()} onOpenChange={setOpenHPM}>
@@ -360,8 +406,8 @@ const HistoryPlot : Component<{name: string, options: Array<DisplayOptions>}> = 
 				</div>
 				<Show when={isHover()}>
 					<div class="flex gap-5">
-						<MxButton>Change</MxButton>
-						<MxButton type="error">Remove</MxButton>
+						{/*<MxButton>Change</MxButton>*/}
+						<MxButton type="error" onClick={() => displaysActions.remove(props.name)}>Remove</MxButton>
 					</div>
 				</Show>
 			</Card>
@@ -370,6 +416,22 @@ const HistoryPlot : Component<{name: string, options: Array<DisplayOptions>}> = 
 };
 
 export const HistoryViewer : Component = () => {
+	const [mountSkip, setMountSkip] = createSignal<boolean>(true);
+
+	// Save the page current displays to localStorage on change
+	createEffect(on(() => displays.data, () => {
+		if(mountSkip()) {
+			setMountSkip(false);
+			return;
+		}
+		saveEntries();
+	}));
+
+	// Load the page displays from localStorage
+	onMount(() => {
+		loadEntries();
+	});
+
 	return (
 		<div>
 			<DynamicTitle title="History"/>

@@ -48,7 +48,7 @@ const Sidebar: Component = () => {
 						</NavigationMenuItem>
 						<NavigationMenuItem>
 							<NavigationMenuTrigger>
-								<A href='/history'>History (Beta)</A>
+								<A href='/history'>History</A>
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
 						<NavigationMenuItem>
