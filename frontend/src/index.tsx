@@ -9,6 +9,7 @@ import { Project } from './Project';
 import { RdbViewer } from './RdbViewer';
 import { LogProvider } from './components/LogTable';
 import { HistoryViewer } from './HistoryViewer';
+import { EventsViewer } from './EventsViewer';
 import { DynamicRouter, DynamicRouterProvider } from './components/DynamicRouter';
 import { MetaProvider, Link } from '@solidjs/meta';
 
@@ -30,6 +31,7 @@ render(() => (
 						<Route path='/project' component={Project}/>
 						<Route path='/rdb' component={RdbViewer}/>
 						<Route path='/history' component={HistoryViewer}/>
+						<Route path='/events' component={EventsViewer}/>
 						<DynamicRouter/>
 					</Router>
 					<Toaster/>
