@@ -11,7 +11,7 @@ export const EventsViewer : Component = () => {
 
 	return (
 		<div>
-			<DynamicTitle title="History"/>
+			<DynamicTitle title="Events"/>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto min-h-dvh flex flex-col">
 				<DiGraph

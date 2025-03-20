@@ -187,6 +187,37 @@ export const DiGraph : Component<DiGraphProps> = (props) => {
 		return [node.x, node.y];
 	}
 
+	function setupEdges() {
+		// Populate a lookup table
+		const lookup = new Map<string, Array<{ index: number, type: string }>>();
+		function setLookup(id: string, i: number, type: string) {
+			let initial = new Array<{ index: number, type: string }>();
+			if(lookup.has(id)) {
+				initial = lookup.get(id)!;
+			}
+			lookup.set(id, [...initial, { index: i, type: type}]);
+		}
+
+		// Set the edges and their lookup
+		for(let i = 0; i < props.edges.length; i++) {
+			const edge = props.edges[i];
+			const [ox, oy] = calculateNodeOutputLocation(edge.from);
+			const [ix, iy] = calculateNodeInputLocation(edge.to);
+			setEdges((p) => [...p, { sX: ox, sY: oy, eX: ix, eY: iy, label: edge.label }]);
+			
+			setLookup(edge.from, i, 'output');
+			setLookup(edge.to  , i, 'input');
+			neMapActions.set(lookup);
+		}
+	}
+
+	function setupNodes() {
+		// Set the nodes
+		for(const node of props.nodes) {
+			nodesActions.add(node.id, node);
+		}
+	}
+
 	onMount(() => {
 		// Set the nodes
 		for(const node of props.nodes) {
@@ -238,6 +269,9 @@ export const DiGraph : Component<DiGraphProps> = (props) => {
 			np[i] = { eX: np[i].eX, eY: np[i].eY, sX: np[i].sX, sY: np[i].sY, label: props.edges[i].label };
 		}
 		setEdges(np);
+	}));
+
+	createEffect(on(() => props.nodes, () => {
 	}));
 
 	// Draw nodes and edges
