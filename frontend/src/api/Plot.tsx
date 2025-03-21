@@ -10,6 +10,7 @@ interface MxPlotProps {
 	bands?: Array<uPlot.Band>;
 	cursor?: uPlot.Cursor;
 	class?: string;
+	autoYScale?: boolean;
 };
 
 export const MxGenericPlot : Component<MxPlotProps> = (props) => {
@@ -55,10 +56,58 @@ export const MxGenericPlot : Component<MxPlotProps> = (props) => {
 				uplot = new uPlot(options, formattedData(), container);
 				window.addEventListener('resize', _updateMaxExtents);
 
+				// Y data changes...
 				createEffect(() => {
 					if(uplot) {
 						uplot.setData(formattedData());
+						if(props.autoYScale) {
+							const getExtents = (scale: string, min: number, max: number) => {
+								let emin = min;
+								let emax = max;
+
+								if(props.scales && props.scales[scale].range) {
+									const range = props.scales[scale].range as uPlot.Range.MinMax;
+									if(range[0] !== null) {
+										emin = min < (range[0] as number) ? min : (range[0] as number);
+									}
+								}
+								if(props.scales && props.scales[scale]) {
+									const range = props.scales[scale].range as uPlot.Range.MinMax;
+									if(range[1] !== null) {
+										emax = max > (range[1] as number) ? max : (range[1] as number);
+									}
+								}
+								return [emin, emax];
+							};
+
+							const flatYData = props.y.flat();
+							const [ymin, ymax] = getExtents('y', Math.min(...flatYData), Math.max(...flatYData));
+							uplot.setScale('y', { min: ymin, max: ymax });
+						}
 					}
+				});
+
+				// Scale changes
+				createEffect(() => {
+					const setExtents = (scale: string) => {
+						if(props.scales && props.scales[scale] && props.scales[scale].range) {
+							const minvalue = (props.scales[scale].range as uPlot.Range.MinMax)[0];
+							const maxvalue = (props.scales[scale].range as uPlot.Range.MinMax)[1];
+							let min = 0;
+							let max = 0;
+
+							if(minvalue !== null) {
+								min = minvalue as number;
+							}
+							if(maxvalue !== null) {
+								max = maxvalue as number;
+							}
+							uplot.setScale(scale, { min: min, max: max });
+						}
+					};
+
+					setExtents('x');
+					setExtents('y');
 				});
 
 				onCleanup(() => {
