@@ -3,10 +3,10 @@ import About from './About';
 import { A } from '@solidjs/router';
 import {
   NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuIcon,
+  // NavigationMenuContent,
+  // NavigationMenuIcon,
   NavigationMenuItem,
-  NavigationMenuLink,
+  // NavigationMenuLink,
   NavigationMenuTrigger
 } from '~/components/ui/navigation-menu';
 
@@ -58,7 +58,12 @@ const Sidebar: Component = () => {
 						</NavigationMenuItem>
 					</NavigationMenu>
 				</div>
-				<footer class="p-5" style="position:fixed; bottom:0"><small>Version {__APP_VNAME__}</small></footer>
+				<footer class="p-5" style="position:fixed; bottom:0">
+					<div class="grid justify-items-center">
+						<small>Version {__APP_VNAME__}</small>
+						<small class="text-gray-400">v{__APP_VERSION__}</small>
+					</div>
+				</footer>
 			</div>
 			<About show={showAbout()} setShow={setShowAbout}/>
 		</div>
