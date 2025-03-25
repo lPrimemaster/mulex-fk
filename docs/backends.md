@@ -236,7 +236,7 @@ rpc.then(async (handle) => {
         MxGenericType.int64(10000)          // Timeout in ms
     ]);
 
-    const [status, retval] = res.unpack(['uint8', 'float32']);
+    const [status, retval] = res.unpack(['uint8', 'float32'])[0];
     // status - status of the call
     // retval - 3.1415
 });
