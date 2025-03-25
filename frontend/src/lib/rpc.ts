@@ -29,7 +29,7 @@ export class MxRpc {
 				response = 'generic';
 			}
 
-			console.log(func);
+			// console.log(func);
 			
 			// Assume all of the function names differ
 			(this as any)[func] = async (args: Array<MxGenericType>) => await MxWebsocket.instance.rpc_call(method[0], args, response);
