@@ -242,6 +242,17 @@ rpc.then(async (handle) => {
 });
 ```
 
+The call status is based on the following enum:
+```cpp
+enum class BckUserRpcStatus : std::uint8_t
+{
+    OK,
+    EMIT_FAILED,
+    RESPONSE_TIMEOUT,
+    NO_SUCH_BACKEND
+};
+```
+
 If no return type is needed it is recommended to return an empty `MxGenericType` (i.e. `return {};`).
 You can also bundle multiple data with the help of the `MxGenericType.makeData` and `MxGenericType.concatData` functions.
 
