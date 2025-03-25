@@ -3,30 +3,78 @@
 #include "../mxlogger.h"
 #include "../mxevt.h"
 #include "../mxrun.h"
+#include <condition_variable>
 #include <thread>
+#include <vector>
 
 static const std::atomic<bool>* stop;
 
 namespace mulex
 {
-	mulex::BckUserRpcStatus BckCallUserRpc(mulex::string32 bck, mulex::RPCGenericType data)
+	mulex::RPCGenericType BckCallUserRpc(mulex::string32 bck, mulex::RPCGenericType data, std::int64_t timeout)
 	{
 		std::string evt = bck.c_str();
-		evt += "::rpc";
+		std::string evt_emt = evt + "::rpc";
+		std::string evt_res = evt + "::rpc_res";
+		std::vector<std::uint8_t> response_full;
 
 		LogTrace("[mxbackend] User RPC called for <%s>.", bck.c_str());
 
-		if(EvtGetId(evt.c_str()) == 0)
+		if(EvtGetId(evt_emt.c_str()) == 0)
 		{
-			return BckUserRpcStatus::NO_SUCH_BACKEND;
+			response_full.push_back(static_cast<std::uint8_t>(BckUserRpcStatus::NO_SUCH_BACKEND));
+			return response_full;
 		}
 
-		if(!EvtEmit(evt, data.getData(), data.getSize()))
+		if(!EvtEmit(evt_emt, data.getData(), data.getSize()))
 		{
-			return BckUserRpcStatus::EMIT_FAILED;
+			response_full.push_back(static_cast<std::uint8_t>(BckUserRpcStatus::EMIT_FAILED));
+			return response_full;
 		}
 
-		return BckUserRpcStatus::OK;
+		// Wait for response
+		std::mutex mtx;
+		std::condition_variable cv;
+		bool proceed = false;
+		std::vector<std::uint8_t> response;
+		EvtServerRegisterCallback(evt_res, [&](auto, auto, auto, const std::uint8_t* data, std::uint64_t len) {
+			LogTrace("[bck] Relaying RPC response.");
+			if(len > 0)
+			{
+				std::unique_lock<std::mutex> lock(mtx);
+				response.resize(len);
+				std::memcpy(response.data(), data, len);
+				proceed = true;
+			}
+			cv.notify_one();
+		});
+
+		// Wait timeout
+		std::unique_lock<std::mutex> lock(mtx);
+		if(timeout > 0)
+		{
+			if(!cv.wait_for(lock, std::chrono::milliseconds(timeout), [&](){ return proceed; }))
+			{
+				response_full.push_back(static_cast<std::uint8_t>(BckUserRpcStatus::RESPONSE_TIMEOUT));
+				return response_full;
+			}
+		}
+		else
+		{
+			static std::once_flag flag;
+			std::call_once(flag, [](){ LogWarning("[mxbackend] Calling user RPC functions with zero timeout is discouraged."); });
+			cv.wait(lock, [&](){ return proceed; });
+		}
+
+		if(response.empty())
+		{
+			response_full.push_back(static_cast<std::uint8_t>(BckUserRpcStatus::OK));
+			return response_full;
+		}
+
+		response_full.push_back(static_cast<std::uint8_t>(BckUserRpcStatus::OK));
+		response_full.insert(response_full.end(), response.begin(), response.end());
+		return response_full;
 	}
 
 	MxBackend::MxBackend(int argc, char* argv[])
@@ -100,10 +148,18 @@ namespace mulex
 	void MxBackend::registerUserRpcEvent()
 	{
 		std::string rpc_event = std::string(SysGetBinaryName()) + "::rpc";
+		std::string rpc_response = std::string(SysGetBinaryName()) + "::rpc_res";
 		registerEvent(rpc_event);
+		registerEvent(rpc_response);
 		subscribeEvent(rpc_event, [this](auto* data, auto len, auto*){
 			this->userRpcInternal(data, len, nullptr);
 		});
+	}
+
+	void MxBackend::emitRpcResponse(const RPCGenericType& data)
+	{
+		static std::string rpc_response = std::string(SysGetBinaryName()) + "::rpc_res";
+		dispatchEvent(rpc_response, data._data);
 	}
 
 	void MxBackend::userRpcInternal(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* udata)
@@ -111,7 +167,10 @@ namespace mulex
 		if(_user_rpc)
 		{
 			std::vector<std::uint8_t> vdata(data, data + len);
-			_io.schedule([this, vdata](){ (*this.*_user_rpc)(vdata); });
+			_io.schedule([this, vdata]() {
+				RPCGenericType response = (*this.*_user_rpc)(vdata);
+				emitRpcResponse(response);
+			});
 		}
 	}
 

@@ -50,6 +50,10 @@ export class MxGenericType
 		return MxGenericType.fromValue(value, 'uint32', intype);
 	}
 
+	static int64(value: BigInt, intype: string = 'native') : MxGenericType {
+		return MxGenericType.fromValue(value, 'int64', intype);
+	}
+
 	static uint64(value: BigInt, intype: string = 'native') : MxGenericType {
 		return MxGenericType.fromValue(value, 'uint64', intype);
 	}

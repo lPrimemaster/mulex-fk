@@ -218,23 +218,31 @@ MyBackend::MyBackend(int argc, char* argv[]) : mulex::MxBackend(argc, argv)
 }
 
 // This signature is required
-void MyBackend::my_rpc(const std::vector<std::uint8_t>& data)
+mulex::RPCGenericType MyBackend::my_rpc(const std::vector<std::uint8_t>& data)
 {
     log.info("User RPC called with data len: %llu.", data.size());
     log.info("Got: %d.", reinterpret_cast<std::int32_t*>(data.data()));
+    return 3.1415f;
+    // return {}; if no return is required
 }
 ```
 ### Frontend
 ```ts
 const rpc = MxRpc.Create();
-rpc.then((handle) => {
-    handle.BckCallUserRpc([
-        MxGenericType.str32('my_backend'), // Executable name (as listed in home page)
-        MxGenericType.int32(42, 'generic') // Custom data
+rpc.then(async (handle) => {
+    const res: MxGenericType = await handle.BckCallUserRpc([
+        MxGenericType.str32('my_backend'),  // Executable name (as listed in home page)
+        MxGenericType.int32(42, 'generic'), // Custom data
+        MxGenericType.int64(10000)          // Timeout in ms
     ]);
+
+    const [status, retval] = res.unpack(['uint8', 'float32']);
+    // status - status of the call
+    // retval - 3.1415
 });
 ```
 
+If no return type is needed it is recommended to return an empty `MxGenericType` (i.e. `return {};`).
 You can also bundle multiple data with the help of the `MxGenericType.makeData` and `MxGenericType.concatData` functions.
 
 ```ts
@@ -246,10 +254,13 @@ rpc.then((handle) => {
         MxGenericType.f32(3.141592654)
     ]);
 
-    handle.BckCallUserRpc([
-        MxGenericType.str32('my_backend'), // Executable name (as listed in home page)
-        MxGenericType.makeData(data, 'generic') // Custom data
+    const res: MxGenericType = await handle.BckCallUserRpc([
+        MxGenericType.str32('my_backend'),       // Executable name (as listed in home page)
+        MxGenericType.makeData(data, 'generic'), // Custom data
+        MxGenericType.int64(10000)               // Timeout in ms
     ]);
+
+    //...
 });
 ```
 Of course proper data handling must take place at the backend user function.

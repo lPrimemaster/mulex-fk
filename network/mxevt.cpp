@@ -816,7 +816,7 @@ namespace mulex
 		{
 			return;
 		}
-		_evt_server_callbacks.emplace(eid, callback);
+		_evt_server_callbacks.insert_or_assign(eid, callback);
 	}
 
 	void EvtTryRunServerCallback(std::uint64_t clientid, std::uint16_t eventid, const std::uint8_t* data, std::uint64_t len, const Socket& socket)

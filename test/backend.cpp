@@ -94,7 +94,7 @@ public:
 		// unsubscribeEvent("TestBackend::data");
 	}
 
-	void userRpc(const std::vector<std::uint8_t>& data)
+	RPCGenericType userRpc(const std::vector<std::uint8_t>& data)
 	{
 		// This function gets called when someone calls
 		// BckCallUserRpc("test_bck", some_data);
@@ -112,8 +112,9 @@ public:
 
 		// As uint8 + float
 		std::uint8_t forty_two = *data.data();
-		float pi = *reinterpret_cast<const float*>(data.data() + sizeof(std::uint8_t));
-		mulex::LogDebug("forty_two: %d, pi: %f", forty_two, pi);
+		// float pi = *reinterpret_cast<const float*>(data.data() + sizeof(std::uint8_t));
+		mulex::LogDebug("forty_two: %d", forty_two);
+		return 3.1415f;
 	}
 
 	void periodic()

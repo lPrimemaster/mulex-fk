@@ -12,10 +12,11 @@ namespace mulex
 	{
 		OK,
 		EMIT_FAILED,
+		RESPONSE_TIMEOUT,
 		NO_SUCH_BACKEND
 	};
 
-	MX_RPC_METHOD mulex::BckUserRpcStatus BckCallUserRpc(mulex::string32 evt, mulex::RPCGenericType data);
+	MX_RPC_METHOD mulex::RPCGenericType BckCallUserRpc(mulex::string32 evt, mulex::RPCGenericType data, std::int64_t timeout);
 
 	class MxBackend
 	{
@@ -33,9 +34,9 @@ namespace mulex
 
 		// User RPC
 		template<std::derived_from<MxBackend> D>
-		void registerUserRpc(void (D::* func)(const std::vector<std::uint8_t>&))
+		void registerUserRpc(RPCGenericType (D::* func)(const std::vector<std::uint8_t>&))
 		{
-			_user_rpc = static_cast<void(MxBackend::*)(const std::vector<std::uint8_t>&)>(func);
+			_user_rpc = static_cast<RPCGenericType(MxBackend::*)(const std::vector<std::uint8_t>&)>(func);
 		}
 
 		// Start/stop
@@ -53,6 +54,7 @@ namespace mulex
 		// User RPC
 		void userRpcInternal(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* udata);
 		void registerUserRpcEvent();
+		void emitRpcResponse(const RPCGenericType& data);
 
 	public:
 		void init();
@@ -80,7 +82,7 @@ namespace mulex
 		SysAsyncEventLoop _io;
 
 		// User rpc function
-		void (MxBackend::* _user_rpc)(const std::vector<std::uint8_t>&) = nullptr;
+		RPCGenericType (MxBackend::* _user_rpc)(const std::vector<std::uint8_t>&) = nullptr;
 
 		// User start/stop
 		void (MxBackend::* _user_run_start)(std::uint64_t) = nullptr;
