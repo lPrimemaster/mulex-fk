@@ -6,7 +6,10 @@
 #include <functional>
 #include <cstring>
 #include <algorithm>
+#include <iterator>
+#include <mutex>
 #include <set>
+#include <numeric>
 
 #include "../mxevt.h"
 
@@ -42,6 +45,11 @@ static std::set<std::uint16_t> _evt_client_ghost;
 // TODO: (Cesar) Update this map value type as required
 static std::map<std::uint64_t, std::atomic<std::uint64_t>> _evt_client_stats;
 static std::mutex _evt_client_stats_lock;
+
+static mulex::EvtStatistics _evt_event_stats;
+static mulex::EvtStatistics _evt_event_stats_buffer;
+static std::mutex _evt_event_stats_lock;
+static std::mutex _evt_event_stats_buffer_lock;
 
 namespace mulex
 {
@@ -684,24 +692,36 @@ namespace mulex
 			LogTrace("[evtserver] Got Event <%d> from <0x%llx>.", header.eventid, header.client);
 
 			// Relay event to clients that are subscribed
+			std::uint64_t relaycount = 0;
 			{
 				std::unique_lock<std::mutex> lock(_evt_sub_lock);
 				for(const std::uint64_t cid : _evt_current_subscriptions.at(header.eventid))
 				{
 					LogTrace("[evtserver] Relaying event <%d> from <0x%llx> to <0x%llx>.", header.eventid, header.client, cid);
 					relay(cid, fbuffer.data(), read);
+					relaycount++;
 				}
 			}
 
 			// Perform server side tasks (if any)
 			EvtTryRunServerCallback(header.client, header.eventid, fbuffer.data() + sizeof(EvtHeader), header.payloadsize, socket);
 
+			std::uint64_t upload = sizeof(EvtHeader) + header.payloadsize;
+			upload &= 0xFFFFFFFF; // Lo DWORD
+
 			if(!ClientIsGhost(header.client))
 			{
-				// Write statistics
-				std::uint64_t upload = sizeof(EvtHeader) + header.payloadsize;
-				EvtAccumulateClientStatistics(header.client, upload & 0xFFFFFFFF); // Lo DWORD
+				// Write event client statistics
+				EvtAccumulateClientStatistics(header.client, upload);
 			}
+
+			std::uint64_t download = relaycount * upload;
+			// Hi DWORD
+			download &= 0xFFFFFFFF;
+			download <<= 32;
+
+			// Write event statistics
+			EvtAccumulateEventStatistics(header.eventid, header.client, upload + download);
 		}
 
 		// On client disconnect unsubscribe from events
@@ -767,6 +787,9 @@ namespace mulex
 		const std::uint16_t event_id = ++_evt_server_reg_next;
 		_evt_current_subscriptions.emplace(event_id, std::set<std::uint64_t>());
 		_evt_server_reg.emplace(name.c_str(), event_id);
+
+		EvtMakeStats(name, event_id);
+
 		LogTrace("[evtserver] Registered event <%s> [id=%d].", name.c_str(), event_id);
 		return true;
 	}
@@ -801,7 +824,11 @@ namespace mulex
 		}
 
 		std::unique_lock<std::mutex> lock(_evt_sub_lock);
+		std::unique_lock<std::mutex> lock_stats(_evt_event_stats_lock);
 		_evt_current_subscriptions.at(eid).insert(cid);
+
+		EvtMakeStatsEntry(eid, cid);
+
 		LogTrace("[evtserver] Subscribed <0x%llx> to event <%s> [id=%d].", cid, name.c_str(), eid);
 		return true;
 	}
@@ -854,6 +881,23 @@ namespace mulex
 				}
 			}
 
+			{
+				std::unique_lock<std::mutex> lock(_evt_event_stats_lock);
+
+				// Copy event stats
+				{
+					std::unique_lock<std::mutex> slock(_evt_event_stats_buffer_lock);
+					_evt_event_stats_buffer = _evt_event_stats;
+				}
+
+				// Clear event stats
+				for(std::uint16_t i = 1; i <= _evt_event_stats._len; i++)
+				{
+					// Reset stats for next frame
+					EvtResetStatistics(i);
+				}
+			}
+
 			// Every second
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000 - ((SysGetCurrentTime() - start))));
 		}
@@ -862,6 +906,98 @@ namespace mulex
 	void EvtAccumulateClientStatistics(std::uint64_t clientid, std::uint64_t framebytes)
 	{
 		_evt_client_stats[clientid] += framebytes; // Atomic op
+	}
+
+	void EvtAccumulateEventStatistics(std::uint16_t eventid, std::uint64_t clientid, std::uint64_t framebytes)
+	{
+		if(eventid > _evt_event_stats._len)
+		{
+			LogError("[mxevt] EvtAccumulateEventStatistics failed unexpectedly due to an index error.");
+			return;
+		}
+
+		const std::uint16_t event_index = eventid - 1;
+
+		_evt_event_stats._total_frames[event_index] += framebytes;
+
+		// Assuming the ammount of subscriptions is relatively low < 100
+		// One could say that searching an array is faster than using an stl map
+		
+		auto it = std::find(_evt_event_stats._clients[event_index].begin(), _evt_event_stats._clients[event_index].end(), clientid);
+		if(it == _evt_event_stats._clients[event_index].end())
+		{
+			LogError("[mxevt] Failed to accumulate event statistics for event <%d>. Client <0x%llx> not found.", eventid, clientid);
+			return;
+		}
+
+		auto index = std::distance(_evt_event_stats._clients[event_index].begin(), it);
+		_evt_event_stats._frames[event_index][index] += framebytes;
+	}
+
+	void EvtResetStatistics(std::uint16_t eventid)
+	{
+		if(eventid > _evt_event_stats._len)
+		{
+			LogError("[mxevt] EvtAccumulateEventStatistics failed unexpectedly due to an index error.");
+			return;
+		}
+
+		const std::uint16_t event_index = eventid - 1;
+
+		_evt_event_stats._total_frames[event_index] = 0;
+		for(auto& cf : _evt_event_stats._frames[event_index]) cf = 0;
+	}
+
+	void EvtMakeStats(const mulex::string32& name, std::uint16_t eventid)
+	{
+		std::unique_lock lock(_evt_event_stats_lock);
+
+		if(eventid <= _evt_event_stats._len)
+		{
+			// Event already in stats
+			return;
+		}
+
+		_evt_event_stats._len++;
+		_evt_event_stats._name.push_back(name);
+		_evt_event_stats._total_frames.push_back(0);
+		_evt_event_stats._clients.push_back(std::vector<std::uint64_t>());
+		_evt_event_stats._frames.push_back(std::vector<std::uint64_t>());
+
+		LogTrace("[mxevt] Made stats vector for event <%d>.", eventid);
+	}
+
+	void EvtMakeStatsEntry(std::uint16_t eventid, std::uint64_t clientid)
+	{
+		std::uint16_t i = eventid - 1;
+		auto it = std::find(_evt_event_stats._clients[i].begin(), _evt_event_stats._clients[i].end(), clientid);
+		if(it == _evt_event_stats._clients[i].end())
+		{
+			LogTrace("[mxevt] Adding event stats entry for event - client pair [<%d>, <%llx>].", eventid, clientid);
+			_evt_event_stats._clients[i].push_back(clientid);
+			_evt_event_stats._frames[i].push_back(0);
+		}
+	}
+
+	std::uint64_t EvtCalculateStatisticsBufferSize()
+	{
+		// NOTE: (Cesar) Needs to be called in a buffer locked scope
+		std::uint64_t size = 0;
+		size += _evt_event_stats_buffer._len * sizeof(std::int16_t);
+		size += _evt_event_stats_buffer._len * sizeof(string32);
+		size += _evt_event_stats_buffer._len * sizeof(std::uint64_t);
+		size += _evt_event_stats_buffer._len * sizeof(std::uint64_t) * 2;
+		size += std::accumulate(
+			_evt_event_stats_buffer._clients.begin(),
+			_evt_event_stats_buffer._clients.end(),
+			0, [](auto sum, const auto& c){ return sum + c.size(); }
+		) * sizeof(std::uint64_t);
+		size += std::accumulate(
+			_evt_event_stats_buffer._frames.begin(),
+			_evt_event_stats_buffer._frames.end(),
+			0, [](auto sum, const auto& c){ return sum + c.size(); }
+		) * sizeof(std::uint64_t);
+		return size;
 	}
 
 	mulex::RPCGenericType EvtGetAllRegisteredEvents()
@@ -874,6 +1010,58 @@ namespace mulex
 			output.push_back(reg.first);
 		}
 		return output;
+	}
+
+	static std::uint8_t* EvtPopulateMetadataBuffer(std::uint16_t eventid, std::uint8_t* data)
+	{
+		// NOTE: (Cesar) Needs to be called in a buffer locked scope
+
+		// Copy id
+		std::int16_t i = eventid - 1;
+		std::memcpy(data, &eventid, sizeof(std::int16_t));
+		data += sizeof(std::int16_t);
+
+		// Copy name
+		std::memcpy(data, &_evt_event_stats_buffer._name[i], sizeof(string32));
+		data += sizeof(string32);
+
+		// Copy total frames
+		std::memcpy(data, &_evt_event_stats_buffer._total_frames[i], sizeof(std::uint64_t));
+		data += sizeof(std::uint64_t);
+
+		// Copy nclientbytes
+		std::uint64_t nclientbytes = _evt_event_stats_buffer._clients[i].size() * sizeof(std::uint64_t);
+		std::memcpy(data, &nclientbytes, sizeof(std::uint64_t));
+		data += sizeof(std::uint64_t);
+
+		// Copy clients
+		std::memcpy(data, _evt_event_stats_buffer._clients[i].data(), nclientbytes);
+		data += nclientbytes;
+
+		// Copy nframebytes
+		std::memcpy(data, &nclientbytes, sizeof(std::uint64_t));
+		data += sizeof(std::uint64_t);
+
+		// Copy frames
+		std::memcpy(data, _evt_event_stats_buffer._frames[i].data(), nclientbytes);
+		data += nclientbytes;
+		return data;
+	}
+
+	mulex::RPCGenericType EvtGetAllMetadata()
+	{
+		std::unique_lock lock(_evt_event_stats_buffer_lock);
+		std::vector<std::uint8_t> result;
+		result.resize(EvtCalculateStatisticsBufferSize());
+		std::uint8_t* data = result.data();
+		for(std::int16_t i = 1; i <= _evt_event_stats_buffer._len; i++)
+		{
+			data = EvtPopulateMetadataBuffer(i, data);
+		}
+
+		LogTrace("STOP");
+
+		return result;
 	}
 
 	bool EvtUnsubscribe(mulex::string32 name)

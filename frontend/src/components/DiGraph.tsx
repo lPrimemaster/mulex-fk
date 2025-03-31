@@ -1,4 +1,4 @@
-import { Component, createEffect, createSignal, For, JSXElement, onMount, Show, on } from 'solid-js';
+import { Component, createEffect, createSignal, For, JSXElement, onMount, Show, on, onCleanup } from 'solid-js';
 import { createMapStore } from '~/lib/rmap';
 
 interface NodeProps {
@@ -158,6 +158,61 @@ const DiEdge : Component<EdgePropsI> = (props) => {
 	);
 };
 
+interface DiGridProps {
+	size: number;
+};
+
+const DiGrid : Component<DiGridProps> = (props) => {
+
+	let ref!: HTMLDivElement;
+	const [w, setW] = createSignal<number>(0);
+	const [h, setH] = createSignal<number>(0);
+
+	function updateDims() {
+		if(ref) {
+			setW(ref.clientWidth);
+			setH(ref.clientHeight);
+			setH(870);
+		}
+	}
+
+	onMount(() => {
+		updateDims();
+		window.addEventListener("resize", updateDims);
+	});
+
+	onCleanup(() => {
+		window.removeEventListener("resize", updateDims);
+	});
+
+	return (
+		<div ref={ref} class="w-full h-full relative">
+			<svg width={w()} height={h()} class="absolute top-0 left-0">
+				<For each={[...Array(Math.floor(w() / props.size) + 1).keys()]}>{(i) => {
+					return <line
+						x1={i * props.size}
+						y1={0}
+						x2={i * props.size}
+						y2={h()}
+						stroke="gray"
+						stroke-width="0.3"
+					/>;
+				}}</For>
+				<For each={[...Array(Math.floor(h() / props.size) + 1).keys()]}>{(i) => {
+					return <line
+						x1={0}
+						y1={i * props.size}
+						x2={w()}
+						y2={i * props.size}
+						stroke="gray"
+						stroke-width="0.3"
+					/>;
+				}}</For>
+			</svg>
+		</div>
+	);
+};
+
 export const DiGraph : Component<DiGraphProps> = (props) => {
 	const [neMap, neMapActions] = createMapStore<string, Array<{ index: number, type: string }>>(new Map<string, Array<{ index: number, type: string }>>());
 	const [edges, setEdges] = createSignal<Array<EdgePropsI>>([]);
@@ -170,8 +225,6 @@ export const DiGraph : Component<DiGraphProps> = (props) => {
 		}
 
 		const node = nodes.data.get(id)!;
-
-		// TODO: (Cesar) Calculate actual place of input
 		return [node.x, node.y];
 	}
 
@@ -182,41 +235,39 @@ export const DiGraph : Component<DiGraphProps> = (props) => {
 		}
 
 		const node = nodes.data.get(id)!;
-
-		// TODO: (Cesar) Calculate actual place of output
 		return [node.x, node.y];
 	}
 
-	function setupEdges() {
-		// Populate a lookup table
-		const lookup = new Map<string, Array<{ index: number, type: string }>>();
-		function setLookup(id: string, i: number, type: string) {
-			let initial = new Array<{ index: number, type: string }>();
-			if(lookup.has(id)) {
-				initial = lookup.get(id)!;
-			}
-			lookup.set(id, [...initial, { index: i, type: type}]);
-		}
-
-		// Set the edges and their lookup
-		for(let i = 0; i < props.edges.length; i++) {
-			const edge = props.edges[i];
-			const [ox, oy] = calculateNodeOutputLocation(edge.from);
-			const [ix, iy] = calculateNodeInputLocation(edge.to);
-			setEdges((p) => [...p, { sX: ox, sY: oy, eX: ix, eY: iy, label: edge.label }]);
-			
-			setLookup(edge.from, i, 'output');
-			setLookup(edge.to  , i, 'input');
-			neMapActions.set(lookup);
-		}
-	}
-
-	function setupNodes() {
-		// Set the nodes
-		for(const node of props.nodes) {
-			nodesActions.add(node.id, node);
-		}
-	}
+	// function setupEdges() {
+	// 	// Populate a lookup table
+	// 	const lookup = new Map<string, Array<{ index: number, type: string }>>();
+	// 	function setLookup(id: string, i: number, type: string) {
+	// 		let initial = new Array<{ index: number, type: string }>();
+	// 		if(lookup.has(id)) {
+	// 			initial = lookup.get(id)!;
+	// 		}
+	// 		lookup.set(id, [...initial, { index: i, type: type}]);
+	// 	}
+	//
+	// 	// Set the edges and their lookup
+	// 	for(let i = 0; i < props.edges.length; i++) {
+	// 		const edge = props.edges[i];
+	// 		const [ox, oy] = calculateNodeOutputLocation(edge.from);
+	// 		const [ix, iy] = calculateNodeInputLocation(edge.to);
+	// 		setEdges((p) => [...p, { sX: ox, sY: oy, eX: ix, eY: iy, label: edge.label }]);
+	// 		
+	// 		setLookup(edge.from, i, 'output');
+	// 		setLookup(edge.to  , i, 'input');
+	// 		neMapActions.set(lookup);
+	// 	}
+	// }
+	//
+	// function setupNodes() {
+	// 	// Set the nodes
+	// 	for(const node of props.nodes) {
+	// 		nodesActions.add(node.id, node);
+	// 	}
+	// }
 
 	onMount(() => {
 		// Set the nodes
@@ -272,11 +323,17 @@ export const DiGraph : Component<DiGraphProps> = (props) => {
 	}));
 
 	createEffect(on(() => props.nodes, () => {
+		for(const node of props.nodes) {
+			nodesActions.modify(node.id, node);
+		}
 	}));
 
 	// Draw nodes and edges
 	return (
-		<div class="overflow-hidden flex-1 rounded-md shadow-md bg-gray-100">
+		<div class="relative overflow-hidden flex-1 rounded-md shadow-md bg-gray-100">
+
+			<DiGrid size={50}/>
+
 			<For each={edges()}>{(edge) => {
 				return <DiEdge {...edge}/>;
 			}}</For>

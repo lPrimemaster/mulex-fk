@@ -79,6 +79,13 @@ public:
 
 		deferExec([this](){ setStatus("MyStatus", "#ff0000"); log.info("Done."); }, 3000);
 
+		registerEvent("TestBackend::dummy");
+		deferExec([this](){
+			// Random 1024 bytes
+			static std::vector<std::uint8_t> data(1024);
+			dispatchEvent("TestBackend::dummy", data);
+		}, 0, 1000);
+
 		// registerRunStartStop(&TestBackend::onRunStart, &TestBackend::onRunStop);
 	}
 

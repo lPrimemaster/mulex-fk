@@ -258,6 +258,7 @@ namespace mulex
 	std::string_view SysGetHostname();
 	std::uint64_t SysGetClientId();
 	std::string SysI64ToHexString(std::uint64_t value);
+	std::string SysI16ToHexString(std::uint16_t value);
 	std::vector<std::uint8_t> SysReadBinFile(const std::string& file);
 	void SysWriteBinFile(const std::string& file, const std::vector<std::uint8_t>& data);
 	void SysCopyFile(const std::string& source, const std::string& destination);

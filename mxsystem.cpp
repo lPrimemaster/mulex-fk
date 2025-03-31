@@ -1005,6 +1005,13 @@ namespace mulex
 		return ss.str();
 	}
 
+	std::string SysI16ToHexString(std::uint16_t value)
+	{
+		std::stringstream ss;
+		ss << std::hex << value;
+		return ss.str();
+	}
+
 	std::vector<std::uint8_t> SysReadBinFile(const std::string& file)
 	{
 		std::ifstream in(file, std::ios::in | std::ios::binary);

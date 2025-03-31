@@ -5,6 +5,7 @@
 #include <map>
 #include <set>
 
+#include "mxtypes.h"
 #include "network/socket.h"
 #include "network/rpc.h"
 #include "mxsystem.h"
@@ -32,6 +33,15 @@ namespace mulex
 
 	constexpr std::uint64_t EVT_HEADER_SIZE = sizeof(EvtHeader);
 	constexpr std::uint64_t EVT_MAX_SUB = 64;
+
+	struct EvtStatistics
+	{
+		std::uint64_t							_len = 0;
+		std::vector<string32> 	 				_name;
+		std::vector<std::uint64_t> 				_total_frames;
+		std::vector<std::vector<std::uint64_t>>	_clients;
+		std::vector<std::vector<std::uint64_t>> _frames;
+	};
 
 	std::uint64_t GetNextEventMessageId();
 
@@ -118,8 +128,14 @@ namespace mulex
 	void EvtTryRunServerCallback(std::uint64_t clientid, std::uint16_t eventid, const std::uint8_t* data, std::uint64_t len, const Socket& socket);
 	bool EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
 	void EvtAccumulateClientStatistics(std::uint64_t clientid, std::uint64_t framebytes);
+	void EvtAccumulateEventStatistics(std::uint16_t eventid, std::uint64_t clientid, std::uint64_t framebytes);
+	void EvtResetStatistics(std::uint16_t eventid);
+	void EvtMakeStats(const mulex::string32& name, std::uint16_t eventid);
+	void EvtMakeStatsEntry(std::uint16_t eventid, std::uint64_t clientid);
+	std::uint64_t EvtCalculateStatisticsBufferSize();
 
 	MX_RPC_METHOD mulex::RPCGenericType EvtGetAllRegisteredEvents();
+	MX_RPC_METHOD mulex::RPCGenericType EvtGetAllMetadata();
 
 	template <typename T>
 	inline std::uint64_t EvtDataAppend(std::uint64_t offset, std::vector<std::uint8_t>* buffer, const T& value)
