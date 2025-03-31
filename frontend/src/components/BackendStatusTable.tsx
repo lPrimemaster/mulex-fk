@@ -5,7 +5,7 @@ import { MxRdb } from '../lib/rdb';
 import { MxGenericType } from '../lib/convert';
 import { BadgeLabel } from './ui/badge-label';
 import { BadgeDelta } from './ui/badge-delta';
-import { timestamp_tohms } from '../lib/utils';
+import { timestamp_tohms, bps_to_string } from '../lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 
 class BackendStatus {
@@ -143,39 +143,6 @@ const BackendStatusTable: Component = () => {
 			setBackends(cid, () => prev);
 		});
 	});
-
-	function bps_get_multiplier(value: number): number {
-		if(Math.trunc(value / 1024) > 0) {
-			if(Math.trunc(value / 1048576) > 0) {
-				if(Math.trunc(value / 1073741824) > 0) {
-					return 3;
-				}
-				return 2;
-			}
-			return 1;
-		}
-		return 0;
-	}
-
-	function bps_get_suffix(multiplier: number, bits: boolean): string {
-		if(multiplier == 3) return bits ? 'Gbps' : 'GB/s';
-		if(multiplier == 2) return bits ? 'Mbps' : 'MB/s';
-		if(multiplier == 1) return bits ? 'kbps' : 'kB/s';
-		if(multiplier == 0) return bits ?  'bps' :  'B/s';
-		return '';
-	}
-
-	function bps_to_string(value: number, bits: boolean = true) {
-		if(bits) {
-			value *= 8;
-		}
-
-		const multiplier = bps_get_multiplier(value);
-		const suffix = bps_get_suffix(multiplier, bits);
-		const str = (value / (1024 ** multiplier)).toFixed(1);
-
-		return str + ' ' + suffix;
-	}
 
 	return (
 		<div>

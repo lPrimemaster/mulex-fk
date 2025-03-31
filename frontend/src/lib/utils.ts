@@ -53,3 +53,43 @@ export function array_chunkify<T>(items: Array<T>, chunkSize: number): Array<Arr
 	}
 	return chunks;
 }
+
+export function event_io_extract(io: bigint) {
+	return {
+		'r': Number((io >> BigInt(32)) & BigInt(0xFFFFFFFF)),
+		'w': Number(io & BigInt(0xFFFFFFFF))
+	};
+}
+
+function bps_get_multiplier(value: number): number {
+	if(Math.trunc(value / 1024) > 0) {
+		if(Math.trunc(value / 1048576) > 0) {
+			if(Math.trunc(value / 1073741824) > 0) {
+				return 3;
+			}
+			return 2;
+		}
+		return 1;
+	}
+	return 0;
+}
+
+function bps_get_suffix(multiplier: number, bits: boolean): string {
+	if(multiplier == 3) return bits ? 'Gbps' : 'GB/s';
+	if(multiplier == 2) return bits ? 'Mbps' : 'MB/s';
+	if(multiplier == 1) return bits ? 'kbps' : 'kB/s';
+	if(multiplier == 0) return bits ?  'bps' :  'B/s';
+	return '';
+}
+
+export function bps_to_string(value: number, bits: boolean = true) {
+	if(bits) {
+		value *= 8;
+	}
+
+	const multiplier = bps_get_multiplier(value);
+	const suffix = bps_get_suffix(multiplier, bits);
+	const str = (value / (1024 ** multiplier)).toFixed(1);
+
+	return str + ' ' + suffix;
+}
