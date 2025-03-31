@@ -1,5 +1,5 @@
 import { Component, For, Show, createSignal } from 'solid-js';
-import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 
 type MxSelectorSize = 'small' | 'medium' | 'large' | 'xlarge';
 

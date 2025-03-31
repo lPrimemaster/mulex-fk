@@ -4,3 +4,4 @@ export { MxValueControl } from './ValueControl';
 export { MxValuePanel } from './ValuePanel';
 export { MxSelector } from './Selector';
 export { MxGaugeVertical } from './GaugeVertical';
+export { MxSpinner } from './Spinner';
