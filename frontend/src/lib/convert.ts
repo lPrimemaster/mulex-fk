@@ -196,6 +196,24 @@ export class MxGenericType
 		return NaN;
 	}
 
+	static sizeFromType(type: string): number {
+		switch(type.toLowerCase()) {
+			case 'int8'    : { return  1; }
+			case 'int16'   : { return  2; }
+			case 'int32'   : { return  4; }
+			case 'int64'   : { return  8; }
+			case 'uint8'   : { return  1; }
+			case 'uint16'  : { return  2; }
+			case 'uint32'  : { return  4; }
+			case 'uint64'  : { return  8; }
+			case 'float32' : { return  4; }
+			case 'float64' : { return  8; }
+			case 'string32': { return 32; }
+			case 'bool'    : { return  1; }
+		}
+		return NaN;
+	}
+
 	public hexdump() : Array<string> {
 		if(this.data.byteLength === 0) {
 			return [];
@@ -418,6 +436,13 @@ export class MxGenericType
 				else if(type === 'bool') {
 					element.push(view.getUint8(packoffset) === 1);
 					packoffset += 1;
+				}
+				else if(type === 'bytearray') {
+					const arr_size = Number(view.getBigUint64(packoffset, true));
+					packoffset += 8;
+
+					element.push(new Uint8Array(view.buffer, view.byteOffset + packoffset, arr_size));
+					packoffset += arr_size;
 				}
 				else {
 					// TODO: (Cesar) Emit frontend errors to the frontend (toast, etc, ...)
