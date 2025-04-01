@@ -84,7 +84,10 @@ public:
 			// Random 1024 bytes
 			static std::vector<std::uint8_t> data(1024);
 			dispatchEvent("TestBackend::dummy", data);
+			log.info("Test message triggering on events page...");
 		}, 0, 1000);
+
+		// subscribeEvent("TestBackend::dummy", [this](auto* d, auto sz, auto* udata){ log.info("Loopback..."); });
 
 		// registerRunStartStop(&TestBackend::onRunStart, &TestBackend::onRunStop);
 	}

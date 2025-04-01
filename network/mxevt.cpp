@@ -722,6 +722,9 @@ namespace mulex
 
 			// Write event statistics
 			EvtAccumulateEventStatistics(header.eventid, header.client, upload + download);
+
+			// TODO: (Cesar) Ah, it's missing on the server emit!
+			// EvtAccumulateEventStatistics(header.eventid, header.client, upload + download);
 		}
 
 		// On client disconnect unsubscribe from events
@@ -765,12 +768,20 @@ namespace mulex
 			
 			SocketSendBytes(socket, data.data(), data.size());
 
+			std::uint64_t download = sizeof(EvtHeader) + header.payloadsize;
+			// Hi DWORD
+			download &= 0xFFFFFFFF;
+			download <<= 32;
+
 			if(!ClientIsGhost(cid))
 			{
-				// Write statistics
-				std::uint64_t download = sizeof(EvtHeader) + header.payloadsize;
-				EvtAccumulateClientStatistics(cid, (download & 0xFFFFFFFF) << 32); // Hi DWORD
+				// Write client statistics
+				EvtAccumulateClientStatistics(cid, download);
 			}
+
+			// Write event statistics
+			// NOTE: (Cesar) what is uploaded is downloaded since these are system events
+			EvtAccumulateEventStatistics(header.eventid, cid, download + (download >> 32));
 		}
 	}
 
@@ -979,6 +990,18 @@ namespace mulex
 		}
 	}
 
+	void EvtDeleteStatsEntry(std::uint16_t eventid, std::uint64_t clientid)
+	{
+		std::uint16_t i = eventid - 1;
+		auto it = std::find(_evt_event_stats._clients[i].begin(), _evt_event_stats._clients[i].end(), clientid);
+		if(it != _evt_event_stats._clients[i].end())
+		{
+			LogTrace("[mxevt] Removing event stats entry for event - client pair [<%d>, <%llx>].", eventid, clientid);
+			_evt_event_stats._clients[i].erase(it);
+			_evt_event_stats._frames[i].erase(_evt_event_stats._frames[i].begin() + std::distance(_evt_event_stats._clients[i].begin(), it));
+		}
+	}
+
 	std::uint64_t EvtCalculateStatisticsBufferSize()
 	{
 		// NOTE: (Cesar) Needs to be called in a buffer locked scope
@@ -1091,6 +1114,9 @@ namespace mulex
 			// Silently ignore
 			return false;
 		}
+
+		std::unique_lock<std::mutex> lock_stats(_evt_event_stats_lock);
+		EvtDeleteStatsEntry(eventid, clientid);
 		
 		eidit->second.erase(clientid);
 		LogTrace("[evtserver] Unsubscribing client <0x%llx> from event <%d>.", clientid, eventid);

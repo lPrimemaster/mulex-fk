@@ -132,6 +132,7 @@ namespace mulex
 	void EvtResetStatistics(std::uint16_t eventid);
 	void EvtMakeStats(const mulex::string32& name, std::uint16_t eventid);
 	void EvtMakeStatsEntry(std::uint16_t eventid, std::uint64_t clientid);
+	void EvtDeleteStatsEntry(std::uint16_t eventid, std::uint64_t clientid);
 	std::uint64_t EvtCalculateStatisticsBufferSize();
 
 	MX_RPC_METHOD mulex::RPCGenericType EvtGetAllRegisteredEvents();

@@ -290,4 +290,8 @@ namespace mulex
 
 		return method_signatures;
 	}
+
+	mulex::RPCGenericType RpcGetCallsDebugData()
+	{
+	}
 }

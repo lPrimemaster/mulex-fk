@@ -395,5 +395,6 @@ namespace mulex
 	}
 
 	MX_RPC_METHOD mulex::RPCGenericType RpcGetAllCalls();
+	MX_RPC_METHOD mulex::RPCGenericType RpcGetCallsDebugData();
 
 } // namespace mulex
