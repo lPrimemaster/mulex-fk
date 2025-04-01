@@ -8,7 +8,7 @@ include(cmake/InstallMulex.cmake)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 # Version configuration
-project(mulex-fk VERSION 0.5.0)
+project(mulex-fk VERSION 0.5.1)
 set(PROJECT_VNAME Wolf)
 
 set(CMAKE_CXX_STANDARD 20)
