@@ -1059,8 +1059,6 @@ namespace mulex
 			data = EvtPopulateMetadataBuffer(i, data);
 		}
 
-		LogTrace("STOP");
-
 		return result;
 	}
 
