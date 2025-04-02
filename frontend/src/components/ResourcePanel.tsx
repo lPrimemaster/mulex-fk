@@ -24,8 +24,6 @@ export const ResourcePanel : Component = () => {
 
 	watchKeys();
 
-	// MxWebsocket.instance.on_connection_change((conn: boolean) => {
-	// 	if(conn) {
 	onMount(() => {
 		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512('/system/metrics/mem_total')], 'generic').then((res) => {
 			// To GB
@@ -43,8 +41,12 @@ export const ResourcePanel : Component = () => {
 
 		watchKeys();
 	});
-	// 	}
-	// });
+
+	MxWebsocket.instance.on_connection_change((conn: boolean) => {
+		if(conn) {
+			watchKeys();
+		}
+	});
 
 	return (
 		<div class="flex gap-5 place-content-center">

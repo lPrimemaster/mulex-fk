@@ -64,36 +64,36 @@ const Home: Component = () => {
 			// });
 
 	// onMount(() => {
-		MxWebsocket.instance.rpc_call(
-			'mulex::RdbReadValueDirect',
-			[MxGenericType.str512('/system/run/status')],
-			'generic').then((res: MxGenericType) => {
-				const rstatus = res.astype('uint8');
-				// Status MEMO:
-				// 0 - Stopped
-				// 1 - Running
-				// 2 - Starting
-				// 3 - Stopping
-				setRunStatusFromCode(rstatus);
-			});
+	MxWebsocket.instance.rpc_call(
+		'mulex::RdbReadValueDirect',
+		[MxGenericType.str512('/system/run/status')],
+		'generic').then((res: MxGenericType) => {
+			const rstatus = res.astype('uint8');
+			// Status MEMO:
+			// 0 - Stopped
+			// 1 - Running
+			// 2 - Starting
+			// 3 - Stopping
+			setRunStatusFromCode(rstatus);
+		});
 
-		MxWebsocket.instance.rpc_call(
-			'mulex::RdbReadValueDirect',
-			[MxGenericType.str512('/system/run/number')],
-			'generic').then((res: MxGenericType) => {
-				const rnumber = res.astype('uint64');
-				setRunNumber(Number(rnumber));
-			});
+	MxWebsocket.instance.rpc_call(
+		'mulex::RdbReadValueDirect',
+		[MxGenericType.str512('/system/run/number')],
+		'generic').then((res: MxGenericType) => {
+			const rnumber = res.astype('uint64');
+			setRunNumber(Number(rnumber));
+		});
 
-		MxWebsocket.instance.rpc_call(
-			'mulex::RdbReadValueDirect',
-			[MxGenericType.str512('/system/run/timestamp')],
-			'generic').then((res: MxGenericType) => {
-				const rts = res.astype('int64');
-				setRunTimestamp(Number(rts));
-			});
+	MxWebsocket.instance.rpc_call(
+		'mulex::RdbReadValueDirect',
+		[MxGenericType.str512('/system/run/timestamp')],
+		'generic').then((res: MxGenericType) => {
+			const rts = res.astype('int64');
+			setRunTimestamp(Number(rts));
+		});
 
-		watchRunInfo();
+	watchRunInfo();
 	// });
 
 	// If the socket status changes, emit a message on the toaster

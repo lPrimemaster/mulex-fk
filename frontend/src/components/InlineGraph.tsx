@@ -34,7 +34,7 @@ export const MxInlineGraph: Component<MxInlineGraphProps> = (props) => {
 
 	return (
 		<svg width={props.width} height={props.height} class={`${props.class || ''} overflow-visible`}>
-			<path d={computePath(props.values)} stroke={props.color} fill="none" stroke-width="1.5"/>
+			<path d={computePath(props.values)} stroke={props.color} fill="none" stroke-width="1"/>
 		</svg>
 	);
 };
