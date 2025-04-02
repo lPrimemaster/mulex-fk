@@ -722,9 +722,6 @@ namespace mulex
 
 			// Write event statistics
 			EvtAccumulateEventStatistics(header.eventid, header.client, upload + download);
-
-			// TODO: (Cesar) Ah, it's missing on the server emit!
-			// EvtAccumulateEventStatistics(header.eventid, header.client, upload + download);
 		}
 
 		// On client disconnect unsubscribe from events

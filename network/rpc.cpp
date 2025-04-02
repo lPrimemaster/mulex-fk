@@ -291,7 +291,9 @@ namespace mulex
 		return method_signatures;
 	}
 
+	// TODO: (Cesar)
 	mulex::RPCGenericType RpcGetCallsDebugData()
 	{
+		return {};
 	}
 }

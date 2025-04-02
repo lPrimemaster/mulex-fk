@@ -12,6 +12,7 @@ import { createMapStore } from './lib/rmap';
 import { BadgeDelta } from './components/ui/badge-delta';
 import { BadgeLabel } from './components/ui/badge-label';
 import { MxInlineGraph } from './components/InlineGraph';
+import { MxPopup } from './components/Popup';
 
 class EventIO {
 	read: number;
@@ -59,6 +60,7 @@ export const EventsViewer : Component = () => {
 	const [sysEvents, setSysEvents] = createSignal<boolean>(false);
 	const [pollFast, setPollFast] = createSignal<boolean>(false);
 	const [eventMap, eventMapActions] = createMapStore<number, EventMeta>(new Map<number, EventMeta>());
+	const [popupID, setPopupID] = createSignal<number>(0);
 
 
 	let iid: NodeJS.Timeout;
@@ -102,6 +104,30 @@ export const EventsViewer : Component = () => {
 		return cio;
 	}
 	
+	function getSelectedEventName() : string {
+		const evt = eventMap.data.get(popupID());
+		return evt !== undefined ? evt.name : '';
+	}
+
+	function getSelectedEventRegistrar() : string {
+		const evt = eventMap.data.get(popupID());
+		return evt !== undefined ? (evt.issys ? 'System' : 'User') : '';
+	}
+
+	function getSelectedEventTotalReadString() : string {
+		const evt = eventMap.data.get(popupID());
+		return evt !== undefined ? bps_to_string(evt.io.read, false) : '';
+	}
+
+	function getSelectedEventTotalWriteString() : string {
+		const evt = eventMap.data.get(popupID());
+		return evt !== undefined ? bps_to_string(evt.io.write, false) : '';
+	}
+
+	function getSelectedEventClientFrames() : Array<[BigInt, EventIO]> {
+		const evt = eventMap.data.get(popupID());
+		return (evt !== undefined && evt.clients !== undefined) ? Array.from(evt.clients.entries()) : [];
+	}
 
 	async function readEventStatistics() {
 		const data = await MxWebsocket.instance.rpc_call('mulex::EvtGetAllMetadata', [], 'generic');
@@ -184,6 +210,52 @@ export const EventsViewer : Component = () => {
 							<Show when={eventMap.data.size === 0}>
 								<MxSpinner description="Waiting for events..."/>
 							</Show>
+							<MxPopup title="Event Details" open={popupID() > 0} onOpenChange={(s: boolean) => { if(!s) setPopupID(0); }}>
+								<div class="grid grid-rows-4 grid-cols-2 gap-2">
+									<span class="font-bold">Name</span>
+									<span>{getSelectedEventName()}</span>
+
+									<span class="font-bold">Registered ID</span>
+									<span>{popupID()}</span>
+
+									<span class="font-bold">Registrar</span>
+									<span>{getSelectedEventRegistrar()}</span>
+
+									<span class="font-bold">Global I/O</span>
+									<span>
+										<BadgeDelta class="w-28" deltaType="increase">{getSelectedEventTotalWriteString()}</BadgeDelta>
+										<BadgeDelta class="w-28" deltaType="decrease">{getSelectedEventTotalReadString()}</BadgeDelta>
+									</span>
+								</div>
+								<div class="mt-5">
+									<Table>
+										<TableHeader>
+											<TableRow>
+												<TableHead>Client ID</TableHead>
+												<TableHead>Client I/O</TableHead>
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											<For each={getSelectedEventClientFrames()}>{(client) =>
+												<TableRow>
+													<TableCell class="py-1">0x{client[0].toString(16)}</TableCell>
+													<TableCell class="py-1">
+														<span>
+															<BadgeDelta class="w-28" deltaType="increase">{bps_to_string(client[1].write, false)}</BadgeDelta>
+															<BadgeDelta class="w-28" deltaType="decrease">{bps_to_string(client[1].read, false)}</BadgeDelta>
+														</span>
+													</TableCell>
+												</TableRow>
+											}</For>
+										</TableBody>
+									</Table>
+									<Show when={getSelectedEventClientFrames().length === 0}>
+										<div class="w-full flex items-center justify-items-center">
+											<div class="w-full text-center text-gray">No connections</div>
+										</div>
+									</Show>
+								</div>
+							</MxPopup>
 							<Show when={eventMap.data.size > 0}>
 								<Table>
 									<TableHeader>
@@ -199,7 +271,10 @@ export const EventsViewer : Component = () => {
 									<TableBody>
 										<For each={Array.from(eventMap.data.entries())}>{(evt) =>
 											<Show when={sysEvents() || (!sysEvents() && !evt[1].issys)}>
-												<TableRow class="hover:bg-yellow-100 cursor-pointer even:bg-gray-200">
+												<TableRow
+													class="hover:bg-yellow-100 cursor-pointer even:bg-gray-200"
+													onClick={() => setPopupID(evt[0])}
+												>
 													<TableCell class="py-1">{evt[1].name}</TableCell>
 													<TableCell class="py-1">{evt[0]}</TableCell>
 													<TableCell class="py-1 flex items-center">
@@ -236,19 +311,6 @@ export const EventsViewer : Component = () => {
 												</TableRow>
 											</Show>
 										}</For>
-										{
-										// <For each={filteredItems()}>{(item) =>
-										// 	<TableRow class="hover:bg-yellow-100 cursor-pointer even:bg-gray-200" onClick={() => {
-										// 		setSelectedItem(item);
-										// 		if(props.onRowClick) {
-										// 			props.onRowClick(item);
-										// 		}
-										// 	}}>
-										// 		<TableCell class="py-1">{getName(item)}</TableCell>
-										// 		<TableCell class="py-1">{getPath(item)}</TableCell>
-										// 	</TableRow>
-										// }</For>
-										}
 									</TableBody>
 								</Table>
 							</Show>
