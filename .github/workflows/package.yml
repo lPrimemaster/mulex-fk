@@ -26,9 +26,9 @@ jobs:
         # Make env.VERSION and env.VNAME available
       - name: Read version
         run: | 
-          cat manifest.json | python3 -c "import json,sys;o=json.load(sys.stdin);print(f\"export VERSION={o['version']}\");print(f\"export VNAME={o['vname']}\");" > setenv.sh
-          chmod +x setenv.sh
-          source ./setenv.sh
+          cat build/manifest.json | python3 -c "import json,sys;o=json.load(sys.stdin);print(f\"export VERSION={o['version']}\");print(f\"export VNAME={o['vname']}\");" > setenv.sh
+          chmod +x build/setenv.sh
+          source ./build/setenv.sh
 
       - name: Package
         run: |
