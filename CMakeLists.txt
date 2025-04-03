@@ -151,6 +151,10 @@ set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 # set(CPACK_DEBIAN_PACKAGE_DEPENDS "python3, nodejs")
 
+# TODO: (Cesar) This is dangerous and should be fixed
+#				For now assuming that when we generate a cpack .deb package
+#				the cmake install prefix is set to /usr/local (default)
+set(CPACK_PACKAGING_INSTALL_PREFIX "/usr/local")
 set(CPACK_GENERATOR "DEB")
 set(CPACK_SOURCE_GENERATOR "DEB")
 include(CPack)
