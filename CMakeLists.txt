@@ -20,6 +20,7 @@ option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." ON)
 option(BUILD_TESTS "Build tests." OFF)
 option(BUILD_EXAMPLES "Build examples." OFF)
 option(BUILD_CTARGETS "Build extra targets." OFF)
+option(GH_ACTION_MODE "Signals this configure is running in a github action." OFF)
 
 # Use vcpkg if we are on windows
 if(WIN32)
@@ -35,13 +36,16 @@ if(USB_SUPPORT)
 	add_definitions(-DUSB_SUPPORT)
 endif()
 
-# Check internet connection
-check_network_connection()
-if(NOT NETWORK_STATUS)
-	set(FETCHCONTENT_FULLY_DISCONNECTED ON)
-	message(WARNING "FetchContent offline mode. '_deps' need to be available and populated.")
-else()
-	set(FETCHCONTENT_FULLY_DISCONNECTED OFF)
+# Disable fetch content network check for gh actions
+if(NOT GH_ACTION_MODE)
+	# Check internet connection
+	check_network_connection()
+	if(NOT NETWORK_STATUS)
+		set(FETCHCONTENT_FULLY_DISCONNECTED ON)
+		message(WARNING "FetchContent offline mode. '_deps' need to be available and populated.")
+	else()
+		set(FETCHCONTENT_FULLY_DISCONNECTED OFF)
+	endif()
 endif()
 
 # SQLite3

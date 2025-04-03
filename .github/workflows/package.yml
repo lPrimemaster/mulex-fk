@@ -16,7 +16,7 @@ jobs:
         run: sudo apt update && sudo apt install -y cmake make gcc g++ zlib1g-dev libuv1-dev
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DLTRACE=OFF -DUSB_SUPPORT=OFF
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DLTRACE=OFF -DUSB_SUPPORT=OFF -DGH_ACTION_MODE=ON
 
       - name: Build
         run: cmake --build build --parallel
