@@ -128,11 +128,12 @@ namespace mulex
 	void EvtTryRunServerCallback(std::uint64_t clientid, std::uint16_t eventid, const std::uint8_t* data, std::uint64_t len, const Socket& socket);
 	bool EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len);
 	void EvtAccumulateClientStatistics(std::uint64_t clientid, std::uint64_t framebytes);
-	void EvtAccumulateEventStatistics(std::uint16_t eventid, std::uint64_t clientid, std::uint64_t framebytes);
+	void EvtAccumulateEventStatistics(std::uint16_t eventid, std::uint64_t clientid, std::uint64_t framebytes, bool create = false);
 	void EvtResetStatistics(std::uint16_t eventid);
 	void EvtMakeStats(const mulex::string32& name, std::uint16_t eventid);
 	void EvtMakeStatsEntry(std::uint16_t eventid, std::uint64_t clientid);
 	void EvtDeleteStatsEntry(std::uint16_t eventid, std::uint64_t clientid);
+	void EvtPurgeStatsEntryClient(std::uint64_t clientid);
 	std::uint64_t EvtCalculateStatisticsBufferSize();
 
 	MX_RPC_METHOD mulex::RPCGenericType EvtGetAllRegisteredEvents();

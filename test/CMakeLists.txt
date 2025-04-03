@@ -112,3 +112,12 @@ endif()
 target_link_libraries(test_ksmatch mxrdb mxhttp mxrpc mxbck)
 
 add_test(test_ksmatch test_ksmatch)
+
+add_executable(test_listen listen_bck.cpp)
+
+target_link_libraries(test_listen mxbck)
+
+target_include_directories(test_listen PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
+add_test(test_listen test_listen)

@@ -497,6 +497,9 @@ namespace mulex
 			EvtUnsubscribe(cid, evt.first);
 		}
 
+		// Get rid of all the event stats for this client
+		EvtPurgeStatsEntryClient(cid);
+
 		if(ClientIsGhost(cid))
 		{
 			_evt_client_ghost.erase(cid);
@@ -691,23 +694,22 @@ namespace mulex
 			std::memcpy(&header, fbuffer.data(), sizeof(EvtHeader));
 			LogTrace("[evtserver] Got Event <%d> from <0x%llx>.", header.eventid, header.client);
 
+			std::uint64_t datasz = sizeof(EvtHeader) + header.payloadsize;
+
 			// Relay event to clients that are subscribed
-			std::uint64_t relaycount = 0;
 			{
 				std::unique_lock<std::mutex> lock(_evt_sub_lock);
 				for(const std::uint64_t cid : _evt_current_subscriptions.at(header.eventid))
 				{
 					LogTrace("[evtserver] Relaying event <%d> from <0x%llx> to <0x%llx>.", header.eventid, header.client, cid);
 					relay(cid, fbuffer.data(), read);
-					relaycount++;
 				}
 			}
 
 			// Perform server side tasks (if any)
 			EvtTryRunServerCallback(header.client, header.eventid, fbuffer.data() + sizeof(EvtHeader), header.payloadsize, socket);
 
-			std::uint64_t upload = sizeof(EvtHeader) + header.payloadsize;
-			upload &= 0xFFFFFFFF; // Lo DWORD
+			std::uint64_t upload = datasz & 0xFFFFFFFF; // Lo DWORD
 
 			if(!ClientIsGhost(header.client))
 			{
@@ -715,13 +717,8 @@ namespace mulex
 				EvtAccumulateClientStatistics(header.client, upload);
 			}
 
-			std::uint64_t download = relaycount * upload;
-			// Hi DWORD
-			download &= 0xFFFFFFFF;
-			download <<= 32;
-
 			// Write event statistics
-			EvtAccumulateEventStatistics(header.eventid, header.client, upload + download);
+			EvtAccumulateEventStatistics(header.eventid, header.client, upload, true);
 		}
 
 		// On client disconnect unsubscribe from events
@@ -777,8 +774,7 @@ namespace mulex
 			}
 
 			// Write event statistics
-			// NOTE: (Cesar) what is uploaded is downloaded since these are system events
-			EvtAccumulateEventStatistics(header.eventid, cid, download + (download >> 32));
+			EvtAccumulateEventStatistics(header.eventid, cid, download);
 		}
 	}
 
@@ -916,7 +912,7 @@ namespace mulex
 		_evt_client_stats[clientid] += framebytes; // Atomic op
 	}
 
-	void EvtAccumulateEventStatistics(std::uint16_t eventid, std::uint64_t clientid, std::uint64_t framebytes)
+	void EvtAccumulateEventStatistics(std::uint16_t eventid, std::uint64_t clientid, std::uint64_t framebytes, bool create)
 	{
 		if(eventid > _evt_event_stats._len)
 		{
@@ -934,6 +930,17 @@ namespace mulex
 		auto it = std::find(_evt_event_stats._clients[event_index].begin(), _evt_event_stats._clients[event_index].end(), clientid);
 		if(it == _evt_event_stats._clients[event_index].end())
 		{
+			if(create)
+			{
+				EvtMakeStatsEntry(eventid, clientid);
+				it = std::find(_evt_event_stats._clients[event_index].begin(), _evt_event_stats._clients[event_index].end(), clientid);
+				if(it == _evt_event_stats._clients[event_index].end())
+				{
+					LogError("[mxevt] Stats entry for [<%d>, <0x%llx>] could not be created.", eventid, clientid);
+					return;
+				}
+			}
+
 			LogError("[mxevt] Failed to accumulate event statistics for event <%d>. Client <0x%llx> not found.", eventid, clientid);
 			return;
 		}
@@ -981,7 +988,7 @@ namespace mulex
 		auto it = std::find(_evt_event_stats._clients[i].begin(), _evt_event_stats._clients[i].end(), clientid);
 		if(it == _evt_event_stats._clients[i].end())
 		{
-			LogTrace("[mxevt] Adding event stats entry for event - client pair [<%d>, <%llx>].", eventid, clientid);
+			LogTrace("[mxevt] Adding event stats entry for event - client pair [<%d>, <0x%llx>].", eventid, clientid);
 			_evt_event_stats._clients[i].push_back(clientid);
 			_evt_event_stats._frames[i].push_back(0);
 		}
@@ -996,6 +1003,14 @@ namespace mulex
 			LogTrace("[mxevt] Removing event stats entry for event - client pair [<%d>, <%llx>].", eventid, clientid);
 			_evt_event_stats._clients[i].erase(it);
 			_evt_event_stats._frames[i].erase(_evt_event_stats._frames[i].begin() + std::distance(_evt_event_stats._clients[i].begin(), it));
+		}
+	}
+
+	void EvtPurgeStatsEntryClient(std::uint64_t clientid)
+	{
+		for(std::uint64_t i = 0; i < _evt_event_stats._len; i++)
+		{
+			EvtDeleteStatsEntry(i + 1, clientid);
 		}
 	}
 

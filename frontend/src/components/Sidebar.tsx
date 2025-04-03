@@ -59,7 +59,7 @@ const Sidebar: Component = () => {
 						</NavigationMenuItem>
 						<NavigationMenuItem>
 							<NavigationMenuTrigger>
-								<A href='/events'>Events (Beta)</A>
+								<A href='/events'>Events</A>
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
 						<NavigationMenuItem>
