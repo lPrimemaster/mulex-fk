@@ -8,7 +8,7 @@ include(cmake/InstallMulex.cmake)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 # Version configuration
-project(mulex-fk VERSION 0.5.3)
+project(mulex-fk VERSION 0.5.4)
 set(PROJECT_VNAME Wolf)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -137,3 +137,21 @@ mx_resource_gen()
 
 # Finally install everything for the user
 install_mulex()
+
+# Generate package using CPack
+include(InstallRequiredSystemLibraries)
+
+set(CPACK_DEBIAN_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "c.godinho@campus.fct.unl.pt")
+set(CPACK_PACKAGE_VERSION_MAJOR "${CMAKE_PROJECT_VERSION_MAJOR}")
+set(CPACK_PACKAGE_VERSION_MINOR "${CMAKE_PROJECT_VERSION_MINOR}")
+set(CPACK_PACKAGE_VERSION_PATCH "${CMAKE_PROJECT_VERSION_PATCH}")
+
+set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+# set(CPACK_DEBIAN_PACKAGE_DEPENDS "python3, nodejs")
+
+set(CPACK_GENERATOR "DEB")
+set(CPACK_SOURCE_GENERATOR "DEB")
+include(CPack)
+
