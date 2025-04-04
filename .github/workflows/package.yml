@@ -29,6 +29,9 @@ jobs:
           cat build/manifest.json | python3 -c "import json,sys;o=json.load(sys.stdin);print(f\"export VERSION={o['version']}\");print(f\"export VNAME={o['vname']}\");" > build/setenv.sh
           chmod +x build/setenv.sh
           source ./build/setenv.sh
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "VNAME=$VNAME" >> $GITHUB_OUTPUT
+        id: read_version
 
       - name: Package
         run: |
@@ -45,7 +48,7 @@ jobs:
       - name: Generate release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.VERSION }}-${{ env.VNAME }}-r${{ github.run_number }}
+          tag_name: ${{ steps.read_version.outputs.VERSION }}-${{ steps.read_version.outputs.VNAME }}-r${{ github.run_number }}
           files: build/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
