@@ -23,7 +23,7 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
-        # Make env.VERSION and env.VNAME available
+        # Make VERSION and VNAME available
       - name: Read version
         run: | 
           cat build/manifest.json | python3 -c "import json,sys;o=json.load(sys.stdin);print(f\"export VERSION={o['version']}\");print(f\"export VNAME={o['vname']}\");" > build/setenv.sh

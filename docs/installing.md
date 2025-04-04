@@ -1,7 +1,10 @@
 # Instalation
 
-The only way to install mulex-fk is via it's source code. There are no official releases nor packages.
+~The only way to install mulex-fk is via it's source code. There are no official releases nor packages.~
 Mulex-fk is tested and is known to work under Linux and Windows.
+
+There is a debian package for debian systems. Check the releases page on github.
+For windows you will still need to compile from source.
 
 ## Requirements
 
