@@ -8,8 +8,10 @@ add_library(MxDrivers
 	mxdrv.cpp
 )
 
-target_link_libraries(MxDrivers PRIVATE ${LIBUSB_LIBRARY})
-target_include_directories(MxDrivers PRIVATE ${LIBUSB_INCLUDE_DIR})
+if(USB_SUPPORT)
+	target_link_libraries(MxDrivers PRIVATE ${LIBUSB_LIBRARY})
+	target_include_directories(MxDrivers PRIVATE ${LIBUSB_INCLUDE_DIR})
+endif()
 
 add_library(mxdrv ALIAS MxDrivers)
 

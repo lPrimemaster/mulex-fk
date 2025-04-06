@@ -7,13 +7,7 @@ include(cmake/InstallMulex.cmake)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-# Version configuration
-project(mulex-fk VERSION 0.5.5)
-set(PROJECT_VNAME Wolf)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
+# Options
 option(LTRACE "Enable/Disable trace logging." OFF)
 option(PROFILE "Enable/Disable profiling with tracy." OFF)
 option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." ON)
@@ -21,20 +15,19 @@ option(BUILD_TESTS "Build tests." OFF)
 option(BUILD_EXAMPLES "Build examples." OFF)
 option(BUILD_CTARGETS "Build extra targets." OFF)
 option(GH_ACTION_MODE "Signals this configure is running in a github action." OFF)
+option(CROSS_COMP_WINDOWS "When on UNIX sets the mode to cross compile to windows x64 using mingw." OFF)
 
-# Use vcpkg if we are on windows
-if(WIN32)
-	message(WARNING "On windows, all packages must be installed as x64-mingw-dynamic if using vcpkg.")
-	set(VCPKG_TARGET_TRIPLET "x64-mingw-dynamic" CACHE STRING "Vcpkg target triplet.")
+if(CROSS_COMP_WINDOWS)
+	set(CMAKE_TOOLCHAIN_FILE "cmake/MingwToolchain.cmake")
 endif()
 
-if(LTRACE)
-	add_definitions(-DLTRACE)
-endif()
+# Version configuration
+project(mulex-fk VERSION 0.5.5)
+set(PROJECT_VNAME Wolf)
 
-if(USB_SUPPORT)
-	add_definitions(-DUSB_SUPPORT)
-endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Disable fetch content network check for gh actions
 if(NOT GH_ACTION_MODE)
@@ -46,6 +39,26 @@ if(NOT GH_ACTION_MODE)
 	else()
 		set(FETCHCONTENT_FULLY_DISCONNECTED OFF)
 	endif()
+endif()
+
+# Use vcpkg if we are on windows
+if(WIN32)
+	if(CROSS_COMP_WINDOWS)
+		message(WARNING "Cross compiling for Windows (x64).")
+
+		# Make afunix.h available
+		# https://raw.githubusercontent.com/mingw-w64/mingw-w64/refs/heads/master/mingw-w64-headers/include/afunix.h
+	endif()
+	message(WARNING "On windows, all packages must be installed as x64-mingw-dynamic if using vcpkg.")
+	set(VCPKG_TARGET_TRIPLET "x64-mingw-dynamic" CACHE STRING "Vcpkg target triplet.")
+endif()
+
+if(LTRACE)
+	add_definitions(-DLTRACE)
+endif()
+
+if(USB_SUPPORT)
+	add_definitions(-DUSB_SUPPORT)
 endif()
 
 # SQLite3
@@ -142,24 +155,40 @@ mx_resource_gen()
 # Finally install everything for the user
 install_mulex()
 
-# Generate package using CPack
-include(InstallRequiredSystemLibraries)
+if(NOT CROSS_COMP_WINDOWS AND NOT WIN32)
+	# Generate debian package using CPack
+	include(InstallRequiredSystemLibraries)
 
-set(CPACK_DEBIAN_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
-set(CPACK_DEBIAN_PACKAGE_MAINTAINER "c.godinho@campus.fct.unl.pt")
-set(CPACK_PACKAGE_VERSION_MAJOR "${CMAKE_PROJECT_VERSION_MAJOR}")
-set(CPACK_PACKAGE_VERSION_MINOR "${CMAKE_PROJECT_VERSION_MINOR}")
-set(CPACK_PACKAGE_VERSION_PATCH "${CMAKE_PROJECT_VERSION_PATCH}")
+	set(CPACK_DEBIAN_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
+	set(CPACK_DEBIAN_PACKAGE_MAINTAINER "c.godinho@campus.fct.unl.pt")
+	set(CPACK_PACKAGE_VERSION_MAJOR "${CMAKE_PROJECT_VERSION_MAJOR}")
+	set(CPACK_PACKAGE_VERSION_MINOR "${CMAKE_PROJECT_VERSION_MINOR}")
+	set(CPACK_PACKAGE_VERSION_PATCH "${CMAKE_PROJECT_VERSION_PATCH}")
 
-set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-# set(CPACK_DEBIAN_PACKAGE_DEPENDS "python3, nodejs")
+	set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+	set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 
-# TODO: (Cesar) This is dangerous and should be fixed
-#				For now assuming that when we generate a cpack .deb package
-#				the cmake install prefix is set to /usr/local (default)
-set(CPACK_PACKAGING_INSTALL_PREFIX "/usr/local")
-set(CPACK_GENERATOR "DEB")
-set(CPACK_SOURCE_GENERATOR "DEB")
+	# TODO: (Cesar) This is dangerous and should be fixed
+	#				For now assuming that when we generate a cpack .deb package
+	#				the cmake install prefix is set to /usr/local (default)
+	set(CPACK_PACKAGING_INSTALL_PREFIX "/usr/local")
+	set(CPACK_GENERATOR "DEB")
+	set(CPACK_SOURCE_GENERATOR "DEB")
+else()
+	# Generate NSIS package using CPack
+	include(InstallRequiredSystemLibraries)
+
+	set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
+	set(CPACK_PACKAGE_VENDOR "César Godinho")
+	set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Mulex-fk Windows (x64) installer.")
+	set(CPACK_PACKAGE_VERSION_MAJOR "${CMAKE_PROJECT_VERSION_MAJOR}")
+	set(CPACK_PACKAGE_VERSION_MINOR "${CMAKE_PROJECT_VERSION_MINOR}")
+	set(CPACK_PACKAGE_VERSION_PATCH "${CMAKE_PROJECT_VERSION_PATCH}")
+	set(CPACK_PACKAGE_INSTALL_DIRECTORY "mulex-fk")
+	set(CPACK_NSIS_MODIFY_PATH ON)
+
+	set(CPACK_GENERATOR "NSIS")
+	set(CPACK_SOURCE_GENERATOR "NSIS")
+endif()
 include(CPack)
 

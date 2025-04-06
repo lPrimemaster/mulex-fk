@@ -4,7 +4,7 @@
 #include <string>
 
 #ifdef _WIN32
-#include <WinSock2.h>
+#include <winsock2.h>
 #undef ERROR
 #endif
 

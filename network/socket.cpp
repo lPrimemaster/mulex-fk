@@ -14,7 +14,7 @@
 #else
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <ws2tcpip.h>
-#include <WinSock2.h>
+#include <winsock2.h>
 #endif
 
 #include "../mxlogger.h"

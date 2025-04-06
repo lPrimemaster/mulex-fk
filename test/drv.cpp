@@ -7,7 +7,7 @@
 #include <pty.h>
 #include <fcntl.h>
 #else
-#include <Windows.h>
+#include <windows.h>
 #endif
 #include <cstring>
 #include <thread>

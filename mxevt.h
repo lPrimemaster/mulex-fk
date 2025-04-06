@@ -4,6 +4,8 @@
 #include <thread>
 #include <map>
 #include <set>
+#include <condition_variable>
+#include <mutex>
 
 #include "mxtypes.h"
 #include "network/socket.h"

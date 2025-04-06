@@ -4,7 +4,7 @@
 #include "network/socket.h"
 
 #ifdef _WIN32
-#include <Windows.h>
+#include <windows.h>
 #undef ERROR
 #endif
 

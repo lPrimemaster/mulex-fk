@@ -32,7 +32,7 @@ macro(build_frontend_yarn)
 	# Build frontend at configure time
 	message(STATUS "Building frontend via 'yarn build'...")
 
-	if(WIN32)
+	if(WIN32 AND NOT CROSS_COMP_WINDOWS)
 		set(YARN_CMD cmd.exe /C yarn)
 	else()
 		set(YARN_CMD yarn)
