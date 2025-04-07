@@ -8,8 +8,6 @@ on:
 jobs:
   build-deb:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # Allow write for automated releases
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,21 +40,11 @@ jobs:
       - name: Generate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: package
+          name: package-deb
           path: build/*.deb
-
-      - name: Generate release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.read_version.outputs.VERSION }}-${{ steps.read_version.outputs.VNAME }}-r${{ github.run_number }}
-          files: build/*.deb
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-win:
     runs-on: windows-latest
-    permissions:
-      contents: write # Allow write for automated releases
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -99,13 +87,42 @@ jobs:
       - name: Generate artifact
         uses: actions/upload-artifact@v4
         with:
-          name: package
+          name: package-win
           path: build/mulex-fk-*-win64.exe
+
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Allow write for automated releases
+
+    needs:
+      - build-deb
+      - build-win
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download package deb
+        uses: actions/download-artifact@v4
+        with:
+          name: package-deb
+          path: artifacts/deb
+
+      - name: Download package win
+        uses: actions/download-artifact@v4
+        with:
+          name: package-win
+          path: artifacts/win
 
       - name: Generate release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.read_version.outputs.VERSION }}-${{ steps.read_version.outputs.VNAME }}-r${{ github.run_number }}
-          files: build/mulex-fk-*-win64.exe
+          name: Release ${{ github.run_number }}
+          tag_name: ${{ needs.build-deb.outputs.read_version.outputs.VERSION }}-${{ needs.build-deb.outputs.read_version.outputs.VNAME }}-r${{ github.run_number }}
+          files: |
+            artifacts/deb/*
+            artifacts/win/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
