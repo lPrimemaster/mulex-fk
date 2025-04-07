@@ -71,7 +71,7 @@ jobs:
 
       - name: Install vcpkg dependencies
         run: |
-          C:\\vcpkg\\vcpkg install libuv zlib1g-dev --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic
+          C:\\vcpkg\\vcpkg install libuv zlib --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic
           C:\\vcpkg\\vcpkg integrate install
 
       - name: Configure
