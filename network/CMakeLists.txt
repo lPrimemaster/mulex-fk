@@ -51,15 +51,17 @@ FetchContent_MakeAvailable(aklomp_base64)
 
 FetchContent_Declare(rapidjson
 	GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
-	# EXCLUDE_FROM_ALL
+	EXCLUDE_FROM_ALL
 )
 
-# Disable RapidJSON testing (which collides with some of our warnings as errors)
-set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "")
-set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "")
-set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "")
-FetchContent_MakeAvailable(rapidjson)
-# install_target(RapidJSON NONE)
+# WARN: (Cesar) Deprecated, but I don't want to build, and did not find a workaround using MakeAvailable
+if(NOT rapidjson_POPULATED)
+	FetchContent_Populate(rapidjson)
+endif()
+
+# Prevent RapidJSON from installing on the system when running [all] install target
+# add_library(RapidJSON_Interface INTERFACE IMPORTED)
+# set_target_properties(RapidJSON_Interface PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${rapidjson_SOURCE_DIR}/include")
 
 add_library(MxRpc
 	rpc.cpp
@@ -88,9 +90,9 @@ find_package(ZLIB REQUIRED)
 
 if(WIN32)
 	target_link_libraries(MxHttp PRIVATE $<IF:$<TARGET_EXISTS:libuv::uv_a>,libuv::uv_a,libuv::uv>)
-	target_link_libraries(MxHttp PRIVATE uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
+	target_link_libraries(MxHttp PRIVATE uSockets ZLIB::ZLIB base64 mxrun)
 else()
-	target_link_libraries(MxHttp PRIVATE uv uSockets ZLIB::ZLIB RapidJSON base64 mxrun)
+	target_link_libraries(MxHttp PRIVATE uv uSockets ZLIB::ZLIB base64 mxrun)
 endif()
 
 target_include_directories(MxHttp PRIVATE
