@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install mingw
-        run: choco install mingw cmake python3
+        run: choco install mingw cmake python3 -y
 
       - name: Add mingw to PATH
         run: Write-Output "C:\\tools\\mingw\\bin" >> $ENV:Path
