@@ -93,7 +93,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: package-win
-          path: build/mulex-fk-*-win64.exe
+          # choco install mingw uses this (we only support it for now)
+          # TODO: (Cesar) compile for multiple ABI's
+          path: build/mulex-fk-*-x86_64-posix-seh-rev0-win64.exe
 
   release:
     runs-on: ubuntu-latest
