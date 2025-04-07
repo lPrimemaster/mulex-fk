@@ -85,12 +85,9 @@ jobs:
       - name: Read version
         run: | 
           Get-Content build\manifest.json | ConvertFrom-Json | ForEach-Object {
-            "export VERSION=$($_.version)"
-            "export VNAME=$($_.vname)"
-          } | Set-Content build\setenv.ps1
-          .\build\setenv.ps1
-          Write-Output "VERSION=$ENV:VERSION" >> $ENV:GITHUB_OUTPUT
-          Write-Output "VNAME=$ENV:VNAME" >> $ENV:GITHUB_OUTPUT
+            Write-Output "VERSION=$($_.version)" >> $ENV:GITHUB_OUTPUT
+            Write-Output "VNAME=$($_.vname)" >> $ENV:GITHUB_OUTPUT
+          }
         id: read_version
 
       - name: Package
