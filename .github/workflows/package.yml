@@ -8,6 +8,11 @@ on:
 jobs:
   build-deb:
     runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.read_version.outputs.VERSION }}
+      vname: ${{ steps.read_version.outputs.VNAME }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -120,7 +125,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ github.run_number }}
-          tag_name: ${{ needs.build-deb.outputs.read_version.outputs.VERSION }}-${{ needs.build-deb.outputs.read_version.outputs.VNAME }}-r${{ github.run_number }}
+          tag_name: ${{ needs.build-deb.outputs.version }}-${{ needs.build-deb.outputs.vname }}-r${{ github.run_number }}
           files: |
             artifacts/deb/*
             artifacts/win/*
