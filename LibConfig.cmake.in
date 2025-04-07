@@ -2,5 +2,4 @@
 
 @LIB_DEPS@
 
-set(@LIB_TARGET@_DIR "@CMAKE_INSTALL_PREFIX@/lib/cmake/@LIB_TARGET@")
-include(${@LIB_TARGET@_DIR}/@LIB_TARGET@Targets.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/@LIB_TARGET@Targets.cmake)

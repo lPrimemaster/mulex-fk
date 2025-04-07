@@ -4,7 +4,7 @@ add_library(MxBackend
 )
 
 if(WIN32)
-	target_link_libraries(MxBackend wsock32 ws2_32 Shlwapi pdh)
+	target_link_libraries(MxBackend PUBLIC wsock32 ws2_32 Shlwapi pdh)
 endif()
 
 target_link_libraries(MxBackend PUBLIC mxrdb mxhttp mxrpc)
