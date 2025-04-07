@@ -96,7 +96,7 @@ jobs:
           name: package-win
           # choco install mingw uses this (we only support it for now)
           # TODO: (Cesar) compile for multiple ABI's
-        path: build/mulex-fk-*-win64.exe
+          path: build/mulex-fk-*-win64.exe
 
   release:
     runs-on: ubuntu-latest
