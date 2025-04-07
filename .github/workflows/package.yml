@@ -6,7 +6,7 @@ on:
       - master
 
 jobs:
-  build:
+  build-deb:
     runs-on: ubuntu-latest
     permissions:
       contents: write # Allow write for automated releases
@@ -50,5 +50,68 @@ jobs:
         with:
           tag_name: ${{ steps.read_version.outputs.VERSION }}-${{ steps.read_version.outputs.VNAME }}-r${{ github.run_number }}
           files: build/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-win:
+    runs-on: windows-latest
+    permissions:
+      contents: write # Allow write for automated releases
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mingw
+        run: choco install mingw cmake python3
+
+      - name: Add mingw to PATH
+        run: Write-Output "C:\\tools\\mingw\\bin" >> $ENV:Path
+
+      - name: Install vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git C:\\vcpkg
+          C:\\vcpkg\\bootstrap-vcpkg.bat
+
+      - name: Install vcpkg dependencies
+        run: |
+          C:\\vcpkg\\vcpkg install libuv zlib1g-dev --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic
+          C:\\vcpkg\\vcpkg integrate install
+
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLTRACE=OFF -DUSB_SUPPORT=OFF -DGH_ACTION_MODE=ON -G"MinGW Makefiles" -DCMAKE_TOOLCHAIN_FILE="C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET="x64-mingw-dynamic" -DVCPKG_ROOT="C:\\vcpkg"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+        # Make VERSION and VNAME available
+      - name: Read version
+        run: | 
+          Get-Content build\manifest.json | ConvertFrom-Json | ForEach-Object {
+            "export VERSION=$($_.version)"
+            "export VNAME=$($_.vname)"
+          } | Set-Content build\setenv.ps1
+          source .\build\setenv.sh
+          Write-Output "VERSION=$ENV:VERSION" >> $ENV:GITHUB_OUTPUT
+          Write-Output "VNAME=$ENV:VNAME" >> $ENV:GITHUB_OUTPUT
+        id: read_version
+
+      - name: Package
+        run: |
+          cd build
+          cpack
+          cd ..
+
+      - name: Generate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: build/mulex-fk-*-win64.exe
+
+      - name: Generate release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.read_version.outputs.VERSION }}-${{ steps.read_version.outputs.VNAME }}-r${{ github.run_number }}
+          files: build/mulex-fk-*-win64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
