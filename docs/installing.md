@@ -1,10 +1,8 @@
 # Instalation
 
-~The only way to install mulex-fk is via it's source code. There are no official releases nor packages.~
-Mulex-fk is tested and is known to work under Linux and Windows.
-
-There is a debian package for debian systems. Check the releases page on github.
-For windows you will still need to compile from source.
+Mulex-fk server works under Linux (Windows under testing). The backend API works both under Windows and Linux.
+Pre-compiled releases are available under the releases tab of the github repository. However, if you wish to have
+more control/compile for a different ABI/platform here are the steps to build from source.
 
 ## Requirements
 
