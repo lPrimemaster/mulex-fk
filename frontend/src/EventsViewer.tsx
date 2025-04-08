@@ -37,12 +37,14 @@ class EventMeta {
 	trigger: number; // In number of frames/cycles
 	clients: ClientsIO;
 	issys: boolean;
+	capture: boolean;
 
 	constructor(name: string,
 				read: number,
 				write: number,
 				trigger: number,
 				issys: boolean,
+				capture: boolean,
 				clients: ClientsIO = undefined,
 				lread: Array<number> | undefined = undefined,
 				lwrite: Array<number> | undefined = undefined) {
@@ -51,7 +53,19 @@ class EventMeta {
 		this.trigger = trigger;
 		this.issys = issys;
 		this.clients = clients;
+		this.capture = capture;
 	}
+};
+
+const CaptureBadge : Component<{capture: boolean}> = (props) => {
+	return (
+		<span class="relative flex h-3 w-3">
+			<Show when={props.capture}>
+				<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+			</Show>
+			<span class={`relative inline-flex rounded-full h-3 w-3 ${props.capture ? 'bg-red-500' : 'bg-gray-500'}`}></span>
+		</span>
+	);
 };
 
 export const EventsViewer : Component = () => {
@@ -61,6 +75,7 @@ export const EventsViewer : Component = () => {
 	const [pollFast, setPollFast] = createSignal<boolean>(false);
 	const [eventMap, eventMapActions] = createMapStore<number, EventMeta>(new Map<number, EventMeta>());
 	const [popupID, setPopupID] = createSignal<number>(0);
+	const [activeCaptureID, setActiveCaptureID] = createSignal<number>(0);
 
 
 	let iid: NodeJS.Timeout;
@@ -141,7 +156,7 @@ export const EventsViewer : Component = () => {
 
 			// NOTE: (Cesar) For now we check for the event being system on the clientside
 			if(!eventMap.data.has(eid)) {
-				eventMapActions.add(eid, new EventMeta(name, r, w, 0, checkSystemEvent(name), clientFrames));
+				eventMapActions.add(eid, new EventMeta(name, r, w, 0, checkSystemEvent(name), false, clientFrames));
 				continue;
 			}
 
@@ -151,14 +166,14 @@ export const EventsViewer : Component = () => {
 				// skip
 				eventMapActions.modify(
 					eid,
-					new EventMeta(name, r, w, evtStore.trigger + 1, evtStore.issys, clientFrames, evtStore.io.lread, evtStore.io.lwrite)
+					new EventMeta(name, r, w, evtStore.trigger + 1, evtStore.issys, evtStore.capture, clientFrames, evtStore.io.lread, evtStore.io.lwrite)
 				);
 				continue;
 			}
 
 			eventMapActions.modify(
 				eid,
-				new EventMeta(name, r, w, 0, evtStore.issys, clientFrames, evtStore.io.lread, evtStore.io.lwrite)
+				new EventMeta(name, r, w, 0, evtStore.issys, evtStore.capture, clientFrames, evtStore.io.lread, evtStore.io.lwrite)
 			);
 		}
 	}
@@ -205,13 +220,15 @@ export const EventsViewer : Component = () => {
 					/>
 				</Show>
 				<Show when={!gmode()}>
-					<Card title="">
+					<Card title="Event List">
 						<div class="py-0">
 							<Show when={eventMap.data.size === 0}>
-								<MxSpinner description="Waiting for events..."/>
+								<div class="pt-5">
+									<MxSpinner description="Waiting for events..."/>
+								</div>
 							</Show>
 							<MxPopup title="Event Details" open={popupID() > 0} onOpenChange={(s: boolean) => { if(!s) setPopupID(0); }}>
-								<div class="grid grid-rows-4 grid-cols-2 gap-2">
+								<div class="grid grid-rows-5 grid-cols-2 gap-2">
 									<span class="font-bold">Name</span>
 									<span>{getSelectedEventName()}</span>
 
@@ -226,6 +243,32 @@ export const EventsViewer : Component = () => {
 										<BadgeDelta class="w-28" deltaType="increase">{getSelectedEventTotalWriteString()}</BadgeDelta>
 										<BadgeDelta class="w-28" deltaType="decrease">{getSelectedEventTotalReadString()}</BadgeDelta>
 									</span>
+
+									<span class="font-bold">Capture Event Data</span>
+									<MxDoubleSwitch
+										labelFalse="No"
+										labelTrue="Yes"
+										value={popupID() > 0 ? eventMap.data.get(popupID())!.capture : false}
+										onChange={(value) => {
+											const eid : number = popupID();
+											if(eid > 0) {
+												const evtStore : EventMeta = eventMap.data.get(eid)!;
+												eventMapActions.modify(
+													eid,
+													new EventMeta(
+														evtStore.name,
+														evtStore.io.read,
+														evtStore.io.write,
+														evtStore.trigger,
+														evtStore.issys,
+														value, 
+														evtStore.clients,
+														evtStore.io.lread,
+														evtStore.io.lwrite
+													)
+												);
+											}
+									}}/>
 								</div>
 								<div class="mt-5">
 									<Table>
@@ -260,6 +303,7 @@ export const EventsViewer : Component = () => {
 								<Table>
 									<TableHeader>
 										<TableRow>
+											<TableHead class="w-5"></TableHead>
 											<TableHead>Name</TableHead>
 											<TableHead>ID</TableHead>
 											<TableHead>I/O Totals</TableHead>
@@ -269,12 +313,14 @@ export const EventsViewer : Component = () => {
 										</TableRow>
 									</TableHeader>
 									<TableBody>
+										{/* TODO: (Cesar) Prevent flicker by not re-rendering the TableRow element */}	
 										<For each={Array.from(eventMap.data.entries())}>{(evt) =>
 											<Show when={sysEvents() || (!sysEvents() && !evt[1].issys)}>
 												<TableRow
 													class="hover:bg-yellow-100 cursor-pointer even:bg-gray-200"
 													onClick={() => setPopupID(evt[0])}
 												>
+													<TableCell class="py-1 px-1 w-3"><CaptureBadge capture={evt[1].capture}/></TableCell>
 													<TableCell class="py-1">{evt[1].name}</TableCell>
 													<TableCell class="py-1">{evt[0]}</TableCell>
 													<TableCell class="py-1 flex items-center">
@@ -315,6 +361,18 @@ export const EventsViewer : Component = () => {
 								</Table>
 							</Show>
 						</div>
+					</Card>
+					<Card title="Captures">
+						<Show when={true}>
+							<div class="w-full flex">
+								<div
+									class="items-center w-full border-4 border-dashed rounded-md h-20 m-2 place-content-center gap-2 text-gray-400"
+								>
+									<div class="text-center">No Captures Active.</div>
+									<div class="text-center">Capture an event to see its frame here.</div>
+								</div>
+							</div>
+						</Show>
 					</Card>
 				</Show>
 			</div>
