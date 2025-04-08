@@ -4,7 +4,9 @@
 #include "mxmsg.h"
 #include "mxsystem.h"
 #include "network/rpc.h"
+#include <algorithm>
 #include <string>
+#include <functional>
 
 namespace mulex
 {
@@ -95,27 +97,35 @@ namespace mulex
 	class MxEventBuilder
 	{
 	public:
-		MxEventBuilder(std::vector<std::uint8_t>& buffer) : _buffer_ref(buffer) {  };
+		explicit MxEventBuilder(std::uint64_t size)
+		{
+			_buffer.reserve(size);
+		}
+
+		inline MxEventBuilder& reset()
+		{
+			_buffer.clear();
+			return *this;
+		}
 
 		template<TriviallyCopyable T>
-		MxEventBuilder& add(const T& t)
+		inline MxEventBuilder& add(const T& t)
 		{
 			const std::uint8_t* ptr = reinterpret_cast<const std::uint8_t*>(&t);
-			_buffer_ref.insert(_buffer_ref.end(), ptr, ptr + sizeof(T));
+			_buffer.insert(_buffer.end(), ptr, ptr + sizeof(T));
 			return *this;
 		}
 
 		template<TriviallyCopyable T>
-		MxEventBuilder& add(const std::vector<T>& t)
+		inline MxEventBuilder& add(const std::vector<T>& t)
 		{
-			_buffer_ref.insert(_buffer_ref.end(), t.begin(), t.end());
+			std::for_each(t.begin(), t.end(), [this](const auto& tt){ add(tt); });
 			return *this;
 		}
 
-		operator const std::vector<std::uint8_t>&() { return _buffer_ref; }
-
+		operator const std::vector<std::uint8_t>&() { return _buffer; }
 	private:
-		std::vector<std::uint8_t>& _buffer_ref;
+		std::vector<std::uint8_t> _buffer;
 	};
 
 } // namespace mulex
