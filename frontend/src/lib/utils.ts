@@ -82,6 +82,14 @@ function bps_get_suffix(multiplier: number, bits: boolean): string {
 	return '';
 }
 
+function bytes_get_suffix(multiplier: number): string {
+	if(multiplier == 3) return 'GB';
+	if(multiplier == 2) return 'MB';
+	if(multiplier == 1) return 'kB';
+	if(multiplier == 0) return 'B';
+	return '';
+}
+
 export function bps_to_string(value: number, bits: boolean = true) {
 	if(bits) {
 		value *= 8;
@@ -89,6 +97,14 @@ export function bps_to_string(value: number, bits: boolean = true) {
 
 	const multiplier = bps_get_multiplier(value);
 	const suffix = bps_get_suffix(multiplier, bits);
+	const str = (value / (1024 ** multiplier)).toFixed(1);
+
+	return str + ' ' + suffix;
+}
+
+export function bytes_to_string(value: number) {
+	const multiplier = bps_get_multiplier(value);
+	const suffix = bytes_get_suffix(multiplier);
 	const str = (value / (1024 ** multiplier)).toFixed(1);
 
 	return str + ' ' + suffix;

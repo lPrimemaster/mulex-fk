@@ -7,12 +7,17 @@ import Card from './components/Card';
 import { MxDoubleSwitch } from './api/Switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table';
 import { MxSpinner } from './api';
-import { bps_to_string, event_io_extract } from './lib/utils';
+import { bps_to_string, bytes_to_string, event_io_extract } from './lib/utils';
 import { createMapStore } from './lib/rmap';
 import { BadgeDelta } from './components/ui/badge-delta';
 import { BadgeLabel } from './components/ui/badge-label';
 import { MxInlineGraph } from './components/InlineGraph';
 import { MxPopup } from './components/Popup';
+import { MxCaptureBadge, MxTickBadge } from './components/Badges';
+import { createSetStore } from './lib/rset';
+import { MxTree, MxTreeNode } from './components/TreeNode';
+import { MxGenericType } from './lib/convert';
+import { MxHexTable } from './components/HexTable';
 
 class EventIO {
 	read: number;
@@ -57,25 +62,26 @@ class EventMeta {
 	}
 };
 
-const CaptureBadge : Component<{capture: boolean}> = (props) => {
-	return (
-		<span class="relative flex h-3 w-3">
-			<Show when={props.capture}>
-				<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-			</Show>
-			<span class={`relative inline-flex rounded-full h-3 w-3 ${props.capture ? 'bg-red-500' : 'bg-gray-500'}`}></span>
-		</span>
-	);
+class CaptureMeta {
+	totalbytes: number;
+
+	constructor(totalbytes: number) {
+		this.totalbytes = totalbytes;
+	}
 };
 
 export const EventsViewer : Component = () => {
 
 	const [gmode, setGmode] = createSignal<boolean>(false);
 	const [sysEvents, setSysEvents] = createSignal<boolean>(false);
-	const [pollFast, setPollFast] = createSignal<boolean>(false);
+	const [pollFast, setPollFast] = createSignal<boolean>(true);
 	const [eventMap, eventMapActions] = createMapStore<number, EventMeta>(new Map<number, EventMeta>());
 	const [popupID, setPopupID] = createSignal<number>(0);
-	const [activeCaptureID, setActiveCaptureID] = createSignal<number>(0);
+	const [captureSet, captureSetActions] = createSetStore<number>([]);
+	const [captureData, captureDataActions] = createMapStore<number, Uint8Array>(new Map<number, Uint8Array>());
+	const [captureMeta, captureMetaActions] = createMapStore<number, CaptureMeta>(new Map<number, CaptureMeta>());
+	const [captureTick, captureTickActions] = createSetStore<number>([]);
+	const [captureCollapse, captureCollapseActions] = createMapStore<number, boolean>(new Map<number, boolean>());
 
 
 	let iid: NodeJS.Timeout;
@@ -178,6 +184,56 @@ export const EventsViewer : Component = () => {
 		}
 	}
 
+	function modifyCapture(value: boolean) {
+		const eid : number = popupID();
+		if(eid > 0) {
+			const evtStore : EventMeta = eventMap.data.get(eid)!;
+			eventMapActions.modify(
+				eid,
+				new EventMeta(
+					evtStore.name,
+					evtStore.io.read,
+					evtStore.io.write,
+					evtStore.trigger,
+					evtStore.issys,
+					value, 
+					evtStore.clients,
+					evtStore.io.lread,
+					evtStore.io.lwrite
+				)
+			);
+
+			if(value) {
+				captureCollapseActions.add(eid, false);
+				captureSetActions.add(eid);
+				captureMetaActions.add(eid, new CaptureMeta(0));
+				captureDataActions.add(eid, new Uint8Array());
+				MxWebsocket.instance.subscribe(evtStore.name, (data: Uint8Array) => {
+					captureTickActions.add(eid);
+					captureDataActions.modify(eid, data);
+					const capMeta: CaptureMeta = captureMeta.data.get(eid)!;
+					captureMetaActions.modify(eid, new CaptureMeta(capMeta.totalbytes + data.length));
+				});
+			}
+			else {
+				captureSetActions.remove(eid);
+				// FIX: (Cesar) This could be tricky and unsubscribe us from the event somewhere else!
+				MxWebsocket.instance.unsubscribe(evtStore.name);
+				captureMetaActions.remove(eid);
+				captureDataActions.remove(eid);
+				captureCollapseActions.remove(eid);
+			}
+		}
+	}
+
+	function eventGotNewFrame(id: number) {
+		const new_frame = captureTick.data.has(id);
+		if(new_frame) {
+			captureTickActions.remove(id);
+		}
+		return new_frame;
+	}
+
 	return (
 		<div>
 			<DynamicTitle title="Events"/>
@@ -249,26 +305,7 @@ export const EventsViewer : Component = () => {
 										labelFalse="No"
 										labelTrue="Yes"
 										value={popupID() > 0 ? eventMap.data.get(popupID())!.capture : false}
-										onChange={(value) => {
-											const eid : number = popupID();
-											if(eid > 0) {
-												const evtStore : EventMeta = eventMap.data.get(eid)!;
-												eventMapActions.modify(
-													eid,
-													new EventMeta(
-														evtStore.name,
-														evtStore.io.read,
-														evtStore.io.write,
-														evtStore.trigger,
-														evtStore.issys,
-														value, 
-														evtStore.clients,
-														evtStore.io.lread,
-														evtStore.io.lwrite
-													)
-												);
-											}
-									}}/>
+										onChange={(value) => modifyCapture(value)}/>
 								</div>
 								<div class="mt-5">
 									<Table>
@@ -320,7 +357,10 @@ export const EventsViewer : Component = () => {
 													class="hover:bg-yellow-100 cursor-pointer even:bg-gray-200"
 													onClick={() => setPopupID(evt[0])}
 												>
-													<TableCell class="py-1 px-1 w-3"><CaptureBadge capture={evt[1].capture}/></TableCell>
+													<TableCell class="py-1 px-1 w-3 gap-1 flex">
+														<MxCaptureBadge capture={evt[1].capture}/>
+														<MxTickBadge on={evt[1].capture && eventGotNewFrame(evt[0])}/>
+													</TableCell>
 													<TableCell class="py-1">{evt[1].name}</TableCell>
 													<TableCell class="py-1">{evt[0]}</TableCell>
 													<TableCell class="py-1 flex items-center">
@@ -363,16 +403,58 @@ export const EventsViewer : Component = () => {
 						</div>
 					</Card>
 					<Card title="Captures">
-						<Show when={true}>
-							<div class="w-full flex">
-								<div
-									class="items-center w-full border-4 border-dashed rounded-md h-20 m-2 place-content-center gap-2 text-gray-400"
-								>
-									<div class="text-center">No Captures Active.</div>
-									<div class="text-center">Capture an event to see its frame here.</div>
+						<div class="mt-5">
+							<Show when={captureSet.data.size === 0}>
+								<div class="w-full flex">
+									<div
+										class="items-center w-full border-4 border-dashed rounded-md h-20 m-2 place-content-center gap-2 text-gray-400"
+									>
+										<div class="text-center">No Captures Active.</div>
+										<div class="text-center">Capture an event to see its frame here.</div>
+									</div>
 								</div>
-							</div>
-						</Show>
+							</Show>
+							<Show when={captureSet.data.size !== 0}>
+								<MxTree>
+									<For each={Array.from(captureData.data.entries())}>{(evt) => {
+										const evtStore: EventMeta = eventMap.data.get(evt[0])!;
+										const capMeta: CaptureMeta = captureMeta.data.get(evt[0])!;
+
+										return (
+											<MxTreeNode
+												title={evtStore.name}
+												open={!captureCollapse.data.get(evt[0])!}
+												onClick={() => captureCollapseActions.modify(evt[0], !captureCollapse.data.get(evt[0])!)}
+											>
+												<div>
+													<div class="w-1/4">
+														<div class="grid grid-rows-3 grid-cols-2 gap-2">
+															<span class="font-bold">Size</span>
+															<span>{evt[1].length}</span>
+
+															<span class="font-bold">Auto-capture</span>
+															<MxDoubleSwitch
+																labelFalse="No"
+																labelTrue="Yes"
+																value={true}
+																disabled
+																// onChange={() => setSysEvents(!sysEvents())}
+															/>
+
+															<span class="font-bold">Total received</span>
+															<span>{bytes_to_string(capMeta.totalbytes)}</span>
+														</div>
+													</div>
+													<div class="w-full mt-5">
+														<MxHexTable data={evt[1]} bpr={32}/>
+													</div>
+												</div>
+											</MxTreeNode>
+										);
+									}}</For>
+								</MxTree>
+							</Show>
+						</div>
 					</Card>
 				</Show>
 			</div>

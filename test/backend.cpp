@@ -18,11 +18,14 @@ public:
 		deferExec([this](){
 			static MxEventBuilder data(1024);
 
-			data.reset().add(0xCAFE).add(0xCAFE).add(0xCAFE).add(0xCAFE);
+			static std::int16_t inc = 0;
+			static std::int16_t coffee = 0xCAFE;
+
+			data.reset().add(coffee).add(coffee).add(coffee).add(coffee + inc++);
 
 			dispatchEvent("TestBackend::dummy", data);
 			log.info("Test message triggering on events page...");
-		}, 0, 1000);
+		}, 0, 500);
 	}
 
 	void onRunStart(std::uint64_t runno)
