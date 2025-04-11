@@ -11,16 +11,12 @@ macro(install_mulex)
 
 	file(GLOB COMMON_HEADERS ${CMAKE_SOURCE_DIR}/*.h)
 	install(FILES ${COMMON_HEADERS} DESTINATION include)
-	# install(FILES mxbackend.h DESTINATION include)
-	# install(FILES mxdrv.h DESTINATION include)
-	# install(FILES mxevt.h DESTINATION include)
-	# install(FILES mxhttp.h DESTINATION include)
-	# install(FILES mxlogger.h DESTINATION include)
-	# install(FILES mxmsg.h DESTINATION include)
-	# install(FILES mxrdb.h DESTINATION include)
-	# install(FILES mxrun.h DESTINATION include)
-	# install(FILES mxsystem.h DESTINATION include)
-	# install(FILES mxtypes.h DESTINATION include)
+
+	# Install required runtime dlls on windows
+	if(WIN32)
+		install(TARGETS ZLIB::ZLIB DESTINATION bin)
+		install(TARGETS $<IF:$<TARGET_EXISTS:libuv::uv_a>,libuv::uv_a,libuv::uv> DESTINATION bin)
+	endif()
 endmacro()
 
 macro(install_target target header)
