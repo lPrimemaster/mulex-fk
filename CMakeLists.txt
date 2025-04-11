@@ -128,6 +128,9 @@ target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp mxbck)
 
 if(WIN32)
 	target_link_libraries(mxmain PRIVATE ${WINDOWS_GLIBS})
+
+	# Statically link against C runtime (assuming we use mingw)
+	target_link_options(mxmain PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 target_compile_definitions(mxmain PUBLIC L2FILE)

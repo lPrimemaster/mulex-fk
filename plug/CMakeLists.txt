@@ -10,6 +10,9 @@ target_link_libraries(mxplug PRIVATE mxrpc mxrdb mxdrv mxhttp mxbck)
 
 if(WIN32)
 	target_link_libraries(mxplug PRIVATE pdh)
+
+	# Statically link against C runtime (assuming we use mingw)
+	target_link_options(mxplug PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 # For the resources

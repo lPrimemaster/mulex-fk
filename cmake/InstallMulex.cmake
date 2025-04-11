@@ -13,9 +13,10 @@ macro(install_mulex)
 	install(FILES ${COMMON_HEADERS} DESTINATION include)
 
 	# Install required runtime dlls on windows
+	# vcpkg already puts the required dlls on the build tree
 	if(WIN32)
-		install(TARGETS ZLIB::ZLIB DESTINATION bin)
-		install(TARGETS $<IF:$<TARGET_EXISTS:libuv::uv_a>,libuv::uv_a,libuv::uv> DESTINATION bin)
+		file(GLOB RUNTIME_DEPS "${CMAKE_BINARY_DIR}/*.dll")
+		install(FILES ${RUNTIME_DEPS} DESTINATION bin)
 	endif()
 endmacro()
 
