@@ -4,11 +4,6 @@
 #include "PerMessageDeflate.h"
 #include "WebSocket.h"
 #include "rpc.h"
-#include <openssl/asn1.h>
-#include <openssl/cryptoerr_legacy.h>
-#include <openssl/evp.h>
-#include <openssl/rsa.h>
-#include <openssl/x509.h>
 #include <rpcspec.inl>
 
 #include <rapidjson/document.h>
@@ -22,11 +17,6 @@
 #include <filesystem>
 
 #include <mxres.h>
-
-#ifdef USE_OPENSSL
-#include <openssl/ssl.h>
-#include <openssl/evp.h>
-#endif
 
 static us_listen_socket_t* _http_listen_socket = nullptr;
 static std::thread* _http_thread;
@@ -44,12 +34,7 @@ struct HttpClientInfo
 	std::uint64_t _identifier;
 };
 
-#ifdef USE_OPENSSL
-using UWSType = uWS::WebSocket<true, true, mulex::WsRpcBridge>;
-// using UWSType = uWS::WebSocket<false, true, mulex::WsRpcBridge>;
-#else
 using UWSType = uWS::WebSocket<false, true, mulex::WsRpcBridge>;
-#endif
 
 static std::mutex _mutex;
 static std::set<UWSType*> _active_ws_connections;
@@ -550,107 +535,6 @@ namespace mulex
 		return true;
 	}
 
-	static bool HttpGenerateSelfSignedCertificateFiles()
-	{
-#ifdef USE_OPENSSL
-		OpenSSL_add_all_algorithms();
-		SSL_library_init();
-		EVP_PKEY* key = EVP_RSA_gen(2048);
-		
-		if(!key)
-		{
-			LogError("[mxhttp] Failed to generate RSA key pair.");
-			return false;
-		}
-
-		X509* cert = X509_new();
-
-		if(!cert)
-		{
-			LogError("[mxhttp] Failed to generate X509 certificate.");
-			EVP_PKEY_free(key);
-			return false;
-		}
-
-		if(!X509_set_version(cert, 2))
-		{
-			LogError("[mxhttp] Failed setting certificate version.");
-			EVP_PKEY_free(key);
-			X509_free(cert);
-			return false;
-		}
-
-		// Self sign it!
-		ASN1_INTEGER_set(X509_get_serialNumber(cert), 1);
-		X509_NAME* cname = X509_get_subject_name(cert);
-		X509_NAME_add_entry_by_txt(cname, "C", 0, reinterpret_cast<const unsigned char*>("."), -1, -1, 0);
-		X509_NAME_add_entry_by_txt(cname, "ST", 0, reinterpret_cast<const unsigned char*>("."), -1, -1, 0);
-		X509_NAME_add_entry_by_txt(cname, "L", 0, reinterpret_cast<const unsigned char*>("."), -1, -1, 0);
-		X509_NAME_add_entry_by_txt(cname, "O", 0, reinterpret_cast<const unsigned char*>("Mulex-fk"), -1, -1, 0);
-		X509_NAME_add_entry_by_txt(cname, "CN", 0, reinterpret_cast<const unsigned char*>("."), -1, -1, 0);
-		X509_set_subject_name(cert, cname);
-		X509_set_issuer_name(cert, cname);
-
-		if(!X509_set_pubkey(cert, key))
-		{
-			LogError("[mxhttp] Failed setting public key in certificate.");
-			EVP_PKEY_free(key);
-			X509_free(cert);
-			return false;
-		}
-
-		ASN1_TIME* nb = ASN1_TIME_new();
-		ASN1_TIME_set(nb, std::time(NULL));
-		X509_set_notBefore(cert, nb);
-		ASN1_TIME_free(nb);
-
-		ASN1_TIME* na = ASN1_TIME_new();
-		ASN1_TIME_set(na, std::time(NULL) + 365 * 24 * 60 * 60);
-		X509_set_notAfter(cert, na);
-		ASN1_TIME_free(na);
-
-		if(!X509_sign(cert, key, EVP_sha256()))
-		{
-			LogError("[mxhttp] Failed to sign the certificate.");
-			EVP_PKEY_free(key);
-			X509_free(cert);
-			return false;
-		}
-
-		std::string serveDir = SysGetExperimentHome();
-		FILE* key_file = std::fopen((serveDir + "/key.pem").c_str(), "wb");
-		if(!key_file)
-		{
-			LogError("[mxhttp] Failed to write <key.pem>.");
-			EVP_PKEY_free(key);
-			X509_free(cert);
-			return false;
-		}
-
-		PEM_write_PrivateKey(key_file, key, NULL, NULL, 0, NULL, NULL);
-		std::fclose(key_file);
-
-		FILE* cert_file = std::fopen((serveDir + "/cert.pem").c_str(), "wb");
-		if(!cert_file)
-		{
-			LogError("[mxhttp] Failed to write <cert.pem>.");
-			EVP_PKEY_free(key);
-			X509_free(cert);
-			return false;
-		}
-
-		PEM_write_X509(cert_file, cert);
-		std::fclose(cert_file);
-
-		EVP_PKEY_free(key);
-		X509_free(cert);
-
-		LogTrace("[mxhttp] HttpGenerateSelfSignedCertificateFiles() OK.");
-		return true;
-#endif
-		return false;
-	}
-
 	template<bool SSL>
 	static void HttpStartServerInternal(uWS::TemplatedApp<SSL>& app, std::uint16_t port, bool islocal)
 	{
@@ -833,7 +717,7 @@ namespace mulex
 		RdbDeleteValueDirect(("/system/http/plugins/" + plugin).c_str());
 	}
 
-	void HttpStartServer(std::uint16_t port, bool islocal, const std::string& ssl_path)
+	void HttpStartServer(std::uint16_t port, bool islocal)
 	{
 
 		if(!HttpCopyAppFiles())
@@ -851,37 +735,11 @@ namespace mulex
 			return;
 		}
 
-		_http_thread = new std::thread([port, islocal, ssl_path](){
+		_http_thread = new std::thread([port, islocal](){
 			_ws_loop_thread = uWS::Loop::get(); // Only read is ok
-#ifdef USE_OPENSSL
-			if(ssl_path.empty())
-			{
-				LogError("[mxhttp] OpenSSL was found and is being used, but certificate path not provided (see the '--ssl' flag).");
-
-				auto app = uWS::SSLApp();
-				LogWarning("[mxhttp] SSL/HTTPS: OFF.");
-				HttpStartServerInternal(app, port, islocal);
-			}
-			else
-			{
-				auto app = uWS::SSLApp({
-					.key_file_name = (ssl_path + "/key.pem").c_str(),
-					.cert_file_name = (ssl_path + "/cert.pem").c_str(),
-					.passphrase = nullptr
-				});
-				LogDebug("[mxhttp] SSL/HTTPS: ON.");
-				HttpStartServerInternal(app, port, islocal);
-			}
-#else
-			if(!ssl_path.empty())
-		 	{
-				LogWarning("[mxhttp] ssl path supplied but USE_OPENSSL was not specified on build.");
-			}
 
 			auto app = uWS::App();
-			LogWarning("[mxhttp] SSL/HTTPS: OFF.");
 			HttpStartServerInternal(app, port, islocal);
-#endif
 
 			LogDebug("[mxhttp] Server graceful shutdown.");
 		});

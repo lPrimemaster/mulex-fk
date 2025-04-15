@@ -287,12 +287,10 @@ namespace mulex
 
 		bool loopback = false;
 		std::uint16_t port = 8080;
-		std::string ssl_path = "";
 
 		SysAddArgument("name", 'n', true, [](const std::string& expname){ _sys_expname = expname; }, "Set the current experiment name.");
 		SysAddArgument("loopback", 'l', false, [&](const std::string&){ loopback = true; }, "Set the http server on loopback mode only.");
 		SysAddArgument("port", 'p', true, [&](const std::string& portstr){ port = ::atoi(portstr.c_str()); }, "Set the http server listen port.");
-		SysAddArgument("ssl", 0, true, [&](const std::string& certpath){ ssl_path = certpath; }, "Turn SSL/HTTPS mode on. Supplies the <pkey.pem> and <cert.pem> path.");
 
 		if(!SysParseArguments(argc, argv))
 		{
@@ -339,7 +337,7 @@ namespace mulex
 		// After evt thread init
 		MsgInit();
 
-		HttpStartServer(port, loopback, ssl_path);
+		HttpStartServer(port, loopback);
 
 		return true;
 	}
