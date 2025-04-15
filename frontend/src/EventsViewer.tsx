@@ -16,7 +16,6 @@ import { MxPopup } from './components/Popup';
 import { MxCaptureBadge, MxTickBadge } from './components/Badges';
 import { createSetStore } from './lib/rset';
 import { MxTree, MxTreeNode } from './components/TreeNode';
-import { MxGenericType } from './lib/convert';
 import { MxHexTable } from './components/HexTable';
 
 class EventIO {
@@ -64,9 +63,11 @@ class EventMeta {
 
 class CaptureMeta {
 	totalbytes: number;
+	autoCapture: boolean;
 
-	constructor(totalbytes: number) {
+	constructor(totalbytes: number, autoCapture: boolean = true) {
 		this.totalbytes = totalbytes;
+		this.autoCapture = autoCapture;
 	}
 };
 
@@ -210,9 +211,12 @@ export const EventsViewer : Component = () => {
 				captureDataActions.add(eid, new Uint8Array());
 				MxWebsocket.instance.subscribe(evtStore.name, (data: Uint8Array) => {
 					captureTickActions.add(eid);
-					captureDataActions.modify(eid, data);
 					const capMeta: CaptureMeta = captureMeta.data.get(eid)!;
-					captureMetaActions.modify(eid, new CaptureMeta(capMeta.totalbytes + data.length));
+
+					if(capMeta.autoCapture) {
+						captureDataActions.modify(eid, data);
+						captureMetaActions.modify(eid, new CaptureMeta(capMeta.totalbytes + data.length));
+					}
 				});
 			}
 			else {
@@ -350,7 +354,7 @@ export const EventsViewer : Component = () => {
 										</TableRow>
 									</TableHeader>
 									<TableBody>
-										{/* TODO: (Cesar) Prevent flicker by not re-rendering the TableRow element */}	
+										{/* TODO: (Cesar) Prevent flicker by not re-rendering the TableRow element */}
 										<For each={Array.from(eventMap.data.entries())}>{(evt) =>
 											<Show when={sysEvents() || (!sysEvents() && !evt[1].issys)}>
 												<TableRow
@@ -436,9 +440,12 @@ export const EventsViewer : Component = () => {
 															<MxDoubleSwitch
 																labelFalse="No"
 																labelTrue="Yes"
-																value={true}
-																disabled
-																// onChange={() => setSysEvents(!sysEvents())}
+																value={captureMeta.data.get(evt[0])!.autoCapture}
+																// disabled
+																onChange={(value: boolean) => {
+																	console.log(value);
+																	captureMetaActions.modify(evt[0], new CaptureMeta(capMeta.totalbytes, value));
+																}}
 															/>
 
 															<span class="font-bold">Total received</span>

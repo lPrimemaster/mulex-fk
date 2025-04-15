@@ -1,6 +1,7 @@
 import { Navigate, Route, A } from "@solidjs/router";
 import { Component } from "solid-js";
 import { Motion } from "solid-motionone";
+import { DynamicTitle } from "./DynamicTitle";
 
 const NavigateError : Component = () => {
 	return <Navigate href="/notfound404"/>;
@@ -9,6 +10,7 @@ const NavigateError : Component = () => {
 const NotFoundPage : Component = () => {
 	return (
 		<div class="relative w-full h-screen bg-white text-black overflow-hidden flex flex-col items-center justify-center">
+			<DynamicTitle title="404"/>
 			<Motion.div
 				animate={{ y: [0, -10, 0] }}
 				transition={{ duration: 5, repeat: Infinity, easing: "ease-in-out" }}
@@ -38,7 +40,7 @@ const NotFoundPage : Component = () => {
 			>
 				Return to base
 			</A>
-    </div>
+		</div>
 	);
 };
 
