@@ -33,6 +33,13 @@ const NotFoundPage : Component = () => {
 			>
 				Looks like that site does not exist on this planet.
 			</Motion.p>
+			<Motion.p
+				class="mt-2 text-sm z-10"
+				animate={{ opacity: [0, 1], y: [-10, 0] }}
+				transition={{ duration: 1.5 }}
+			>
+				Note: <code class="bg-gray-200">/dynamic</code> pages are note refreshable.
+			</Motion.p>
 
 			<A
 				href="/"

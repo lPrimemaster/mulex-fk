@@ -17,6 +17,11 @@ export const DynamicRouterProvider : Component<{ children: JSXElement }> = (prop
 	const [routes, setRoutes] = createSignal<Array<MxDynamicRoute>>(new Array<MxDynamicRoute>());
 
 	const addRoute = (path: string, component: Component) => {
+		if(routes().find(o => o.path === '/dynamic' + path) !== undefined) {
+			console.warn('Cannot add dynamic path. Already exists.');
+			return;
+		}
+
 		setRoutes((p) => [...p, { path: '/dynamic' + path, component: component }]);
 	};
 

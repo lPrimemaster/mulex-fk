@@ -1,4 +1,4 @@
-import { Component, createSignal, Show } from 'solid-js';
+import { Component, createEffect, createSignal, Show, useContext } from 'solid-js';
 import About from './About';
 import { A } from '@solidjs/router';
 import {
@@ -11,6 +11,8 @@ import {
 } from '~/components/ui/navigation-menu';
 
 import metadata from '../lib/metadata';
+import { DynamicRouterContext, MxDynamicRouterContext } from './DynamicRouter';
+import { DebugPanel } from '~/Debug';
 
 const [devTools, setDevTools] = createSignal(false);
 
@@ -19,6 +21,7 @@ const Sidebar: Component = () => {
 	const [showAbout, setShowAbout] = createSignal(false);
 	const [showDevPopup, setShowDevPopup] = createSignal(false);
 	const [devSteps, setDevSteps] = createSignal(9);
+	const { addRoute } = useContext(DynamicRouterContext) as MxDynamicRouterContext;
 
 	let timeout: NodeJS.Timeout;
 
@@ -27,6 +30,7 @@ const Sidebar: Component = () => {
 
 		if(devSteps() < 1) {
 			setDevTools(true);
+			addRoute('/debug', DebugPanel);
 			return;
 		}
 
@@ -75,7 +79,7 @@ const Sidebar: Component = () => {
 						<Show when={devTools()}>
 							<NavigationMenuItem>
 								<NavigationMenuTrigger>
-									<A href='/debug'>Debug</A>
+									<A href='/dynamic/debug'>Debug</A>
 								</NavigationMenuTrigger>
 							</NavigationMenuItem>
 						</Show>
