@@ -48,6 +48,7 @@ namespace mulex
 	struct WsRpcBridge
 	{
 		Experiment _local_experiment;
+		std::string _ip;
 	};
 
 	static bool HttpGenerateViteConfigFile()
@@ -551,15 +552,28 @@ namespace mulex
 			.closeOnBackpressureLimit = false,
 			.resetIdleTimeoutOnSend = false,
 			.sendPingsAutomatically = true,
-			.upgrade = nullptr,
-			
+			.upgrade = [](auto* res, auto* req, auto* ctx) {
+				WsRpcBridge b;
+				// This gets triggered if we going through a proxy
+				b._ip = std::string(req->getHeader("x-real-ip"));
+
+				res->template upgrade<WsRpcBridge>(
+					std::move(b),
+					req->getHeader("sec-websocket-key"),
+					req->getHeader("sec-websocket-protocol"),
+					req->getHeader("sec-websocket-extensions"),
+					ctx	
+				);
+			},
 			.open = [](auto* ws) {
 				{
 					std::lock_guard<std::mutex> lock(_mutex);
 					_active_ws_connections.insert(ws);
 				}
 
-				std::string ip = std::string(ws->getRemoteAddressAsText());
+				WsRpcBridge* bridge = ws->getUserData();
+
+				std::string ip = bridge->_ip.empty() ? std::string(ws->getRemoteAddressAsText()) : bridge->_ip;
 				std::int64_t ts = SysGetCurrentTime();
 				std::uint64_t id = HttpGetNextClientId();
 
@@ -572,7 +586,6 @@ namespace mulex
 
 				EvtEmit("mxhttp::newclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]), sizeof(HttpClientInfo));
 
-				WsRpcBridge* bridge = ws->getUserData();
 
 				// Ghost client with custom id
 				std::uint64_t custom_id = SysStringHash64(ip + std::to_string(ts) + std::to_string(id));
