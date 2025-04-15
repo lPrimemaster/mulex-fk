@@ -283,4 +283,6 @@ namespace mulex
 	void SysStartPerformanceMetricsThread();
 	void SysStopPerformanceMetricsThread();
 
+	void SysMarkUptimeNow();
+	MX_RPC_METHOD std::int64_t SysGetUptimeMark();
 } // namespace mulex

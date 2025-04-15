@@ -25,6 +25,7 @@
 #endif
 
 #include <tracy/Tracy.hpp>
+#include <mxconfig.h>
 
 static mulex::Experiment _sys_experiment;
 static bool _sys_experiment_connected = false;
@@ -41,6 +42,7 @@ static std::map<std::string, bool> _sys_argscmd_long_reqarg;
 static std::map<std::string, std::string> _sys_argscmd_helptxt;
 static bool _sys_isdaemon = false;
 static std::uint64_t _sys_cid = 0x00;
+static std::int64_t _sys_uptime_mark;
 
 static std::unique_ptr<std::thread> _sys_performance_metrics_thread;
 static std::atomic<bool> _sys_performance_metrics_running;
@@ -139,6 +141,11 @@ namespace mulex
 				::exit(0);
 			}
 		}, "Turn the current process into a daemon (linux only).");
+
+		SysAddArgumentI("version", 'v', false, [](const std::string&){
+			std::cout << "v" MX_VSTR " - " MX_VNAME << std::endl;
+			::exit(0);
+		}, "Gets the program's current version.");
 
 		// Ignore argv[0]
 		for(int i = 1; i < argc;)
@@ -266,6 +273,9 @@ namespace mulex
 
 	bool SysInitializeExperiment(int argc, char* argv[])
 	{
+		// Set the current time as the server starting time for the given experiment
+		SysMarkUptimeNow();
+
 		if(argc < 2)
 		{
 			// This is an experiment without a home location / name
@@ -1208,5 +1218,16 @@ namespace mulex
 		_sys_performance_metrics_running.store(false);
 		_sys_performance_metrics_thread->join();
 		_sys_performance_metrics_thread.reset();
+	}
+
+	void SysMarkUptimeNow()
+	{
+		_sys_uptime_mark = SysGetCurrentTime();
+		LogTrace("[sys] Setting uptime mark to unix timestamp: %ull.", _sys_uptime_mark);
+	}
+
+	std::int64_t SysGetUptimeMark()
+	{
+		return _sys_uptime_mark;
 	}
 } // namespace mulex

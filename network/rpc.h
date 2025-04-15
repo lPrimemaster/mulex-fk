@@ -394,6 +394,17 @@ namespace mulex
 		}
 	}
 
+	struct RpcCallerStatDescriptor
+	{
+		std::uint64_t client;
+		std::uint16_t procid;
+		std::uint16_t _padding[3];
+
+		bool operator<(const RpcCallerStatDescriptor& other) const;
+	};
+
+	void RpcAccumulateCallStatistics(std::uint64_t client, std::uint16_t procid);
+
 	MX_RPC_METHOD mulex::RPCGenericType RpcGetAllCalls();
 	MX_RPC_METHOD mulex::RPCGenericType RpcGetCallsDebugData();
 

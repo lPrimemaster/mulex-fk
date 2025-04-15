@@ -4,6 +4,7 @@ include(cmake/InternetConnection.cmake)
 include(cmake/BuildManifest.cmake)
 include(cmake/BuildFrontend.cmake)
 include(cmake/InstallMulex.cmake)
+include(cmake/GenerateConfigInfo.cmake)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -101,6 +102,9 @@ include_directories(${tracy_SOURCE_DIR}/public)
 add_executable(mxmain
 	main.cpp
 )
+
+# Generate the <mxconfig.h> file
+generate_config_info()
 
 # Set global windows libs
 if(WIN32)

@@ -18,6 +18,10 @@ target_compile_definitions(MxBackend PUBLIC MX_RPC_METHOD=)
 
 add_library(mxbck ALIAS MxBackend)
 
+target_include_directories(MxBackend PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
+
 include(../cmake/InstallMulex.cmake)
 set(LIB_DEPS
 "

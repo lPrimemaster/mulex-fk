@@ -18,6 +18,7 @@ endif()
 # For the resources
 target_include_directories(mxplug PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
 
 # Package libs

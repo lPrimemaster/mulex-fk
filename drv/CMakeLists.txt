@@ -15,6 +15,10 @@ endif()
 
 add_library(mxdrv ALIAS MxDrivers)
 
+target_include_directories(MxDrivers PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
+
 include(../cmake/InstallMulex.cmake)
 if(USB_SUPPORT)
 	set(LIB_DEPS

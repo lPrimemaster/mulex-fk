@@ -3,6 +3,7 @@
 // Brief  : RPC calls from and to a client via TCP/IP
 
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <algorithm>
 
@@ -19,6 +20,8 @@ static std::atomic<std::uint64_t> _client_msg_id = 0;
 // 				 RPC calls on a local context
 // static std::atomic<std::uint64_t> _client_current_caller = 0;
 static std::map<std::thread::id, std::uint64_t> _client_current_caller;
+
+static std::map<mulex::RpcCallerStatDescriptor, std::uint64_t> _rpc_statistics;
 
 namespace mulex
 {
@@ -204,6 +207,7 @@ namespace mulex
 			}
 
 			LogTrace("[rpcserver] Got RPC Call <%d> from <0x%llx>.", header.procedureid, header.client);
+			RpcAccumulateCallStatistics(header.client, header.procedureid);
 
 			// Set the current global client state
 			// This works if we have multiple threads serving RPC requests
@@ -274,6 +278,26 @@ namespace mulex
 		_rpc_thread_ready.store(false);
 	}
 
+	bool RpcCallerStatDescriptor::operator<(const RpcCallerStatDescriptor& other) const
+	{
+		return (client < other.client) || (client == other.client && procid < other.procid);
+	}
+
+	void RpcAccumulateCallStatistics(std::uint64_t client, std::uint16_t procid)
+	{
+		RpcCallerStatDescriptor descriptor{ client, procid };
+
+		auto it = _rpc_statistics.find(descriptor);
+
+		if(it == _rpc_statistics.end())
+		{
+			_rpc_statistics.emplace(descriptor, 1ULL);
+			return;
+		}
+
+		it->second++;
+	}
+
 	mulex::RPCGenericType RpcGetAllCalls()
 	{
 		static std::mutex _mtx;
@@ -291,9 +315,19 @@ namespace mulex
 		return method_signatures;
 	}
 
-	// TODO: (Cesar)
 	mulex::RPCGenericType RpcGetCallsDebugData()
 	{
-		return {};
+		std::vector<std::uint8_t> output;
+		constexpr std::uint64_t size = (2 * sizeof(std::uint64_t) + sizeof(std::uint16_t));
+		output.resize(_rpc_statistics.size() * size);
+		std::uint8_t* data = output.data();
+		for(const auto& desc : _rpc_statistics)
+		{
+			std::memcpy(data, &desc.first.client, sizeof(uint64_t));
+			std::memcpy(data + sizeof(uint64_t), &desc.first.procid, sizeof(uint16_t));
+			std::memcpy(data + sizeof(uint64_t) + sizeof(uint16_t), &desc.second, sizeof(uint64_t));
+			data += size;
+		}
+		return output;
 	}
 }

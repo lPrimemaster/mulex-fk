@@ -27,6 +27,7 @@ target_link_libraries(test_rpc mxrdb mxhttp mxrpc mxbck)
 
 target_include_directories(test_rpc PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
 add_test(test_rpc test_rpc)
 
@@ -110,6 +111,11 @@ if(WIN32)
 endif()
 
 target_link_libraries(test_ksmatch mxrdb mxhttp mxrpc mxbck)
+
+target_include_directories(test_ksmatch PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
 
 add_test(test_ksmatch test_ksmatch)
 
