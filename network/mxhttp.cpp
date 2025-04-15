@@ -2,7 +2,13 @@
 #include "../mxsystem.h"
 #include "../mxlogger.h"
 #include "PerMessageDeflate.h"
+#include "WebSocket.h"
 #include "rpc.h"
+#include <openssl/asn1.h>
+#include <openssl/cryptoerr_legacy.h>
+#include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/x509.h>
 #include <rpcspec.inl>
 
 #include <rapidjson/document.h>
@@ -16,6 +22,11 @@
 #include <filesystem>
 
 #include <mxres.h>
+
+#ifdef USE_OPENSSL
+#include <openssl/ssl.h>
+#include <openssl/evp.h>
+#endif
 
 static us_listen_socket_t* _http_listen_socket = nullptr;
 static std::thread* _http_thread;
@@ -33,7 +44,13 @@ struct HttpClientInfo
 	std::uint64_t _identifier;
 };
 
+#ifdef USE_OPENSSL
+using UWSType = uWS::WebSocket<true, true, mulex::WsRpcBridge>;
+// using UWSType = uWS::WebSocket<false, true, mulex::WsRpcBridge>;
+#else
 using UWSType = uWS::WebSocket<false, true, mulex::WsRpcBridge>;
+#endif
+
 static std::mutex _mutex;
 static std::set<UWSType*> _active_ws_connections;
 static std::unordered_map<UWSType*, HttpClientInfo> _active_clients_info;
@@ -523,7 +540,6 @@ namespace mulex
 		// Do this everytime the server starts
 		// in case some of the files were accidentaly modified by the user (e.g. during plugins creation/copy)
 		std::string serveDir = SysGetExperimentHome();
-		std::uint64_t ncopy = 0;
 
 		SysWriteBinFile(serveDir + "/index.html", ResGetResource("index.html"));
 
@@ -532,6 +548,277 @@ namespace mulex
 		SysWriteBinFile(serveDir + "/favicon.ico", ResGetResource("favicon.ico"));
 
 		return true;
+	}
+
+	static bool HttpGenerateSelfSignedCertificateFiles()
+	{
+#ifdef USE_OPENSSL
+		OpenSSL_add_all_algorithms();
+		SSL_library_init();
+		EVP_PKEY* key = EVP_RSA_gen(2048);
+		
+		if(!key)
+		{
+			LogError("[mxhttp] Failed to generate RSA key pair.");
+			return false;
+		}
+
+		X509* cert = X509_new();
+
+		if(!cert)
+		{
+			LogError("[mxhttp] Failed to generate X509 certificate.");
+			EVP_PKEY_free(key);
+			return false;
+		}
+
+		if(!X509_set_version(cert, 2))
+		{
+			LogError("[mxhttp] Failed setting certificate version.");
+			EVP_PKEY_free(key);
+			X509_free(cert);
+			return false;
+		}
+
+		// Self sign it!
+		ASN1_INTEGER_set(X509_get_serialNumber(cert), 1);
+		X509_NAME* cname = X509_get_subject_name(cert);
+		X509_NAME_add_entry_by_txt(cname, "C", 0, reinterpret_cast<const unsigned char*>("."), -1, -1, 0);
+		X509_NAME_add_entry_by_txt(cname, "ST", 0, reinterpret_cast<const unsigned char*>("."), -1, -1, 0);
+		X509_NAME_add_entry_by_txt(cname, "L", 0, reinterpret_cast<const unsigned char*>("."), -1, -1, 0);
+		X509_NAME_add_entry_by_txt(cname, "O", 0, reinterpret_cast<const unsigned char*>("Mulex-fk"), -1, -1, 0);
+		X509_NAME_add_entry_by_txt(cname, "CN", 0, reinterpret_cast<const unsigned char*>("."), -1, -1, 0);
+		X509_set_subject_name(cert, cname);
+		X509_set_issuer_name(cert, cname);
+
+		if(!X509_set_pubkey(cert, key))
+		{
+			LogError("[mxhttp] Failed setting public key in certificate.");
+			EVP_PKEY_free(key);
+			X509_free(cert);
+			return false;
+		}
+
+		ASN1_TIME* nb = ASN1_TIME_new();
+		ASN1_TIME_set(nb, std::time(NULL));
+		X509_set_notBefore(cert, nb);
+		ASN1_TIME_free(nb);
+
+		ASN1_TIME* na = ASN1_TIME_new();
+		ASN1_TIME_set(na, std::time(NULL) + 365 * 24 * 60 * 60);
+		X509_set_notAfter(cert, na);
+		ASN1_TIME_free(na);
+
+		if(!X509_sign(cert, key, EVP_sha256()))
+		{
+			LogError("[mxhttp] Failed to sign the certificate.");
+			EVP_PKEY_free(key);
+			X509_free(cert);
+			return false;
+		}
+
+		std::string serveDir = SysGetExperimentHome();
+		FILE* key_file = std::fopen((serveDir + "/key.pem").c_str(), "wb");
+		if(!key_file)
+		{
+			LogError("[mxhttp] Failed to write <key.pem>.");
+			EVP_PKEY_free(key);
+			X509_free(cert);
+			return false;
+		}
+
+		PEM_write_PrivateKey(key_file, key, NULL, NULL, 0, NULL, NULL);
+		std::fclose(key_file);
+
+		FILE* cert_file = std::fopen((serveDir + "/cert.pem").c_str(), "wb");
+		if(!cert_file)
+		{
+			LogError("[mxhttp] Failed to write <cert.pem>.");
+			EVP_PKEY_free(key);
+			X509_free(cert);
+			return false;
+		}
+
+		PEM_write_X509(cert_file, cert);
+		std::fclose(cert_file);
+
+		EVP_PKEY_free(key);
+		X509_free(cert);
+
+		LogTrace("[mxhttp] HttpGenerateSelfSignedCertificateFiles() OK.");
+		return true;
+#endif
+		return false;
+	}
+
+	template<bool SSL>
+	static void HttpStartServerInternal(uWS::TemplatedApp<SSL>& app, std::uint16_t port, bool islocal)
+	{
+		// using TAWSB = uWS::TemplatedApp<SSL>::template WebSocketBehavior<WsRpcBridge>;
+
+		app.get("/*", [](auto* res, auto* req) {
+			HttpServeFile(res, req);
+		}).template ws<WsRpcBridge>("/*", {
+			.compression = uWS::CompressOptions(uWS::DEDICATED_COMPRESSOR_4KB | uWS::DEDICATED_COMPRESSOR),
+			// .compression = uWS::DISABLED,
+			.maxPayloadLength = 1024 * 1024 * 1024,
+			.idleTimeout = 16,
+			.maxBackpressure = 1024 * 1024 * 1024,
+			.closeOnBackpressureLimit = false,
+			.resetIdleTimeoutOnSend = false,
+			.sendPingsAutomatically = true,
+			.upgrade = nullptr,
+			
+			.open = [](auto* ws) {
+				{
+					std::lock_guard<std::mutex> lock(_mutex);
+					_active_ws_connections.insert(ws);
+				}
+
+				std::string ip = std::string(ws->getRemoteAddressAsText());
+				std::int64_t ts = SysGetCurrentTime();
+				std::uint64_t id = HttpGetNextClientId();
+
+				std::unique_lock lock_aci(_aci_lock);
+				_active_clients_info[ws] = {
+					._ip = ip,
+					._timestamp = ts,
+					._identifier = id
+				};
+
+				EvtEmit("mxhttp::newclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]), sizeof(HttpClientInfo));
+
+				WsRpcBridge* bridge = ws->getUserData();
+
+				// Ghost client with custom id
+				std::uint64_t custom_id = SysStringHash64(ip + std::to_string(ts) + std::to_string(id));
+
+				// Initialize a local rpc client to push ws requests
+				// NOTE: (Cesar) We can hack into the server rpc/evt threads stack instead of sending a socket request
+				// 				 This will however be harder to do for events I think
+				// 				 I would say it is not worth the efort / problems if the local network call
+				// 				 does not pose any performance / latency problems in the future
+				bridge->_local_experiment._rpc_client = std::make_unique<RPCClientThread>("localhost", RPC_PORT, custom_id);
+
+				bridge->_local_experiment._evt_client = std::make_unique<EvtClientThread>(
+					"localhost",
+					&bridge->_local_experiment,
+					EVT_PORT,
+					true,
+					custom_id
+				);
+				LogDebug("[mxhttp] New WS connection. [%x]", ws);
+			},
+			.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
+
+				WsRpcBridge* bridge = ws->getUserData();
+
+				// Parse the received data
+				bool parse_error;
+				rapidjson::Document doc = HttpParseWSMessage(message, &parse_error);
+
+
+				std::uint16_t type = HttpTryGetEntry<std::uint16_t>(doc, "type", &parse_error);
+				if(parse_error)
+				{
+					return;
+				}
+				
+				if(type == 0) // RPC call
+				{
+					const auto [procedureid, args, messageidws, exresult] = HttpGetRPCMessage(doc, &parse_error);
+					if(parse_error)
+					{
+						// Parse error, ignore this message
+						return;
+					}
+
+					if(exresult)
+					{
+						std::vector<std::uint8_t> result;
+						// NOTE: (Cesar) If this gets expensive we move the call to another thread and defer send to ws
+						// 				 Backpressure should handle this automatically via the uWS buffer
+						bridge->_local_experiment._rpc_client->callRaw(procedureid, args, &result);
+						const std::string retmessage = HttpMakeWSRPCMessage(result, "OK", messageidws);
+						ws->send(retmessage);
+					}
+					else
+					{
+						bridge->_local_experiment._rpc_client->callRaw(procedureid, args, nullptr);
+						const std::string retmessage = HttpMakeWSRPCMessage(std::vector<std::uint8_t>(), "OK", messageidws);
+						ws->send(retmessage);
+					}
+				}
+				else if(type == 1) // Evt subscription/unsubscription
+				{
+					const auto [opcode, event] = HttpGetEVTMessage(doc, &parse_error);
+					if(parse_error)
+					{
+						// Parse error, ignore this message
+						return;
+					}
+
+					if(opcode == 0) // subscribe
+					{
+						HttpSubscribeEvent(ws, event);
+					}
+					else if(opcode == 1) // unsubscribe
+					{
+						HttpUnsubscribeEvent(ws, event);
+					}
+					else
+					{
+						LogError("[mxhttp] Urecognized event opcode <%d>.", opcode);
+					}
+				}
+				else
+				{
+					LogError("[mxhttp] Urecognized message type <%d>.", type);
+				}
+			},
+			.close = [](auto* ws, int code, std::string_view message) {
+				WsRpcBridge* bridge = ws->getUserData();
+
+				// BUG: (Cesar) This is failing sometimes - the evtserver handles disconnected clients
+				// 				But it would be nice to have some cleaning up when disconnect is clean
+				// Unsubscribe from all events on this client if any
+				// HttpUnsubscribeEventAll(ws);
+
+				std::unique_lock lock_aci(_aci_lock);
+				EvtEmit("mxhttp::delclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]._identifier), sizeof(std::uint64_t));
+
+
+				_active_clients_info.erase(ws);
+
+				// Delete the local rpc/ect client bridges for this connection
+				bridge->_local_experiment._rpc_client.reset();
+				bridge->_local_experiment._evt_client.reset();
+
+				{
+					std::lock_guard<std::mutex> lock(_mutex);
+					_active_ws_connections.erase(ws);
+				}
+
+				LogDebug("[mxhttp] Closed WS connection. [%x]", ws);
+			}
+		}).listen(islocal ? "127.0.0.1" : "0.0.0.0", port, [port, islocal](auto* token) {
+			if(token)
+			{
+				_http_listen_socket = token;
+				LogMessage("[mxhttp] Started listening on port %d.", port);
+
+				if(islocal)
+				{
+					LogMessage("[mxhttp] Loopback mode is active.");
+				}
+
+				LogDebug("[mxhttp] HttpStartServer() OK.");
+			}
+			else
+			{
+				LogError("[mxhttp] Failed to listen on port %d.", port);
+			}
+		}).run();
 	}
 
 	bool HttpRegisterUserPlugin(const std::string& plugin)
@@ -566,169 +853,31 @@ namespace mulex
 
 		_http_thread = new std::thread([port, islocal](){
 			_ws_loop_thread = uWS::Loop::get(); // Only read is ok
-			uWS::App().get("/*", [](auto* res, auto* req) {
-				HttpServeFile(res, req);
-			}).ws<WsRpcBridge>("/*", {
-				.compression = uWS::CompressOptions(uWS::DEDICATED_COMPRESSOR_4KB | uWS::DEDICATED_COMPRESSOR),
-				// .compression = uWS::DISABLED,
-				.maxPayloadLength = 1024 * 1024 * 1024,
-				.idleTimeout = 16,
-				.maxBackpressure = 1024 * 1024 * 1024,
-				.closeOnBackpressureLimit = false,
-				.resetIdleTimeoutOnSend = false,
-				.sendPingsAutomatically = true,
-				.upgrade = nullptr,
-				
-				.open = [](auto* ws) {
-					{
-						std::lock_guard<std::mutex> lock(_mutex);
-						_active_ws_connections.insert(ws);
-					}
+#ifdef USE_OPENSSL
+			if(!HttpGenerateSelfSignedCertificateFiles())
+			{
+				LogError("[mxhttp] OpenSSL was found and is being used, but certificate generation failed.");
 
-					std::string ip = std::string(ws->getRemoteAddressAsText());
-					std::int64_t ts = SysGetCurrentTime();
-					std::uint64_t id = HttpGetNextClientId();
-
-					std::unique_lock lock_aci(_aci_lock);
-					_active_clients_info[ws] = {
-						._ip = ip,
-						._timestamp = ts,
-						._identifier = id
-					};
-
-					EvtEmit("mxhttp::newclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]), sizeof(HttpClientInfo));
-
-					WsRpcBridge* bridge = ws->getUserData();
-
-					// Ghost client with custom id
-					std::uint64_t custom_id = SysStringHash64(ip + std::to_string(ts) + std::to_string(id));
-
-					// Initialize a local rpc client to push ws requests
-					// NOTE: (Cesar) We can hack into the server rpc/evt threads stack instead of sending a socket request
-					// 				 This will however be harder to do for events I think
-					// 				 I would say it is not worth the efort / problems if the local network call
-					// 				 does not pose any performance / latency problems in the future
-					bridge->_local_experiment._rpc_client = std::make_unique<RPCClientThread>("localhost", RPC_PORT, custom_id);
-
-					bridge->_local_experiment._evt_client = std::make_unique<EvtClientThread>(
-						"localhost",
-						&bridge->_local_experiment,
-						EVT_PORT,
-						true,
-						custom_id
-					);
-					LogDebug("[mxhttp] New WS connection. [%x]", ws);
-				},
-				.message = [](auto* ws, std::string_view message, uWS::OpCode opcode) {
-
-					WsRpcBridge* bridge = ws->getUserData();
-
-					// Parse the received data
-					bool parse_error;
-					rapidjson::Document doc = HttpParseWSMessage(message, &parse_error);
-
-
-					std::uint16_t type = HttpTryGetEntry<std::uint16_t>(doc, "type", &parse_error);
-					if(parse_error)
-					{
-						return;
-					}
-					
-					if(type == 0) // RPC call
-					{
-						const auto [procedureid, args, messageidws, exresult] = HttpGetRPCMessage(doc, &parse_error);
-						if(parse_error)
-						{
-							// Parse error, ignore this message
-							return;
-						}
-
-						if(exresult)
-						{
-							std::vector<std::uint8_t> result;
-							// NOTE: (Cesar) If this gets expensive we move the call to another thread and defer send to ws
-							// 				 Backpressure should handle this automatically via the uWS buffer
-							bridge->_local_experiment._rpc_client->callRaw(procedureid, args, &result);
-							const std::string retmessage = HttpMakeWSRPCMessage(result, "OK", messageidws);
-							ws->send(retmessage);
-						}
-						else
-						{
-							bridge->_local_experiment._rpc_client->callRaw(procedureid, args, nullptr);
-							const std::string retmessage = HttpMakeWSRPCMessage(std::vector<std::uint8_t>(), "OK", messageidws);
-							ws->send(retmessage);
-						}
-					}
-					else if(type == 1) // Evt subscription/unsubscription
-					{
-						const auto [opcode, event] = HttpGetEVTMessage(doc, &parse_error);
-						if(parse_error)
-						{
-							// Parse error, ignore this message
-							return;
-						}
-
-						if(opcode == 0) // subscribe
-						{
-							HttpSubscribeEvent(ws, event);
-						}
-						else if(opcode == 1) // unsubscribe
-						{
-							HttpUnsubscribeEvent(ws, event);
-						}
-						else
-						{
-							LogError("[mxhttp] Urecognized event opcode <%d>.", opcode);
-						}
-					}
-					else
-					{
-						LogError("[mxhttp] Urecognized message type <%d>.", type);
-					}
-				},
-				.close = [](auto* ws, int code, std::string_view message) {
-					WsRpcBridge* bridge = ws->getUserData();
-
-					// BUG: (Cesar) This is failing sometimes - the evtserver handles disconnected clients
-					// 				But it would be nice to have some cleaning up when disconnect is clean
-					// Unsubscribe from all events on this client if any
-					// HttpUnsubscribeEventAll(ws);
-
-					std::unique_lock lock_aci(_aci_lock);
-					EvtEmit("mxhttp::delclient", reinterpret_cast<std::uint8_t*>(&_active_clients_info[ws]._identifier), sizeof(std::uint64_t));
-
-
-					_active_clients_info.erase(ws);
-
-					// Delete the local rpc/ect client bridges for this connection
-					bridge->_local_experiment._rpc_client.reset();
-					bridge->_local_experiment._evt_client.reset();
-
-					{
-						std::lock_guard<std::mutex> lock(_mutex);
-						_active_ws_connections.erase(ws);
-					}
-
-					LogDebug("[mxhttp] Closed WS connection. [%x]", ws);
-				}
-			}).listen(islocal ? "127.0.0.1" : "0.0.0.0", port, [port, islocal](auto* token) {
-				if(token)
-				{
-					_http_listen_socket = token;
-					LogMessage("[mxhttp] Started listening on port %d.", port);
-
-					if(islocal)
-					{
-						LogMessage("[mxhttp] Loopback mode is active.");
-					}
-
-					LogDebug("[mxhttp] HttpStartServer() OK.");
-				}
-				else
-				{
-					LogError("[mxhttp] Failed to listen on port %d.", port);
-				}
-			}).run();
+				auto app = uWS::SSLApp();
+				LogWarning("[mxhttp] SSL/HTTPS: OFF.");
+				HttpStartServerInternal(app, port, islocal);
+			}
+			else
+			{
+				std::string serveDir = SysGetExperimentHome();
+				auto app = uWS::SSLApp({
+					.key_file_name = (serveDir + "/key.pem").c_str(),
+					.cert_file_name = (serveDir + "/cert.pem").c_str(),
+					.passphrase = nullptr
+				});
+				LogDebug("[mxhttp] SSL/HTTPS: ON.");
+				HttpStartServerInternal(app, port, islocal);
+			}
+#else
+			auto app = uWS::App();
+			LogWarning("[mxhttp] SSL/HTTPS: OFF.");
+			HttpStartServerInternal(app, port, islocal);
+#endif
 
 			LogDebug("[mxhttp] Server graceful shutdown.");
 		});

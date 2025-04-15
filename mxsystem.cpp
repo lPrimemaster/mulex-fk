@@ -661,7 +661,7 @@ namespace mulex
 		_notifier.notify_all();
 	}
 
-	const bool SysByteStream::unblockRequested() const
+	bool SysByteStream::unblockRequested() const
 	{
 		return _unblock_sig.load();
 	}
@@ -1115,7 +1115,7 @@ namespace mulex
 				return SysMatchPattern(pattern.substr(next_ks + 1), target.substr(next_target_pos + midfix.size()));
 			}
 			std::int64_t match_sz = target.size() - suffix.size();
-			return match_sz >= 0 ? (target.find(suffix) == match_sz) : false;
+			return match_sz >= 0 ? (target.find(suffix) == static_cast<std::uint64_t>(match_sz)) : false;
 		}
 
 		// ks is not in a valid position

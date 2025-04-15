@@ -151,7 +151,7 @@ namespace mulex
 		bool push(std::uint8_t* data, std::uint64_t size);
 		std::uint64_t fetch(std::uint8_t* buffer, std::uint64_t size);
 		void requestUnblock();
-		const bool unblockRequested() const;
+		bool unblockRequested() const;
 
 	private:
 		std::vector<std::uint8_t> _buffer;

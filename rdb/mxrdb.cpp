@@ -1120,7 +1120,7 @@ namespace mulex
 		{
 			return;
 		}
-		mulex::string32 event_name = exp.value()->_rpc_client->call<mulex::string32>(RPC_CALL_MULEX_RDBUNWATCH, RdbKeyName(_key));
+		exp.value()->_rpc_client->call<mulex::string32>(RPC_CALL_MULEX_RDBUNWATCH, RdbKeyName(_key));
 	}
 
 	bool RdbProxyValue::history(bool status)

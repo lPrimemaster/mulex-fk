@@ -371,7 +371,7 @@ namespace mulex
 		// ([&]() { query += names; query += ","; }, ...);
 		query.pop_back();
 		query += ") VALUES (";
-		for(const auto& name : names)
+		for([[maybe_unused]] const auto& name : names)
 		{
 			query += "?,";
 		}

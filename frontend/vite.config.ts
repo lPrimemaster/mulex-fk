@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import path from "path";
 import fs from 'fs';
+import { VitePWA } from 'vite-plugin-pwa';
 // import devtools from 'solid-devtools/vite';
 
 const manifest = JSON.parse(fs.readFileSync('./../build/manifest.json', 'utf-8'));
@@ -14,6 +15,17 @@ export default defineConfig({
     */
     // devtools(),
     solidPlugin(),
+	VitePWA({
+		registerType: 'autoUpdate',
+		manifest: {
+			name: 'Mulex App',
+			short_name: 'Mulex App',
+			start_url: '/?standalone=1',
+			display: 'standalone',
+			background_color: '#ffffff',
+			theme_color: '#000000'
+		}
+	})
   ],
   server: {
     port: 3000,

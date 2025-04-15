@@ -180,7 +180,6 @@ namespace mulex
 	std::uint16_t EvtClientThread::findEvent(const std::string& event)
 	{
 		auto evt = _evt_registry.find(event);
-		std::uint16_t eventid = 0;
 		if(evt == _evt_registry.end())
 		{
 			LogDebug("[evtclient] Could not find event <%s> in local registry.", event.c_str());
@@ -405,7 +404,7 @@ namespace mulex
 
 	void EvtClientThread::unsubscribeAll()
 	{
-		for(const auto event : _evt_subscriptions)
+		for(const auto& event : _evt_subscriptions)
 		{
 			unsubscribe(event);
 		}
@@ -1089,7 +1088,7 @@ namespace mulex
 		std::vector<std::uint8_t> result;
 		result.resize(EvtCalculateStatisticsBufferSize());
 		std::uint8_t* data = result.data();
-		for(std::int16_t i = 1; i <= _evt_event_stats_buffer._len; i++)
+		for(std::int16_t i = 1; i <= static_cast<std::int16_t>(_evt_event_stats_buffer._len); i++)
 		{
 			data = EvtPopulateMetadataBuffer(i, data);
 		}

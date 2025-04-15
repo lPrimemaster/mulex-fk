@@ -398,7 +398,7 @@ namespace mulex
 	{
 		std::uint64_t client;
 		std::uint16_t procid;
-		std::uint16_t _padding[3];
+		// std::uint16_t _padding[3];
 
 		bool operator<(const RpcCallerStatDescriptor& other) const;
 	};

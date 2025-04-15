@@ -18,6 +18,12 @@ if(mxrpcret EQUAL "1")
 	message(FATAL_ERROR "mxrpcgen failed")
 endif()
 
+# find_package(OpenSSL)
+
+if(NOT OPENSSL_FOUND)
+	message(STATUS "OpenSSL not found. HTTPS will not be available.")
+endif()
+
 # Don't use uSockets built-in makefile (does not work on windows - unless we are on MSYS2)
 FetchContent_Declare(uWebSockets_cont
 	GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
@@ -27,7 +33,10 @@ FetchContent_Declare(uWebSockets_cont
 )
 FetchContent_MakeAvailable(uWebSockets_cont)
 message(STATUS ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets)
-file(GLOB_RECURSE uWS_SOURCES ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src/*.c)
+file(GLOB_RECURSE uWS_SOURCES
+	${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src/*.c
+	${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src/*.cpp
+)
 add_library(uSockets ${uWS_SOURCES})
 install_target(uSockets NONE)
 
@@ -37,7 +46,12 @@ if(WIN32)
 endif()
 
 target_include_directories(uSockets PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src)
-target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
+target_compile_options(uSockets PUBLIC -w) # We don't control uSockets' SSL usage...
+if(OPENSSL_FOUND)
+	target_compile_definitions(uSockets PRIVATE LIBUS_USE_OPENSSL)
+else()
+	target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
+endif()
 
 FetchContent_Declare(aklomp_base64
 	GIT_REPOSITORY https://github.com/aklomp/base64.git
@@ -93,6 +107,11 @@ if(WIN32)
 	target_link_libraries(MxHttp PRIVATE uSockets ZLIB::ZLIB base64 mxrun)
 else()
 	target_link_libraries(MxHttp PRIVATE uv uSockets ZLIB::ZLIB base64 mxrun)
+endif()
+
+if(OPENSSL_FOUND)
+	target_compile_definitions(MxHttp PRIVATE USE_OPENSSL)
+	target_link_libraries(MxHttp PRIVATE OpenSSL::SSL)
 endif()
 
 target_include_directories(MxHttp PRIVATE

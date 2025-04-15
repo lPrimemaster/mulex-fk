@@ -25,6 +25,7 @@ const About: Component<{show: boolean, setShow: SetShowF, children? : JSX.Elemen
 					<li>uSockets - [Apache License v2.0]</li>
 					<li>uWebSockets - [Apache License v2.0]</li>
 					<li>base64 - Copyright (c) Nick Galbreath, Wojciech Muła, Matthieu Darbois & Alfred Klomp [BSD License]</li>
+					<li>OpenSSL - [Apache License v2.0]</li>
 				</AlertDialogDescription>
 			</AlertDialogContent>
 		</AlertDialog>

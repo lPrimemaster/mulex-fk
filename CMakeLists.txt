@@ -94,6 +94,16 @@ set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
 add_definitions(-D${RPC_CALL_KEYWORD}=)
 set(RPC_SPEC_FILE rpcspec.inl)
 
+# Set global warnings all
+add_compile_options(
+	-Wall										# All warnings!
+	-Wextra										# More warnings!
+	-Wno-unused-parameter						# Unused parameters are common on some scenarios (implicit constructor deductions etc)
+												# So I don't need to be using [[maybe_unused]] every single time I do that (but really should)
+	-Wno-implicit-fallthrough					# I like implicit fallthroughs
+	$<$<COMPILE_LANGUAGE:CXX>:-Wno-reorder>     # Usually I don't use this and when I do, stuff don't depend on one another (this could mean bugs tho...)
+	-Wno-unused-function 						# RPC Generation might be usefull on some compilation units in the future
+)
 
 # Make sure tracy profiler is installed/linked system wide
 link_libraries(TracyClient)
