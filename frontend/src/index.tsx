@@ -12,6 +12,7 @@ import { HistoryViewer } from './HistoryViewer';
 import { EventsViewer } from './EventsViewer';
 import { DynamicRouter, DynamicRouterProvider } from './components/DynamicRouter';
 import { MetaProvider, Link } from '@solidjs/meta';
+import { RouterCatcher } from './components/RouterCatcher';
 
 const root = document.getElementById('root');
 
@@ -33,6 +34,7 @@ render(() => (
 						<Route path='/history' component={HistoryViewer}/>
 						<Route path='/events' component={EventsViewer}/>
 						<DynamicRouter/>
+						<RouterCatcher/>
 					</Router>
 					<Toaster/>
 				</LogProvider>
