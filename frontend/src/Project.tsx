@@ -1,4 +1,4 @@
-import { Component, For, Show, useContext } from 'solid-js';
+import { Component, createSignal, For, Show, useContext } from 'solid-js';
 import Sidebar from './components/Sidebar';
 import { MxPlugin, mxRegisterPluginFromFile, mxDeletePlugin, plugins } from './lib/plugin';
 import { MxRdb } from './lib/rdb';
@@ -9,10 +9,12 @@ import { MxDynamicRouterContext, DynamicRouterContext } from './components/Dynam
 import { createMapStore } from './lib/rmap';
 import { A } from '@solidjs/router';
 import { DynamicTitle } from './components/DynamicTitle';
+import { MxSpinner } from './api';
 
 export const Project : Component = () => {
 	const { addRoute, removeRoute } = useContext(DynamicRouterContext) as MxDynamicRouterContext;
 	const [ dynamicRoutes, dynamicRoutesActions ] = createMapStore<string, string>(new Map<string, string>());
+	const [ loadingPlugins, setLoadingPlugins ] = createSignal<boolean>(false);
 
 	function generatePluginPage(plugin: MxPlugin) {
 		const RenderPlug : Component = () => {
@@ -68,11 +70,13 @@ export const Project : Component = () => {
 		}
 	});
 
-	MxWebsocket.instance.rpc_call('mulex::RdbListSubkeys', [MxGenericType.str512('/system/http/plugins/')], 'generic').then((res) => {
+	setLoadingPlugins(true);
+	MxWebsocket.instance.rpc_call('mulex::RdbListSubkeys', [MxGenericType.str512('/system/http/plugins/')], 'generic').then(async (res) => {
 		const keys = res.astype('stringarray');
 		for(const key of keys) {
-			registerPluginFromFile(key);
+			await registerPluginFromFile(key);
 		}
+		setLoadingPlugins(false);
 	});
 
 	return (
@@ -86,9 +90,14 @@ export const Project : Component = () => {
 							<div
 								class="items-center w-full border-4 border-dashed rounded-md h-20 m-2 place-content-center gap-2 text-gray-400 bg-white"
 							>
-								<div class="text-center">No Plugins Found.</div>
-								<div class="text-center">Place your plugins under <code>&lt;expCacheDir&gt;/plugins/&lt;myPlugin&gt;.js</code></div>
-								<div class="text-center">Or use `mxplug` to compile.</div>
+								<Show when={loadingPlugins()}>
+									<MxSpinner description="Loading plugins. Please wait..."/>
+								</Show>
+								<Show when={!loadingPlugins()}>
+									<div class="text-center">No Plugins Found.</div>
+									<div class="text-center">Place your plugins under <code>&lt;expCacheDir&gt;/plugins/&lt;myPlugin&gt;.js</code></div>
+									<div class="text-center">Or use `mxplug` to compile.</div>
+								</Show>
 							</div>
 						</div>
 					</Show>
