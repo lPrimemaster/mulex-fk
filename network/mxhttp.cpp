@@ -206,7 +206,7 @@ namespace mulex
 		std::string_view contentType = HttpGetMimeType(respath);
 
 		res->writeHeader("Content-Type", contentType)
-		   ->writeHeader("Content-Length", std::to_string(data.size()))
+		   // ->writeHeader("Content-Length", std::to_string(data.size()))
 		   ->end(data);
 
 		return true;
@@ -833,7 +833,7 @@ namespace mulex
 		RdbDeleteValueDirect(("/system/http/plugins/" + plugin).c_str());
 	}
 
-	void HttpStartServer(std::uint16_t port, bool islocal)
+	void HttpStartServer(std::uint16_t port, bool islocal, const std::string& ssl_path)
 	{
 
 		if(!HttpCopyAppFiles())
@@ -851,12 +851,12 @@ namespace mulex
 			return;
 		}
 
-		_http_thread = new std::thread([port, islocal](){
+		_http_thread = new std::thread([port, islocal, ssl_path](){
 			_ws_loop_thread = uWS::Loop::get(); // Only read is ok
 #ifdef USE_OPENSSL
-			if(!HttpGenerateSelfSignedCertificateFiles())
+			if(ssl_path.empty())
 			{
-				LogError("[mxhttp] OpenSSL was found and is being used, but certificate generation failed.");
+				LogError("[mxhttp] OpenSSL was found and is being used, but certificate path not provided (see the '--ssl' flag).");
 
 				auto app = uWS::SSLApp();
 				LogWarning("[mxhttp] SSL/HTTPS: OFF.");
@@ -864,16 +864,20 @@ namespace mulex
 			}
 			else
 			{
-				std::string serveDir = SysGetExperimentHome();
 				auto app = uWS::SSLApp({
-					.key_file_name = (serveDir + "/key.pem").c_str(),
-					.cert_file_name = (serveDir + "/cert.pem").c_str(),
+					.key_file_name = (ssl_path + "/key.pem").c_str(),
+					.cert_file_name = (ssl_path + "/cert.pem").c_str(),
 					.passphrase = nullptr
 				});
 				LogDebug("[mxhttp] SSL/HTTPS: ON.");
 				HttpStartServerInternal(app, port, islocal);
 			}
 #else
+			if(!ssl_path.empty())
+		 	{
+				LogWarning("[mxhttp] ssl path supplied but USE_OPENSSL was not specified on build.");
+			}
+
 			auto app = uWS::App();
 			LogWarning("[mxhttp] SSL/HTTPS: OFF.");
 			HttpStartServerInternal(app, port, islocal);

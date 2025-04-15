@@ -18,11 +18,13 @@ if(mxrpcret EQUAL "1")
 	message(FATAL_ERROR "mxrpcgen failed")
 endif()
 
+# OPENSSL Is disabled for now!
+# SSLing via proxy is much easier for the end user!
 # find_package(OpenSSL)
 
-if(NOT OPENSSL_FOUND)
-	message(STATUS "OpenSSL not found. HTTPS will not be available.")
-endif()
+# if(NOT OPENSSL_FOUND)
+# 	message(STATUS "OpenSSL not found. HTTPS will not be available.")
+# endif()
 
 # Don't use uSockets built-in makefile (does not work on windows - unless we are on MSYS2)
 FetchContent_Declare(uWebSockets_cont
@@ -46,12 +48,13 @@ if(WIN32)
 endif()
 
 target_include_directories(uSockets PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/uWebSockets/uSockets/src)
-target_compile_options(uSockets PUBLIC -w) # We don't control uSockets' SSL usage...
-if(OPENSSL_FOUND)
-	target_compile_definitions(uSockets PRIVATE LIBUS_USE_OPENSSL)
-else()
-	target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
-endif()
+target_compile_options(uSockets PUBLIC -w) # We don't control uSockets
+# if(OPENSSL_FOUND)
+# 	target_compile_definitions(uSockets PRIVATE LIBUS_USE_OPENSSL)
+# else()
+# 	target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
+# endif()
+target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
 
 FetchContent_Declare(aklomp_base64
 	GIT_REPOSITORY https://github.com/aklomp/base64.git
@@ -109,10 +112,10 @@ else()
 	target_link_libraries(MxHttp PRIVATE uv uSockets ZLIB::ZLIB base64 mxrun)
 endif()
 
-if(OPENSSL_FOUND)
-	target_compile_definitions(MxHttp PRIVATE USE_OPENSSL)
-	target_link_libraries(MxHttp PRIVATE OpenSSL::SSL)
-endif()
+# if(OPENSSL_FOUND)
+# 	target_compile_definitions(MxHttp PRIVATE USE_OPENSSL)
+# 	target_link_libraries(MxHttp PRIVATE OpenSSL::SSL)
+# endif()
 
 target_include_directories(MxHttp PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
