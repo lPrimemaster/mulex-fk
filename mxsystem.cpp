@@ -1166,9 +1166,33 @@ namespace mulex
 	static std::pair<std::uint64_t, std::uint64_t> SysGetRAMUsage()
 	{
 #ifdef __linux__
-		struct sysinfo info;
-		sysinfo(&info);
-		return { info.totalram * info.mem_unit, (info.totalram - info.freeram) * info.mem_unit };
+		std::ifstream stat("/proc/meminfo");
+		std::string line;
+		std::uint64_t total_ram;
+		std::uint64_t free_ram;
+		std::uint8_t done = 0;
+
+		while(std::getline(stat, line) && !(done & 2))
+		{
+			std::istringstream iss(line);
+			std::string token;
+			iss >> token;
+
+			if(token == "MemAvailable:")
+			{
+				iss >> free_ram; done++;
+			}
+			else if(token == "MemTotal:")
+			{
+				iss >> total_ram; done++;
+			}
+		}
+
+		return { total_ram * 1024, (total_ram - free_ram) * 1024 };
+
+		// struct sysinfo info;
+		// sysinfo(&info);
+		// return { info.totalram * info.mem_unit, (info.totalram - info.freeram - info.bufferram) * info.mem_unit };
 #else
 		MEMORYSTATUSEX statex;
 		statex.dwLength = sizeof(statex);
