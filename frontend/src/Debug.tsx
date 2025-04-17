@@ -134,6 +134,14 @@ export const DebugPanel : Component = () => {
 									<TableCell class="px-5 py-0">Uptime</TableCell>
 									<TableCell class="px-5 py-0">{timestamp_tohms(time() - umark())}</TableCell>
 								</TableRow>
+								<TableRow class="even:bg-gray-200">
+									<TableCell class="px-5 py-0">Version</TableCell>
+									<TableCell class="px-5 py-0">{__APP_VERSION__} ({__APP_VNAME__})</TableCell>
+								</TableRow>
+								<TableRow class="even:bg-gray-200">
+									<TableCell class="px-5 py-0">Build Stamp</TableCell>
+									<TableCell class="px-5 py-0">{__APP_GHASH__}-{__APP_GBRANCH__}</TableCell>
+								</TableRow>
 							</TableBody>
 						</Table>
 					</Card></div>

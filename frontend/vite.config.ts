@@ -47,6 +47,8 @@ export default defineConfig({
   },
   define: {
 	  __APP_VERSION__: JSON.stringify(manifest.version),
-	  __APP_VNAME__: JSON.stringify(manifest.vname)
+	  __APP_VNAME__: JSON.stringify(manifest.vname),
+	  __APP_GHASH__: JSON.stringify(manifest.hash),
+	  __APP_GBRANCH__: JSON.stringify(manifest.branch)
   }
 });

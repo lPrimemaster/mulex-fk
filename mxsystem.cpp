@@ -143,7 +143,7 @@ namespace mulex
 		}, "Turn the current process into a daemon (linux only).");
 
 		SysAddArgumentI("version", 'v', false, [](const std::string&){
-			std::cout << "v" MX_VSTR " - " MX_VNAME << std::endl;
+			std::cout << "v" MX_VSTR " - " MX_VNAME << " (" << MX_HASH "-" << MX_BRANCH << ")" << std::endl;
 			::exit(0);
 		}, "Gets the program's current version.");
 
