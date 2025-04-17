@@ -12,7 +12,8 @@ macro(build_manifest_json)
 	# The manifest only makes sense if cmake configure step is ran
 	# Since the build command does not regenerate the mxres.h file
 	execute_process(
-		COMMAND git rev-parse --short HEAD
+		# COMMAND git rev-parse --short HEAD
+		COMMAND git describe --match=kusefh8 --always --abbrev=7 --dirty
 		OUTPUT_VARIABLE GIT_HEAD_HASH
 		OUTPUT_STRIP_TRAILING_WHITESPACE
 	)

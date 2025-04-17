@@ -2,9 +2,11 @@
 
 file(WRITE ${CONFIG_HEADER_FILE} "// mxconfig.h Generated file\n")
 
-# Get git short hash
+# Get git short hash (assume first 7 chars are always unique)
+# somewhat the same as --short
 execute_process(
-	COMMAND git rev-parse --short HEAD
+	# COMMAND git rev-parse --short HEAD
+	COMMAND git describe --match=kusefh8 --always --abbrev=7 --dirty
 	OUTPUT_VARIABLE GIT_HEAD_HASH
 	OUTPUT_STRIP_TRAILING_WHITESPACE
 )
