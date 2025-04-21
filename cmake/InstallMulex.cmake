@@ -14,10 +14,11 @@ macro(install_mulex)
 
 	# Install required runtime dlls on windows
 	# vcpkg already puts the required dlls on the build tree
-	# However, we do need to call this step as a script so that
-	# we get the dependencies generated on the build step
 	if(WIN32)
-		install(SCRIPT "${CMAKE_SOURCE_DIR}/cmake/InstallDependencies.cmake")
+		message(STATUS "Copying required dlls...")
+		# file(GLOB RUNTIME_DEPS "${CMAKE_BINARY_DIR}/*.dll")
+		# install(FILES ${RUNTIME_DEPS} DESTINATION bin)
+		install(FILES $<TARGET_RUNTIME_DLLS:mxmain> DESTINATION bin)
 	endif()
 endmacro()
 
