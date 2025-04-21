@@ -28,13 +28,14 @@ export const DebugPanel : Component = () => {
 
 	let methodNames: Array<string>;
 
-	onMount(async () => {
-		const res = await MxWebsocket.instance.rpc_call('mulex::RpcGetAllCalls', [], 'generic');
-		const methods = array_chunkify<string>(res.astype('stringarray'), 2);
-		methodNames = methods.map(x => x[0]);
+	onMount(() => {
+		MxWebsocket.instance.rpc_call('mulex::RpcGetAllCalls', [], 'generic').then((res: MxGenericType) => {
+			const methods = array_chunkify<string>(res.astype('stringarray'), 2);
+			methodNames = methods.map(x => x[0]);
 
-		getUptimeMark();
-		getRpcCallsDebugInfo();
+			getUptimeMark();
+			getRpcCallsDebugInfo();
+		});
 
 		const iid = setInterval(() => getRpcCallsDebugInfo(), POLL_F);
 		const i2id = setInterval(() => setTime(Date.now() as number), 1000);
