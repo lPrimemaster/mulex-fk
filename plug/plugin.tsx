@@ -8,6 +8,20 @@ const MyPlugin : Component = () => {
 	);
 };
 
-export const pname = 'MyPlugin'; // Name seen by the mx server instance
+// MANDATORY: Name seen by the mx server instance
+export const pname = 'MyPlugin';
+
+// MANDATORY: The render component
 export const render = MyPlugin;
-// export const icon = () => <svg></svg>; // Custom icon to display at the plugins project page
+
+//  OPTIONAL: The current plugin version
+export const version = '1.0.0';
+
+//  OPTIONAL: Description text to display at the plugins project page
+export const description = 'The mxfk default sample plugin. Displays basic functionality from the mxfk typescript API.';
+
+//  OPTIONAL: Author name to display at the plugins project page
+export const author = 'César Godinho';
+
+//  OPTIONAL: Custom icon to display at the plugins project page
+// export const icon = () => <svg></svg>;
