@@ -3,9 +3,11 @@ include(../cmake/InstallMulex.cmake)
 
 configure_file(mxrpcgen.py ../mxrpcgen.py)
 
+find_package(Python COMPONENTS Interpreter REQUIRED)
+
 # Generate RPC calls at configure time
 execute_process(
-	COMMAND python3 mxrpcgen.py 
+	COMMAND ${python_EXECUTABLE} mxrpcgen.py 
 		--dirs ${CMAKE_SOURCE_DIR}
 		--ignore ${CMAKE_BINARY_DIR} test .cache .git build build_win # Specify build and build_win commonly used to dev
 		--recursive
