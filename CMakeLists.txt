@@ -114,18 +114,18 @@ add_executable(mxmain
 
 # Generate the <mxconfig.h> file
 set(CONFIG_HEADER_FILE "${CMAKE_BINARY_DIR}/mxconfig.h")
-add_custom_command(
-	OUTPUT ${CONFIG_HEADER_FILE}
+set_property(SOURCE ${CONFIG_HEADER_FILE} PROPERTY GENERATED TRUE)
+add_custom_target(generate_build_info ALL
 	COMMAND ${CMAKE_COMMAND}
 		-DCONFIG_HEADER_FILE=${CONFIG_HEADER_FILE}
 		-DPROJECT_VNAME=${PROJECT_VNAME}
 		-DPROJECT_VERSION=${CMAKE_PROJECT_VERSION}
 		-P ${CMAKE_SOURCE_DIR}/cmake/GenerateConfigInfo.cmake
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+	BYPRODUCTS ${CONFIG_HEADER_FILE}
 	COMMENT "Generating mxconfig.h"
 	VERBATIM
 )
-add_custom_target(generate_build_info ALL DEPENDS ${CONFIG_HEADER_FILE})
 add_dependencies(mxmain generate_build_info)
 target_include_directories(mxmain PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>

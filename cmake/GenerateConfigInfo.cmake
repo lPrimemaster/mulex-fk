@@ -1,6 +1,4 @@
-# macro(generate_config_info)
-
-file(WRITE ${CONFIG_HEADER_FILE} "// mxconfig.h Generated file\n")
+file(WRITE ${CONFIG_HEADER_FILE}.tmp "// mxconfig.h Generated file\n")
 
 # Get git short hash (assume first 7 chars are always unique)
 # somewhat the same as --short
@@ -18,25 +16,22 @@ execute_process(
 	OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-file(APPEND ${CONFIG_HEADER_FILE} "#pragma once\n")
-file(APPEND ${CONFIG_HEADER_FILE} "#define MX_VNAME \"${PROJECT_VNAME}\"\n")
-file(APPEND ${CONFIG_HEADER_FILE} "#define MX_VSTR \"${PROJECT_VERSION}\"\n")
-file(APPEND ${CONFIG_HEADER_FILE} "#define MX_HASH \"${GIT_HEAD_HASH}\"\n")
-file(APPEND ${CONFIG_HEADER_FILE} "#define MX_BRANCH \"${GIT_HEAD_BRANCH}\"\n")
+file(APPEND ${CONFIG_HEADER_FILE}.tmp "#pragma once\n")
+file(APPEND ${CONFIG_HEADER_FILE}.tmp "#define MX_VNAME \"${PROJECT_VNAME}\"\n")
+file(APPEND ${CONFIG_HEADER_FILE}.tmp "#define MX_VSTR \"${PROJECT_VERSION}\"\n")
+file(APPEND ${CONFIG_HEADER_FILE}.tmp "#define MX_HASH \"${GIT_HEAD_HASH}\"\n")
+file(APPEND ${CONFIG_HEADER_FILE}.tmp "#define MX_BRANCH \"${GIT_HEAD_BRANCH}\"\n")
 
-# add_custom_command(
-# 	OUTPUT ${CONFIG_HEADER_FILE}
-# 	COMMAND ${CMAKE_COMMAND} -E echo "#pragma once" > ${CONFIG_HEADER_FILE}
-# 	COMMAND ${CMAKE_COMMAND} -E echo "#define MX_VNAME \"${PROJECT_VNAME}\"" >> ${CONFIG_HEADER_FILE}
-# 	COMMAND ${CMAKE_COMMAND} -E echo "#define MX_VSTR \"${CMAKE_PROJECT_VERSION}\"" >> ${CONFIG_HEADER_FILE}
-# 	COMMENT "Generating mxconfig.h"
-# 	VERBATIM
-# )
+execute_process(
+	COMMAND ${CMAKE_COMMAND} -E compare_files "${CONFIG_HEADER_FILE}.tmp" "${CONFIG_HEADER_FILE}"
+	RESULT_VARIABLE build_info_outdated
+)
 
-# add_custom_target(generate_build_info ALL DEPENDS ${CONFIG_HEADER_FILE})
-# add_dependencies(mxmain generate_build_info)
-#
-# target_include_directories(mxmain PRIVATE
-# 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-# )
-# endmacro()
+if(NOT build_info_outdated EQUAL 0)
+	message(STATUS "HEAD changed: Regenerating mxconfig.h file...")
+	file(RENAME "${CONFIG_HEADER_FILE}.tmp" "${CONFIG_HEADER_FILE}")
+else()
+	message(STATUS "HEAD unchanged.")
+	file(REMOVE "${CONFIG_HEADER_FILE}.tmp")
+endif()
+
