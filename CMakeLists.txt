@@ -123,7 +123,7 @@ add_custom_target(generate_build_info ALL
 		-P ${CMAKE_SOURCE_DIR}/cmake/GenerateConfigInfo.cmake
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 	BYPRODUCTS ${CONFIG_HEADER_FILE}
-	COMMENT "Generating mxconfig.h"
+	COMMENT "Checking mxconfig.h"
 	VERBATIM
 )
 add_dependencies(mxmain generate_build_info)
