@@ -22,7 +22,7 @@ if(CROSS_COMP_WINDOWS)
 endif()
 
 # Version configuration
-project(mulex-fk VERSION 0.7.2)
+project(mulex-fk VERSION 0.7.3)
 set(PROJECT_VNAME Sirius)
 
 set(CMAKE_CXX_STANDARD 20)
