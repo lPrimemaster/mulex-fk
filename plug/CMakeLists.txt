@@ -30,17 +30,16 @@ mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/rdb.ts lib)
 mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/utils.ts lib)
 
 # Package components
-mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Button.tsx components)
-mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Plot.tsx components)
-mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/GaugeVertical.tsx components)
-mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Selector.tsx components)
-mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Switch.tsx components)
-mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/ValueControl.tsx components)
-mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/ValuePanel.tsx components)
+file(GLOB MX_COMPONENT_FILES "${CMAKE_SOURCE_DIR}/frontend/src/api/*.tsx")
+foreach(file ${MX_COMPONENT_FILES})
+	mx_resource_append(${file} components)
+endforeach()
 
 # Package solid-ui
-mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/components/ui/tooltip.tsx ui)
-mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/components/ui/switch.tsx ui)
+file(GLOB SOLID_UI_FILES "${CMAKE_SOURCE_DIR}/frontend/src/components/ui/*.tsx")
+foreach(file ${SOLID_UI_FILES})
+	mx_resource_append(${file} ui)
+endforeach()
 
 # Package solid-ui-lib
 mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/lib/utils.ts uilib)
@@ -51,6 +50,6 @@ mx_resource_append(${CMAKE_SOURCE_DIR}/plug/tsconfig.json build)
 mx_resource_append(${CMAKE_SOURCE_DIR}/plug/vite.config.ts build)
 
 # Main plugin file (just a placeholder)
-mx_resource_append(${CMAKE_SOURCE_DIR}/plug/plugin.tsx)
+mx_resource_append(${CMAKE_SOURCE_DIR}/plug/plugin.tsx binary)
 
 mx_resource_gen()

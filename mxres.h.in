@@ -29,14 +29,19 @@ namespace mulex
 		return output;
 	}
 
-	inline std::vector<std::uint8_t> ResGetResource(const std::string& resname)
+	inline const std::unordered_map<std::string, std::vector<std::uint8_t>>& ResGetAll()
 	{
 		static std::unordered_map<std::string, std::vector<std::uint8_t>> _mx_resources = {
 			@MXRES_MAP_ENTRIES@
 		};
-		
-		auto res = _mx_resources.find(resname);
-		if(res == _mx_resources.end())
+		return _mx_resources;
+	}
+
+	inline std::vector<std::uint8_t> ResGetResource(const std::string& resname)
+	{
+		static auto entries = ResGetAll();
+		auto res = entries.find(resname);
+		if(res == entries.end())
 		{
 			LogError("[mxres] Failed to fetch resource: <%s>.", resname.c_str());
 			return {};

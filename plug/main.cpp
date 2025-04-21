@@ -1,6 +1,7 @@
 #include "../mxsystem.h"
 #include <mxres.h>
 #include <filesystem>
+#include <unordered_map>
 
 using namespace mulex;
 
@@ -11,79 +12,44 @@ enum class Mode
 	UNKNOWN
 };
 
-inline static void PlugWriteFile(const std::string& resource, const std::string& path)
+inline static std::pair<std::string, std::string> PlugGetResourceInfo(const std::string& resource)
 {
-	LogMessage("[mxplug] Writing <%s>...", path.c_str());
-	SysWriteBinFile(path, ResGetResource(resource));
+	auto index = resource.find_last_of(':');
+	return std::make_pair(resource.substr(0, index - 1), resource.substr(index + 1));
+}
+
+static void PlugWriteFiles(const std::unordered_map<std::string, std::string>& dirs)
+{
+	for(const auto& dir : dirs)
+	{
+		if(dir.second.empty()) continue; // Skip if dir is cwd basically
+		std::filesystem::create_directories(dir.second);
+	}
+
+	for(const auto& [name, data] : ResGetAll())
+	{
+		const auto [nspace, filename] = PlugGetResourceInfo(name);
+		std::string path = dirs.at(nspace) + filename;
+		LogMessage("[mxplug] Writing <%s>...", path.c_str());
+		SysWriteBinFile(path, data);
+	}
 }
 
 static bool PlugUnpackFiles(const std::filesystem::path& path)
 {
 	LogMessage("[mxplug] Unpacking files...");
-
-	// # Package libs
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/websocket.ts lib)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/convert.ts lib)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/event.ts lib)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/rpc.ts lib)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/rdb.ts lib)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/utils.ts lib)
-	//
-	// # Package components
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Button.tsx components)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/GaugeVertical.tsx components)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Selector.tsx components)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/Switch.tsx components)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/ValueControl.tsx components)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/api/ValuePanel.tsx components)
-	//
-	// # Package solid-ui
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/components/ui/tooltip.tsx ui)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/components/ui/switch.tsx ui)
-	//
-	// # Package solid-ui-lib
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/lib/utils.ts uilib)
-	//
-	// # Package npm/yarn build configs
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/plug/package.json build)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/plug/tsconfig.json build)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/plug/vite.config.ts build)
-	//
-	// # Main plugin file (just a placeholder)
-	// mx_resource_append(${CMAKE_SOURCE_DIR}/plug/plugin.tsx)
 	
 	auto prev_path = std::filesystem::current_path();
 	std::filesystem::current_path(path);
 
-	std::filesystem::create_directory("lib");
-	PlugWriteFile("uilib::utils.ts", "lib/utils.ts");
-
-	std::filesystem::create_directories("src/api");
-	PlugWriteFile("components::Button.tsx", "src/api/Button.tsx");
-	PlugWriteFile("components::Plot.tsx", "src/api/Plot.tsx");
-	PlugWriteFile("components::GaugeVertical.tsx", "src/api/GaugeVertical.tsx");
-	PlugWriteFile("components::Selector.tsx", "src/api/Selector.tsx");
-	PlugWriteFile("components::Switch.tsx", "src/api/Switch.tsx");
-	PlugWriteFile("components::ValueControl.tsx", "src/api/ValueControl.tsx");
-	PlugWriteFile("components::ValuePanel.tsx", "src/api/ValuePanel.tsx");
-
-	std::filesystem::create_directories("src/components/ui");
-	PlugWriteFile("ui::tooltip.tsx", "src/components/ui/tooltip.tsx");
-	PlugWriteFile("ui::switch.tsx", "src/components/ui/switch.tsx");
-
-	std::filesystem::create_directories("src/lib");
-	PlugWriteFile("lib::websocket.ts", "src/lib/websocket.ts");
-	PlugWriteFile("lib::convert.ts", "src/lib/convert.ts");
-	PlugWriteFile("lib::event.ts", "src/lib/event.ts");
-	PlugWriteFile("lib::rpc.ts", "src/lib/rpc.ts");
-	PlugWriteFile("lib::rdb.ts", "src/lib/rdb.ts");
-	PlugWriteFile("lib::utils.ts", "src/lib/utils.ts");
-
-	PlugWriteFile("build::package.json", "package.json");
-	PlugWriteFile("build::tsconfig.json", "tsconfig.json");
-	PlugWriteFile("build::vite.config.ts", "vite.config.ts");
-
-	PlugWriteFile("plugin.tsx", "src/plugin.tsx");
+	PlugWriteFiles({
+		{ "uilib", "lib/" },
+		{ "components", "src/api/" },
+		{ "ui", "src/components/ui/" },
+		{ "lib", "src/lib/" },
+		{ "build", "" },
+		{ "binary", "src/" }
+	});
 
 	std::filesystem::current_path(prev_path);
 
