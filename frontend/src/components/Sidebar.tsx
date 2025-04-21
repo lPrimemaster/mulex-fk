@@ -13,6 +13,7 @@ import {
 import metadata from '../lib/metadata';
 import { DynamicRouterContext, MxDynamicRouterContext } from './DynamicRouter';
 import { DebugPanel } from '~/Debug';
+import { MxSpinner } from '~/api';
 
 const [devTools, setDevTools] = createSignal(false);
 
@@ -49,6 +50,14 @@ const Sidebar: Component = () => {
 						<h1><b>{metadata.expname()}</b></h1>
 					</Show>
 				</span>
+				<Show when={metadata.expname.loading}>
+					<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+						<div class="bg-white rounded-md shadow-lg w-[90%] max-w-md p-5 flex flex-col items-center justify-center">
+							<p class="font-bold mb-2">Loading Experiment</p>
+							<MxSpinner description="Please Wait..."/>
+						</div>
+					</div>
+				</Show>
 				<div class="m-5">
 					<NavigationMenu orientation="vertical">
 						<NavigationMenuItem>
