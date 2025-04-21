@@ -4,12 +4,15 @@
 #include <sqlite3.h>
 #include "../mxrdb.h"
 
+#include <tracy/Tracy.hpp>
+
 static sqlite3* _pdb_handle = nullptr;
 
 namespace mulex
 {
 	static std::string PdbGetLocation(const std::string& cache)
 	{
+		ZoneScoped;
 		RdbEntry* pdb = RdbFindEntryByName("/system/pdbloc");
 		std::string pdb_loc;
 		if(!pdb)
@@ -34,6 +37,7 @@ namespace mulex
 
 	void PdbInit()
 	{
+		ZoneScoped;
 		std::string cache = SysGetExperimentHome();
 		if(cache.empty())
 		{
@@ -60,6 +64,7 @@ namespace mulex
 
 	void PdbClose()
 	{
+		ZoneScoped;
 		LogDebug("[pdb] Closing pdb.");
 		if(_pdb_handle)
 		{
@@ -69,6 +74,7 @@ namespace mulex
 
 	std::uint64_t PdbTypeSize(const PdbValueType& type)
 	{
+		ZoneScoped;
 		switch (type)
 		{
 			case PdbValueType::INT8: return sizeof(std::int8_t);
@@ -91,6 +97,7 @@ namespace mulex
 	
 	void PdbPushBufferBytes(const std::uint8_t* value, std::uint64_t size, std::vector<std::uint8_t>& buffer)
 	{
+		ZoneScoped;
 		for(std::uint64_t i = 0; i < size; i++)
 		{
 			buffer.push_back(*(value + i));
@@ -99,6 +106,7 @@ namespace mulex
 
 	static void PdbTableGet(const PdbValueType& type, std::vector<std::uint8_t>& buffer, int col, sqlite3_stmt* stmt)
 	{
+		ZoneScoped;
 		switch (type)
 		{
 			case PdbValueType::INT8:
@@ -161,6 +169,7 @@ namespace mulex
 
 	static bool PdbTableBind(const PdbValueType& type, const std::uint8_t* ptr, int col, sqlite3_stmt* stmt, std::uint64_t& offset)
 	{
+		ZoneScoped;
 		switch (type)
 		{
 			case PdbValueType::INT8:  
@@ -219,6 +228,7 @@ namespace mulex
 
 	bool PdbWriteTable(mulex::PdbQuery query, mulex::RPCGenericType types, mulex::RPCGenericType data)
 	{
+		ZoneScoped;
 		sqlite3_stmt* stmt;
 		if(sqlite3_prepare_v2(_pdb_handle, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
 		{
@@ -256,6 +266,7 @@ namespace mulex
 
 	static std::uint64_t PdbCalculateTypesSize(const std::vector<PdbValueType>& types)
 	{
+		ZoneScoped;
 		std::uint64_t size = 0;
 		for(const auto& t : types)
 		{
@@ -266,6 +277,7 @@ namespace mulex
 
 	static std::vector<std::uint8_t> PdbFlattenList(const std::vector<std::vector<std::uint8_t>>& list)
 	{
+		ZoneScoped;
 		std::vector<std::uint8_t> data;
 		std::uint64_t tsize = std::accumulate(list.begin(), list.end(), 0, [](std::uint64_t s, const std::vector<std::uint8_t>& v) { return s + v.size(); });
 		data.reserve(tsize);
@@ -280,6 +292,7 @@ namespace mulex
 
 	mulex::RPCGenericType PdbReadTable(mulex::PdbQuery query, mulex::RPCGenericType types)
 	{
+		ZoneScoped;
 		sqlite3_stmt* stmt;
 		if(sqlite3_prepare_v2(_pdb_handle, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
 		{
@@ -309,6 +322,7 @@ namespace mulex
 
 	static std::string PdbTypeName(const PdbValueType& type)
 	{
+		ZoneScoped;
 		switch (type)
 		{
 			case PdbValueType::INT8:
@@ -336,6 +350,7 @@ namespace mulex
 
 	bool PdbExecuteQuery(mulex::PdbQuery query)
 	{
+		ZoneScoped;
 		char* err;
 		if(sqlite3_exec(_pdb_handle, query.c_str(), nullptr, nullptr, &err) != SQLITE_OK)
 		{
@@ -348,6 +363,7 @@ namespace mulex
 
 	std::string PdbGenerateSQLQueryCreate(const std::string& table, const std::initializer_list<std::string>& specs)
 	{
+		ZoneScoped;
 		std::string query = "CREATE TABLE IF NOT EXISTS " + table + " (";
 		// std::apply([&](auto&&... val){ ((query += val, query += ","), ...); }, spec);
 		for(const auto& spec : specs)
@@ -362,6 +378,7 @@ namespace mulex
 
 	std::string PdbGenerateSQLQueryInsert(const std::string& table, const std::initializer_list<std::string>& names)
 	{
+		ZoneScoped;
 		std::string query = "INSERT INTO " + table + " (";
 		for(const auto& name : names)
 		{
@@ -383,6 +400,7 @@ namespace mulex
 
 	std::string PdbGenerateSQLQuerySelect(const std::string& table, const std::initializer_list<std::string>& names)
 	{
+		ZoneScoped;
 		std::string query = "SELECT ";
 		for(const auto& name : names)
 		{
@@ -398,6 +416,7 @@ namespace mulex
 
 	bool PdbAccessPolicyRemote::executeQueryRemote(const std::string& query)
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
@@ -408,6 +427,7 @@ namespace mulex
 
 	bool PdbAccessPolicyRemote::executeInsertRemote(const std::string& query, const std::vector<PdbValueType>& types, const std::vector<uint8_t>& data)
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
@@ -418,6 +438,7 @@ namespace mulex
 
 	std::vector<std::uint8_t> PdbAccessPolicyRemote::executeSelectRemoteI(const std::string& query, const std::vector<PdbValueType>& types)
 	{
+		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
 		if(exp.has_value())
 		{
@@ -428,16 +449,19 @@ namespace mulex
 
 	bool PdbAccessPolicyLocal::executeQueryRemote(const std::string& query)
 	{
+		ZoneScoped;
 		return PdbExecuteQuery(query);
 	}
 
 	bool PdbAccessPolicyLocal::executeInsertRemote(const std::string& query, const std::vector<PdbValueType>& types, const std::vector<uint8_t>& data)
 	{
+		ZoneScoped;
 		return PdbWriteTable(PdbQuery(query), types, data);
 	}
 
 	std::vector<std::uint8_t> PdbAccessPolicyLocal::executeSelectRemoteI(const std::string& query, const std::vector<PdbValueType>& types)
 	{
+		ZoneScoped;
 		return PdbReadTable(PdbQuery(query), types);
 	}
 } // namespace mulex

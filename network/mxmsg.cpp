@@ -105,6 +105,7 @@ namespace mulex
 
 	static void MsgFlushSQLQueue()
 	{
+		ZoneScoped;
 		LogTrace("[mxmsg] Flushing logs to disk.");
 		while(!_msg_queue.empty())
 		{
@@ -118,6 +119,7 @@ namespace mulex
 
 	void MsgWrite(mulex::MsgClass mclass, std::int64_t timestamp, mulex::RPCGenericType msg)
 	{
+		ZoneScoped;
 		const std::vector<char> message_data = msg.asVectorType<char>();
 		const std::uint64_t message_size = message_data.size() < MSG_MAX_SIZE ? message_data.size() : MSG_MAX_SIZE;
 
@@ -154,17 +156,19 @@ namespace mulex
 
 	mulex::RPCGenericType MsgGetLastLogs(std::uint32_t count)
 	{
+		ZoneScoped;
 		std::unique_lock<std::mutex> lock(_msg_queue_lock);
 
 		// Force queue flush when getting last logs
 		MsgFlushSQLQueue();
 
 		const static std::vector<PdbValueType> types = { PdbValueType::INT32, PdbValueType::UINT8, PdbValueType::UINT64, PdbValueType::INT64, PdbValueType::STRING };
-		return PdbReadTable("SELECT * FROM logs ORDER BY timestamp DESC LIMIT " + std::to_string(count) + ";", types);
+		return PdbReadTable("SELECT * FROM logs ORDER BY id DESC LIMIT " + std::to_string(count) + ";", types);
 	}
 
 	void MsgInit()
 	{
+		ZoneScoped;
 		if(!EvtRegister("mxmsg::message"))
 		{
 			return;
@@ -185,6 +189,7 @@ namespace mulex
 
 	void MsgClose()
 	{
+		ZoneScoped;
 		std::unique_lock<std::mutex> lock(_msg_queue_lock);
 		MsgFlushSQLQueue();
 	}

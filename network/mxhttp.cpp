@@ -18,6 +18,8 @@
 
 #include <mxres.h>
 
+#include <tracy/Tracy.hpp>
+
 static us_listen_socket_t* _http_listen_socket = nullptr;
 static std::thread* _http_thread;
 static uWS::Loop* _ws_loop_thread;
@@ -53,6 +55,7 @@ namespace mulex
 
 	static bool HttpGenerateViteConfigFile()
 	{
+		ZoneScoped;
 		std::string serveDir = SysGetExperimentHome();
 		if(!std::filesystem::exists(serveDir + "/vite.config.ts"))
 		{
@@ -69,6 +72,7 @@ namespace mulex
 
 	static bool HttpStartWatcherThread()
 	{
+		ZoneScoped;
 		// We transpile with vite (via yarn build, must be installed on server-side)
 		std::string serveDir = SysGetExperimentHome();
 		if(serveDir.empty())
@@ -122,6 +126,7 @@ namespace mulex
 
 	static void HttpStopWatcherThread()
 	{
+		ZoneScoped;
 		if(_plugins_watch)
 		{
 			_plugins_watch.reset();
@@ -130,6 +135,7 @@ namespace mulex
 
 	static std::string HttpReadFileFromDisk(const std::string& filepath)
 	{
+		ZoneScoped;
 		std::ifstream file(filepath, std::ios::binary);
 		if(!file.is_open())
 		{
@@ -148,6 +154,7 @@ namespace mulex
 
 	static std::string_view HttpGetMimeType(const std::string& urlPath)
 	{
+		ZoneScoped;
 		std::string ext = std::filesystem::path(urlPath).extension().string();
 		if (ext == ".html") return "text/html";
 		if (ext == ".css")  return "text/css";
@@ -162,6 +169,7 @@ namespace mulex
 	template<bool SSL>
 	static bool HttpServeFile(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
 	{
+		ZoneScoped;
 		std::string urlPath = std::string(req->getUrl());
 
 		if(urlPath == "/")
@@ -200,6 +208,7 @@ namespace mulex
 
 	static std::vector<std::uint8_t> HttpByteVectorFromJsonB64(const char* args, std::uint64_t len)
 	{
+		ZoneScoped;
 		std::vector<std::uint8_t> output;
 		output.resize(len * 5); // 5 times the encoded string
 		std::uint64_t wlen;
@@ -217,6 +226,7 @@ namespace mulex
 
 	static rapidjson::Document HttpJsonFromByteVector(const std::vector<std::uint8_t>& arr)
 	{
+		ZoneScoped;
 		rapidjson::Document d;
 		d.SetObject();
 		rapidjson::Value output(rapidjson::kArrayType);
@@ -233,6 +243,7 @@ namespace mulex
 	template<typename T>
 	static T HttpTryGetEntry(const rapidjson::Document& d, const std::string& key, bool* error)
 	{
+		ZoneScoped;
 		if(error) *error = false;
 		if(d.HasMember(key.c_str()))
 		{
@@ -304,6 +315,7 @@ namespace mulex
 
 	static rapidjson::Document HttpParseWSMessage(std::string_view message, bool* error)
 	{
+		ZoneScoped;
 		rapidjson::Document d;
 		// HACK: (Cesar) This is not ideal
 		//				 However, We need to recheck how uWS handles the string_view output to, *maybe*, avoid copying
@@ -343,6 +355,7 @@ namespace mulex
 
 	static std::tuple<std::uint16_t, std::vector<std::uint8_t>, std::uint64_t, bool> HttpGetRPCMessage(const rapidjson::Document& d, bool* error)
 	{
+		ZoneScoped;
 		// If we want to use native types we should get someway of getting the RPC server side types
 		// Multiple ways come to mind. For now we generate the same data on the frontend args array
 		
@@ -401,6 +414,7 @@ namespace mulex
 
 	static std::string HttpMakeWSRPCMessage(const std::vector<std::uint8_t>& ret, const std::string& status, std::uint64_t messageid)
 	{
+		ZoneScoped;
 		rapidjson::Document d;
 		rapidjson::StringBuffer buffer;
 		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -425,6 +439,7 @@ namespace mulex
 
 	static std::string HttpMakeWSEVTMessage(const std::vector<std::uint8_t>& ret, const std::string& eventname)
 	{
+		ZoneScoped;
 		rapidjson::Document d;
 		rapidjson::StringBuffer buffer;
 		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -446,6 +461,7 @@ namespace mulex
 
 	static void HttpDeferCall(decltype(_active_ws_connections)::key_type ws, std::function<void(decltype(_active_ws_connections)::key_type)> func)
 	{
+		ZoneScoped;
 		// {
 		// 	std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
 		// 	if(_active_ws_connections.find(ws) == _active_ws_connections.end()) return;
@@ -459,6 +475,7 @@ namespace mulex
 
 	static void HttpDeferCallAll(std::function<void(decltype(_active_ws_connections)::key_type)> func)
 	{
+		ZoneScoped;
 		_ws_loop_thread->defer([&func]() {
 			// std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
 			for(auto* ws : _active_ws_connections)
@@ -470,6 +487,7 @@ namespace mulex
 
 	static void HttpSendEvent(UWSType* ws, const std::string& event, const std::uint8_t* data, std::uint64_t len)
 	{
+		ZoneScoped;
 		std::vector<std::uint8_t> data_vector;
 
 		data_vector.resize(len);
@@ -485,6 +503,7 @@ namespace mulex
 
 	static void HttpSubscribeEvent(UWSType* ws, const std::string& event)
 	{
+		ZoneScoped;
 		// See if this event exists
 		WsRpcBridge* bridge = ws->getUserData();
 		auto& evtclient = bridge->_local_experiment._evt_client;
@@ -504,6 +523,7 @@ namespace mulex
 
 	static void HttpUnsubscribeEvent(UWSType* ws, const std::string& event)
 	{
+		ZoneScoped;
 		WsRpcBridge* bridge = ws->getUserData();
 		bridge->_local_experiment._evt_client->unsubscribe(event);
 		LogTrace("[mxhttp] HttpUnsubscribeEvent() OK.");
@@ -511,18 +531,21 @@ namespace mulex
 
 	static void HttpUnsubscribeEventAll(UWSType* ws)
 	{
+		ZoneScoped;
 		WsRpcBridge* bridge = ws->getUserData();
 		bridge->_local_experiment._evt_client->unsubscribeAll();
 	}
 
 	static std::uint64_t HttpGetNextClientId()
 	{
+		ZoneScoped;
 		static std::atomic<std::uint64_t> ccid = 0;
 		return ccid++;
 	}
 
 	static bool HttpCopyAppFiles()
 	{
+		ZoneScoped;
 		// Do this everytime the server starts
 		// in case some of the files were accidentaly modified by the user (e.g. during plugins creation/copy)
 		std::string serveDir = SysGetExperimentHome();
@@ -539,6 +562,7 @@ namespace mulex
 	template<bool SSL>
 	static void HttpStartServerInternal(uWS::TemplatedApp<SSL>& app, std::uint16_t port, bool islocal)
 	{
+		ZoneScoped;
 		// using TAWSB = uWS::TemplatedApp<SSL>::template WebSocketBehavior<WsRpcBridge>;
 
 		app.get("/*", [](auto* res, auto* req) {
@@ -720,18 +744,21 @@ namespace mulex
 
 	bool HttpRegisterUserPlugin(const std::string& plugin)
 	{
+		ZoneScoped;
 		LogDebug("[mxhttp] Registering user plugin <%s>.", plugin.c_str());
 		return RdbCreateValueDirect(("/system/http/plugins/" + plugin).c_str(), RdbValueType::BOOL, 0, true);
 	}
 
 	void HttpRemoveUserPlugin(const std::string& plugin)
 	{
+		ZoneScoped;
 		LogDebug("[mxhttp] Removing user plugin <%s>.", plugin.c_str());
 		RdbDeleteValueDirect(("/system/http/plugins/" + plugin).c_str());
 	}
 
 	void HttpStartServer(std::uint16_t port, bool islocal)
 	{
+		ZoneScoped;
 
 		if(!HttpCopyAppFiles())
 		{
@@ -760,6 +787,7 @@ namespace mulex
 
 	void HttpStopServer()
 	{
+		ZoneScoped;
 		LogDebug("[mxhttp] Closing http server.");
 
 		HttpStopWatcherThread();
@@ -779,6 +807,7 @@ namespace mulex
 
 	mulex::RPCGenericType HttpGetClients()
 	{
+		ZoneScoped;
 		std::unique_lock lock_aci(_aci_lock);
 		std::vector<HttpClientInfo> output;
 		output.reserve(_active_clients_info.size());
