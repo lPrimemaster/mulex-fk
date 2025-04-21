@@ -16,9 +16,9 @@ macro(install_mulex)
 	# vcpkg already puts the required dlls on the build tree
 	if(WIN32)
 		message(STATUS "Copying required dlls...")
-		# file(GLOB RUNTIME_DEPS "${CMAKE_BINARY_DIR}/*.dll")
-		# install(FILES ${RUNTIME_DEPS} DESTINATION bin)
 		install(FILES $<TARGET_RUNTIME_DLLS:mxmain> DESTINATION bin)
+		# HACK: (Cesar) This works on CI/CD but might break...
+		install(FILES "${CMAKE_BINARY_DIR}/libzlib1.dll" DESTINATION bin)
 	endif()
 endmacro()
 
