@@ -350,7 +350,7 @@ namespace mulex
 		auto eid_callbacks = _evt_callbacks.find(eventid);
 		if(eid_callbacks != _evt_callbacks.end())
 		{
-			LogWarning("[evtclient] Subscribing to already subscribed event. Only one callback per event is allowed. Replacing...");
+			LogTrace("[evtclient] Subscribing to already subscribed event. Only one callback per event is allowed. Replacing...");
 		}
 		_evt_callbacks[eventid] = callback;
 		_evt_subscriptions.insert(event);
