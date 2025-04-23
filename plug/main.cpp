@@ -48,7 +48,8 @@ static bool PlugUnpackFiles(const std::filesystem::path& path)
 		{ "ui", "src/components/ui/" },
 		{ "lib", "src/lib/" },
 		{ "build", "" },
-		{ "binary", "src/" }
+		{ "binary", "src/entry/" },
+		{ "assets", "assets/" }
 	});
 
 	std::filesystem::current_path(prev_path);

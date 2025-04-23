@@ -172,7 +172,11 @@ namespace mulex
 			MODIFIED,
 			DELETED
 		};
-		SysFileWatcher(const std::string& dir, std::function<void(const FileOp op, const std::string& filename)> f, std::uint32_t interval = 1000);
+		SysFileWatcher(
+			const std::string& dir,
+			std::function<void(const FileOp op, const std::string& filename, const std::int64_t timestamp)> f,
+			std::uint32_t interval = 1000
+		);
 		~SysFileWatcher();
 
 	private:

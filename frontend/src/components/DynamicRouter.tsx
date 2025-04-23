@@ -9,6 +9,7 @@ export interface MxDynamicRoute {
 export interface MxDynamicRouterContext {
 	routes: Accessor<Array<MxDynamicRoute>>;
 	addRoute: (path: string, component: Component) => void;
+	updateRoute: (path: string, component: Component) => void;
 	removeRoute: (path: string) => void;
 };
 
@@ -22,7 +23,17 @@ export const DynamicRouterProvider : Component<{ children: JSXElement }> = (prop
 			return;
 		}
 
+		console.log('Adding dynamic route: /dynamic' + path);
+
 		setRoutes((p) => [...p, { path: '/dynamic' + path, component: component }]);
+	};
+
+	const updateRoute = (path: string, component: Component) => {
+		if(routes().find(o => o.path === '/dynamic' + path) === undefined) {
+			addRoute(path, component);
+			return;
+		}
+		setRoutes((p) => p.map(x => x.path === '/dynamic' + path ? { path: '/dynamic' + path, component: component } : x));
 	};
 
 	const removeRoute = (path: string) => {
@@ -31,14 +42,18 @@ export const DynamicRouterProvider : Component<{ children: JSXElement }> = (prop
 			if(element) {
 				const idx = p.indexOf(element, 0);
 				if(idx > -1) {
-					return p.splice(idx, 1);
+					const np = Array.from(p);
+					np.splice(idx, 1);
+					return np;
 				}
 			}
 			return p;
 		});
+
+		console.log('Removing dynamic route: /dynamic' + path);
 	};
 
-	return <DynamicRouterContext.Provider value={{ routes: routes, addRoute: addRoute, removeRoute: removeRoute }}>{props.children}</DynamicRouterContext.Provider>
+	return <DynamicRouterContext.Provider value={{ routes: routes, addRoute: addRoute, updateRoute: updateRoute, removeRoute: removeRoute }}>{props.children}</DynamicRouterContext.Provider>
 };
 
 export const DynamicRouter : Component = () => {

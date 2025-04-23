@@ -48,8 +48,15 @@ mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/lib/utils.ts uilib)
 mx_resource_append(${CMAKE_SOURCE_DIR}/plug/package.json build)
 mx_resource_append(${CMAKE_SOURCE_DIR}/plug/tsconfig.json build)
 mx_resource_append(${CMAKE_SOURCE_DIR}/plug/vite.config.ts build)
+mx_resource_append(${CMAKE_SOURCE_DIR}/plug/globals.d.ts build)
 
 # Main plugin file (just a placeholder)
 mx_resource_append(${CMAKE_SOURCE_DIR}/plug/plugin.tsx binary)
+
+# Package assets
+file(GLOB MX_ASSET_FILES "${CMAKE_SOURCE_DIR}/plug/assets/*")
+foreach(file ${MX_ASSET_FILES})
+	mx_resource_append(${file} assets)
+endforeach()
 
 mx_resource_gen()

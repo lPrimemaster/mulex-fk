@@ -1,4 +1,4 @@
-import { Component, createSignal, For, Show, useContext } from 'solid-js';
+import { Component, createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack, useContext } from 'solid-js';
 import Sidebar from './components/Sidebar';
 import { MxPlugin, mxRegisterPluginFromFile, mxDeletePlugin, plugins } from './lib/plugin';
 import { MxRdb } from './lib/rdb';
@@ -9,21 +9,76 @@ import { MxDynamicRouterContext, DynamicRouterContext } from './components/Dynam
 import { createMapStore } from './lib/rmap';
 import { A } from '@solidjs/router';
 import { DynamicTitle } from './components/DynamicTitle';
-import { MxSpinner } from './api';
+import { MxButton, MxSpinner } from './api';
+import { timestamp_tolocaldatetime } from './lib/utils';
 
 export const Project : Component = () => {
-	const { addRoute, removeRoute } = useContext(DynamicRouterContext) as MxDynamicRouterContext;
+	const { updateRoute, removeRoute } = useContext(DynamicRouterContext) as MxDynamicRouterContext;
 	const [ dynamicRoutes, dynamicRoutesActions ] = createMapStore<string, string>(new Map<string, string>());
 	const [ loadingPlugins, setLoadingPlugins ] = createSignal<boolean>(false);
 
 	function generatePluginPage(plugin: MxPlugin) {
 		const RenderPlug : Component = () => {
+			const [scroll, setScroll] = createSignal<number>(0);
+			const [height, setHeight] = createSignal<number>(0);
+			const [showDocs, setShowDocs] = createSignal<boolean>(false);
+			const calculateScale = createMemo(() => showDocs() ? 1 : Math.max(1 - scroll() / height(), 0));
+			let id: HTMLDivElement | undefined;
+
+			function onScroll() {
+				setScroll(window.scrollY);
+			}
+
+			onMount(() => {
+				setHeight(id!.offsetHeight);
+
+				window.addEventListener('scroll', onScroll);
+				onCleanup(() => {
+					window.removeEventListener('scroll', onScroll);
+				});
+			});
+
 			return (
 				<div>
 					<DynamicTitle title={plugin.name}/>
 					<Sidebar/>
-					<div class="p-5 ml-36 mr-auto">
-						<plugin.render/>
+					<div class={
+						`fixed top-0 left-36 right-0 p-5 border-b-2
+						bg-white/50 backdrop-blur-sm z-50
+						flex place-items-center place-content-between
+						overflow-hidden h-20`
+					}
+					style={{
+						opacity: calculateScale(),
+						display: calculateScale() === 0 ? 'none' : 'flex'
+					}}
+					ref={id}>
+						<div class="flex place-items-center">
+							<div class="size-10">
+								<plugin.icon/>
+							</div>
+							<div class="ml-5 font-bold">
+								{plugin.name}
+							</div>
+						</div>
+						<Show when={!showDocs()}>
+							<MxButton disabled={plugin.description === undefined} onClick={() => setShowDocs(true)}>
+								Documentation
+							</MxButton>
+						</Show>
+						<Show when={showDocs()}>
+							<MxButton disabled={plugin.description === undefined} onClick={() => setShowDocs(false)} type="error">
+								Back to plugin
+							</MxButton>
+						</Show>
+					</div>
+					<div class="p-5 mt-20 ml-36 mr-auto">
+						<Show when={!showDocs()}>
+							<plugin.render/>
+						</Show>
+						<Show when={showDocs()}>
+							<plugin.description/>
+						</Show>
 					</div>
 				</div>
 			);
@@ -42,11 +97,11 @@ export const Project : Component = () => {
 		return filename.split('.').shift();
 	}
 
-	async function registerPluginFromFile(key: string) {
+	async function registerPluginFromFile(key: string, timestamp: number) {
 		const path = await getPluginJsPath(key);
-		const plugin = await mxRegisterPluginFromFile(path);
+		const plugin = await mxRegisterPluginFromFile(path, timestamp);
 		const plugin_route = '/plugin/' + await getPluginName(key);
-		addRoute(plugin_route, generatePluginPage(plugin));
+		updateRoute(plugin_route, generatePluginPage(plugin));
 		dynamicRoutesActions.add(plugin.id, plugin_route);
 	}
 
@@ -58,8 +113,8 @@ export const Project : Component = () => {
 	}
 
 	const rdb = new MxRdb();
-	rdb.watch('/system/http/plugins/*', (key: string, _: MxGenericType) => {
-		registerPluginFromFile(key);
+	rdb.watch('/system/http/plugins/*', (key: string, value: MxGenericType) => {
+		registerPluginFromFile(key, Number(value.astype('int64')));
 	});
 
 	MxWebsocket.instance.subscribe('mxrdb::keydeleted', (data: Uint8Array) => {
@@ -74,7 +129,8 @@ export const Project : Component = () => {
 	MxWebsocket.instance.rpc_call('mulex::RdbListSubkeys', [MxGenericType.str512('/system/http/plugins/')], 'generic').then(async (res) => {
 		const keys = res.astype('stringarray');
 		for(const key of keys) {
-			await registerPluginFromFile(key);
+			const value = await rdb.read(key);
+			await registerPluginFromFile(key, Number(value));
 		}
 		setLoadingPlugins(false);
 	});
@@ -108,11 +164,14 @@ export const Project : Component = () => {
 									<div class="flex h-32 place-content-between">
 										<div>
 											<div class="w-52 h-32 overflow-hidden">
-												<div class="text-ellipsis overflow-hidden text-nowrap hover:text-wrap text-center">
+												<div class="text-ellipsis overflow-hidden text-nowrap hover:text-wrap text-center mb-2">
 													{Plugin.name}
 												</div>
 												<div class="flex place-content-center">
-													<Plugin.icon/>
+													{
+														// Force size to 80x80 px
+													}
+													<div class="size-20"><Plugin.icon/></div>
 												</div>
 											</div>
 										</div>
@@ -120,34 +179,26 @@ export const Project : Component = () => {
 											<div class="text-center font-bold">Description</div>
 											<div class="flex items-center">
 												<div class="text-ellipsis text-wrap text-justify">
-													{Plugin.description ?? 'No description provided.'}
+													{Plugin.brief ?? 'No brief description provided.'}
 												</div>
 											</div>
 										</div>
 										<div class="flex place-content-center hidden lg:block">
-											<div class="grid grid-cols-1 grid-rows-4 gap-1">
-												<div>
-													<span class="font-bold">Filename:&nbsp;</span>
-													<span>{Plugin.id.split('/').slice(-1)}</span>
-												</div>
+											<div class="grid grid-cols-2 grid-rows-4 gap-1">
+												<span class="font-bold text-right">Filename:&nbsp;</span>
+												<span>{Plugin.id.split('/').slice(-1)}</span>
 
-												<div>
-													<span class="font-bold">Author:&nbsp;</span>
-													<span>{Plugin.author ?? 'Unspecified'}</span>
-												</div>
+												<span class="font-bold text-right">Author:&nbsp;</span>
+												<span>{Plugin.author ?? 'Unspecified'}</span>
 
-												<div>
-													<span class="font-bold">Modified:&nbsp;</span>
-													{
-														// TODO: (Cesar) Get it from some RPC Call
-													}
-													<span>03-01-2025 02:07:23PM</span>
-												</div>
+												<span class="font-bold text-right">Modified:&nbsp;</span>
+												{
+													// TODO: (Cesar) Get it from some RPC Call
+												}
+												<span>{timestamp_tolocaldatetime(Plugin.modified)}</span>
 
-												<div>
-													<span class="font-bold">Version:&nbsp;</span>
-													<span>{Plugin.version ?? 'Unspecified'}</span>
-												</div>
+												<span class="font-bold text-right">Version:&nbsp;</span>
+												<span>{Plugin.version ?? 'Unspecified'}</span>
 											</div>
 										</div>
 									</div>

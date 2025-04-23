@@ -1,4 +1,5 @@
 #include "mxsystem.h"
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <signal.h>
@@ -666,12 +667,24 @@ namespace mulex
 		return _unblock_sig.load();
 	}
 
-	SysFileWatcher::SysFileWatcher(const std::string& dir, std::function<void(const FileOp op, const std::string& filename)> f, std::uint32_t interval)
+	SysFileWatcher::SysFileWatcher(
+		const std::string& dir,
+		std::function<void(const FileOp op, const std::string& filename, const std::int64_t timestamp)> f,
+		std::uint32_t interval
+	)
 	{
 		_watcher_on.store(true);
 		LogDebug("SysFileWatcher: Watching dir <%s>. [interval=%d]", dir.c_str(), interval);
 		_thread = std::make_unique<std::thread>([this, dir, f, interval](){
 			std::unordered_map<std::string, std::filesystem::file_time_type> file_mod_time;
+
+			// NOTE: (César) clock_cast is not yet available under GCC for C++20
+			auto to_systime = [](const std::filesystem::file_time_type& time) -> std::int64_t {
+				auto delta = std::filesystem::file_time_type::clock::now().time_since_epoch() - time.time_since_epoch();
+				auto sys_file_time = std::chrono::system_clock::now().time_since_epoch() - delta;
+				return std::chrono::duration_cast<std::chrono::milliseconds>(sys_file_time).count();
+			};
+
 			while(_watcher_on.load())
 			{
 				for(const auto& file : std::filesystem::recursive_directory_iterator(dir))
@@ -683,23 +696,22 @@ namespace mulex
 					{
 						// This is a new file
 						file_mod_time[file_path] = last_write_ts;
-						f(FileOp::CREATED, file_path);
+						f(FileOp::CREATED, file_path, to_systime(last_write_ts));
 					}
 					else if(file_mod_time[file_path] != last_write_ts)
 					{
 						// This is a modified file
 						file_mod_time[file_path] = last_write_ts;
-						f(FileOp::MODIFIED, file_path);
+						f(FileOp::MODIFIED, file_path, to_systime(last_write_ts));
 					}
 				}
-
 
 				auto fit = file_mod_time.begin();
 				while(fit != file_mod_time.end())
 				{
 					if(!std::filesystem::exists(fit->first))
 					{
-						f(FileOp::DELETED, fit->first);
+						f(FileOp::DELETED, fit->first, to_systime(fit->second));
 						fit = file_mod_time.erase(fit);
 						continue;
 					}

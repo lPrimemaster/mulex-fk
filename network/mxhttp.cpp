@@ -83,7 +83,6 @@ namespace mulex
 
 		std::string pluginsDir = serveDir + "/plugins";
 
-
 		if(!std::filesystem::is_directory(pluginsDir) && !std::filesystem::create_directory(pluginsDir))
 		{
 			LogError("[mxhttp] Failed to create/attach to user plugins directory.");
@@ -97,28 +96,36 @@ namespace mulex
 			RdbDeleteValueDirect(pplugin);
 		}
 
-		_plugins_watch = std::make_unique<SysFileWatcher>(pluginsDir, [serveDir](const SysFileWatcher::FileOp op, const std::string& file) {
-			std::string filename = std::filesystem::path(file).filename().string();
-			switch(op)
-			{
-				case SysFileWatcher::FileOp::CREATED:
+		_plugins_watch = std::make_unique<SysFileWatcher>(
+			pluginsDir,
+			[serveDir](const SysFileWatcher::FileOp op, const std::string& file, const std::int64_t timestamp) {
+				std::string filename = std::filesystem::path(file).filename().string();
+				bool is_plugin = std::filesystem::path(file).filename().extension().string() == ".js";
+				
+				if(!is_plugin) return;
+
+				switch(op)
 				{
-					HttpRegisterUserPlugin(filename);
-					break;
-				}
-				case SysFileWatcher::FileOp::MODIFIED:
-				{
-					// TODO: (Cesar) Send some flag to reload the file
-					// 				 without the need to reload the webapp
-					break;
-				}
-				case SysFileWatcher::FileOp::DELETED:
-				{
-					HttpRemoveUserPlugin(filename);
-					break;
+					case SysFileWatcher::FileOp::CREATED:
+					{
+						HttpRegisterUserPlugin(filename, timestamp);
+						break;
+					}
+					case SysFileWatcher::FileOp::MODIFIED:
+					{
+						// TODO: (Cesar) Send some flag to reload the file
+						// 				 without the need to reload the webapp
+						HttpUpdateUserPlugin(filename, timestamp);
+						break;
+					}
+					case SysFileWatcher::FileOp::DELETED:
+					{
+						HttpRemoveUserPlugin(filename);
+						break;
+					}
 				}
 			}
-		});
+		);
 
 		LogDebug("[mxhttp] Plugin watcher realtime thread OK.");
 		return true;
@@ -742,11 +749,27 @@ namespace mulex
 		}).run();
 	}
 
-	bool HttpRegisterUserPlugin(const std::string& plugin)
+	bool HttpRegisterUserPlugin(const std::string& plugin, std::int64_t timestamp)
 	{
 		ZoneScoped;
 		LogDebug("[mxhttp] Registering user plugin <%s>.", plugin.c_str());
-		return RdbCreateValueDirect(("/system/http/plugins/" + plugin).c_str(), RdbValueType::BOOL, 0, true);
+		return RdbCreateValueDirect(("/system/http/plugins/" + plugin).c_str(), RdbValueType::INT64, 0, timestamp);
+	}
+
+	bool HttpUpdateUserPlugin(const std::string& plugin, std::int64_t timestamp)
+	{
+		ZoneScoped;
+		RdbKeyName key = ("/system/http/plugins/" + plugin).c_str();
+
+		if(!RdbValueExists(key))
+		{
+			LogError("[mxhttp] Cannot update unknown user plugin <%s>.", plugin.c_str());
+			return false;
+		}
+
+		LogDebug("[mxhttp] Updating user plugin <%s>.", plugin.c_str());
+		RdbWriteValueDirect(key, timestamp);
+		return true;
 	}
 
 	void HttpRemoveUserPlugin(const std::string& plugin)

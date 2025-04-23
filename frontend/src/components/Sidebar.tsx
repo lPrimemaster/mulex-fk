@@ -43,7 +43,7 @@ const Sidebar: Component = () => {
 	}
 
 	return (
-		<div class="m-0 border-r-2 hover:shadow-2xl shadow-lg border-solid border-black-200 min-h-full min-w-36 max-w-36" style="width:10%;position:fixed!important;z-index:1;overflow:auto;">
+		<div class="top-0 m-0 border-r-2 hover:shadow-2xl shadow-lg border-solid border-black-200 min-h-full min-w-36 max-w-36" style="width:10%;position:fixed!important;z-index:1;overflow:auto;">
 			<div class="flex flex-col items-center p-5">
 				<span>
 					<Show when={!metadata.expname.loading} fallback={<h1><b>mxfk</b></h1>}>

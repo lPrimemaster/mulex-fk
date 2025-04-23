@@ -7,8 +7,10 @@ export interface MxPlugin {
 	icon: () => JSXElement;
 	render: (() => JSX.Element) | Component;
 	version: string;
-	description: string;
+	brief: string;
+	description: (() => JSX.Element) | string;
 	author: string;
+	modified: number;
 };
 
 // const [plugins, pluginsActions] = createMapStore<string, MxPlugin>(new Map<string, MxPlugin>());
@@ -16,7 +18,6 @@ export const [plugins, setPlugins] = createSignal<Map<string, MxPlugin>>(new Map
 
 export function mxRegisterPlugin(plugin: MxPlugin) {
 	// pluginsActions.add(plugin.id, plugin);
-	console.log('Adding: ', plugin.id);
 	setPlugins((p) => new Map<string, MxPlugin>(p).set(plugin.id, plugin));
 }
 
@@ -27,16 +28,18 @@ export function mxDeletePlugin(filename: string) {
 	setPlugins((p) => { const np = new Map<string, MxPlugin>(p); np.delete(filename); return np; });
 }
 
-export async function mxRegisterPluginFromFile(filename: string) {
-	const module = await import(filename);
+export async function mxRegisterPluginFromFile(filename: string, timestamp: number) {
+	const module = await import(filename + `?v=${Date.now()}`); // NOTE: (Cesar) Trick to force no caching
 	const plugin = {
 		id: filename,
 		name: module.pname,
 		icon: module.icon,
 		render: module.render,
 		version: module.version,
+		brief: module.brief,
 		description: module.description,
-		author: module.author
+		author: module.author,
+		modified: timestamp
 	};
 
 	if(plugin.icon === undefined) {
