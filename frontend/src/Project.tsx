@@ -1,4 +1,4 @@
-import { Component, createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, untrack, useContext } from 'solid-js';
+import { Component, createMemo, createSignal, For, onCleanup, onMount, Show, useContext } from 'solid-js';
 import Sidebar from './components/Sidebar';
 import { MxPlugin, mxRegisterPluginFromFile, mxDeletePlugin, plugins } from './lib/plugin';
 import { MxRdb } from './lib/rdb';
