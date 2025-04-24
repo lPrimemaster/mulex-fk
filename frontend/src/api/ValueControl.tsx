@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, on } from 'solid-js';
+import { Component, Show, createEffect, on, onMount } from 'solid-js';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 
 type MxValuePanelSize = 'small' | 'medium' | 'large' | 'xlarge';
@@ -61,19 +61,30 @@ export const MxValueControl : Component<MxValueControlProps> = (props) => {
 		if(props.max !== undefined && props.value > props.max) props.onChange(props.max);
 	}));
 
-	createEffect(() => {
-		ref.addEventListener('blur', () => {
-			const cv = ref.textContent;
-			if(!cv) {
-				ref.textContent = last_input_value;
-				return;
-			}
+	onMount(() => {
+		const effect_ref = () => {
+			if(ref) {
+				createEffect(() => {
+					ref.addEventListener('blur', () => {
+						const cv = ref.textContent;
+						if(!cv) {
+							ref.textContent = last_input_value;
+							return;
+						}
 
-			if(cv !== last_input_value) {
-				last_input_value = cv;
-				props.onChange(Number(cv));
+						if(cv !== last_input_value) {
+							last_input_value = cv;
+							props.onChange(Number(cv));
+						}
+					});
+				});
 			}
-		});
+			else {
+				setTimeout(effect_ref, 100);
+			}
+		};
+
+		effect_ref();
 	});
 
 	return (
