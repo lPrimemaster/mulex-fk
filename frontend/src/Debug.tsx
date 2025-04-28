@@ -9,6 +9,7 @@ import Card from "./components/Card";
 import { MxGenericType } from "./lib/convert";
 import { MxButton, MxSpinner, MxValueControl } from "./api";
 import { MxPopup } from "./components/Popup";
+import { MxRdb } from "./lib/rdb";
 
 export const DebugPanel : Component = () => {
 
@@ -100,6 +101,28 @@ export const DebugPanel : Component = () => {
 		setDownloading('');
 	}
 
+	async function dumpRdbKeys() {
+		setDownloading('Downloading keys...');
+		const data: MxGenericType = await MxWebsocket.instance.rpc_call('mulex::RdbListKeys', [], 'generic');
+		const rdbkeys: Array<string> = data.astype('stringarray');
+		let output = [];
+
+		const rdb = new MxRdb();
+		for(const key of rdbkeys) {
+			setDownloading('Downloading [' + key + ']...');
+			const types: MxGenericType = await MxWebsocket.instance.rpc_call('mulex::RdbReadKeyMetadata', [MxGenericType.str512(key)], 'generic');
+			const ktype = MxGenericType.typeFromTypeid(types.astype('uint8'));
+			output.push({
+				key: key,
+				type: ktype,
+				value: await rdb.read(key)
+			});
+		}
+
+		download_data('rdb_keys.json', JSON.stringify(output, (_, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v), 'application/json');
+		setDownloading('');
+	}
+
 	return (
 		<div>
 			<DynamicTitle title="Debug"/>
@@ -186,9 +209,12 @@ export const DebugPanel : Component = () => {
 						</Table>
 					</Card></div>
 					<div class="break-inside-avoid"><Card title="Misc">
-						<div class="flex gap-5">
+						<div class="flex gap-5 m-5">
 							<MxButton onClick={downloadLastLogs}>Download logs</MxButton>
 							<MxValueControl title="Count" value={logCount()} onChange={setLogCount} size="small" min={1} max={2000} increment={100}/>
+						</div>
+						<div class="flex gap-5 m-5">
+							<MxButton onClick={dumpRdbKeys}>Dump RDB keys</MxButton>
 						</div>
 						<MxPopup title="Please wait..." open={downloading().length > 0}>
 							<MxSpinner description={downloading()}/>
