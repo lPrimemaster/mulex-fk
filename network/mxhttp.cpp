@@ -113,8 +113,6 @@ namespace mulex
 					}
 					case SysFileWatcher::FileOp::MODIFIED:
 					{
-						// TODO: (Cesar) Send some flag to reload the file
-						// 				 without the need to reload the webapp
 						HttpUpdateUserPlugin(filename, timestamp);
 						break;
 					}
