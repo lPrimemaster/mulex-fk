@@ -109,3 +109,13 @@ export function bytes_to_string(value: number) {
 
 	return str + ' ' + suffix;
 }
+
+export function download_data(filename: string, data: any, mimetype: string = 'application/octet-stream') {
+	const blob = new Blob([data], { type: mimetype });
+	const url = URL.createObjectURL(blob);
+	const el = document.createElement('a');
+	el.href = url;
+	el.download = filename;
+	el.click();
+	URL.revokeObjectURL(url);
+}

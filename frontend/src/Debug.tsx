@@ -3,10 +3,12 @@ import { DynamicTitle } from "./components/DynamicTitle";
 import Sidebar from "./components/Sidebar";
 import { MxWebsocket } from "./lib/websocket";
 import { createMapStore } from "./lib/rmap";
-import { array_chunkify, timestamp_tohms } from "./lib/utils";
+import { array_chunkify, download_data, timestamp_tohms } from "./lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
 import Card from "./components/Card";
 import { MxGenericType } from "./lib/convert";
+import { MxButton, MxSpinner, MxValueControl } from "./api";
+import { MxPopup } from "./components/Popup";
 
 export const DebugPanel : Component = () => {
 
@@ -16,6 +18,8 @@ export const DebugPanel : Component = () => {
 	const [methodCalls, methodCallsActions] = createMapStore<number, number>(new Map<number, number>());
 	const [methodTotals, setMethodTotals]   = createSignal<number>(0);
 	const [pmethodTotals, setPmethodTotals]   = createSignal<number>(methodTotals());
+	const [downloading, setDownloading] = createSignal<string>('');
+	const [logCount, setLogCount] = createSignal<number>(1000);
 	const methodLoadAvg = createMemo(() => {
 		const v = methodTotals();
 		const p = untrack(pmethodTotals);
@@ -83,7 +87,17 @@ export const DebugPanel : Component = () => {
 			methodCallsActions.modify(m, Number(calls.filter((x) => x[1] === m).map((x) => x[2]).reduce((s, v) => s + v, 0n)));
 		});
 
-		setMethodTotals(methodCalls.data.values().reduce((s, v) => s + v, 0));
+		setMethodTotals(Array.from(methodCalls.data.values()).reduce((s, v) => s + v, 0));
+	}
+
+	async function downloadLastLogs() {
+		setDownloading('Downloading...');
+		const res: MxGenericType = await MxWebsocket.instance.rpc_call('mulex::MsgGetLastLogs', [MxGenericType.uint32(logCount())], 'generic');
+		setDownloading('Converting...');
+		const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
+		const logsString = JSON.stringify(logs.reverse(), (_, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v);
+		download_data('logs.json', logsString, 'application/json');
+		setDownloading('');
 	}
 
 	return (
@@ -166,10 +180,19 @@ export const DebugPanel : Component = () => {
 								<TableRow class="even:bg-gray-200">
 									<TableCell class="px-5 py-0 font-bold">Total</TableCell>
 									<TableCell class="px-5 py-0 font-bold">---</TableCell>
-									<TableCell class="px-5 py-0 font-bold">{clientCalls.data.values().reduce((s, v) => s + v, 0)}</TableCell>
+									<TableCell class="px-5 py-0 font-bold">{Array.from(clientCalls.data.values()).reduce((s, v) => s + v, 0)}</TableCell>
 								</TableRow>
 							</TableBody>
 						</Table>
+					</Card></div>
+					<div class="break-inside-avoid"><Card title="Misc">
+						<div class="flex gap-5">
+							<MxButton onClick={downloadLastLogs}>Download logs</MxButton>
+							<MxValueControl title="Count" value={logCount()} onChange={setLogCount} size="small" min={1} max={2000} increment={100}/>
+						</div>
+						<MxPopup title="Please wait..." open={downloading().length > 0}>
+							<MxSpinner description={downloading()}/>
+						</MxPopup>
 					</Card></div>
 				</div>
 			</div>
