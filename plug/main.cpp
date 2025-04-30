@@ -186,7 +186,7 @@ int main(int argc, char* argv[])
 		}
 		
 		auto watcher = std::make_unique<SysFileWatcher>(
-			(path / "src").c_str(),
+			(path / "src").string(),
 			[experiment, path](const SysFileWatcher::FileOp op, const std::string& file, const std::int64_t timestamp) {
 				auto fpath = std::filesystem::path(file);
 
