@@ -1,50 +1,363 @@
-import { Component } from 'solid-js';
+import { Component, createSignal, JSXElement, onCleanup, onMount } from 'solid-js';
 import apperture from '../../assets/aperture.svg';
+import { MxButton, MxGaugeVertical, MxSelector, MxSpinner, MxSwitch, MxValueControl, MxValuePanel } from '~/api';
+import { MxDoubleSwitch } from '~/api/Switch';
+import { MxGenericPlot, MxHistogramPlot } from '~/api/Plot';
+import { MxRpc } from '~/lib/rpc';
+import { MxGenericType } from '~/lib/convert';
+import { MxRdb } from '~/lib/rdb';
+import { MxEvent } from '~/lib/event';
+import { MxWebsocket } from '~/lib/websocket';
+
+// You can write any ammount of components you wish
+// In reallity the plugin.tsx main entrypoint
+// lives at 'src/entry/'
+// all the other 'src/' locations are free to use
+// there are no real limitations
+const Detail : Component<{ children: JSXElement, class?: string }> = (props) => {
+	return (
+		<div class={`flex w-1/2 border shadow-md bg-red-100 rounded-md place-items-center ${props.class ?? ''}`}>
+			<img class="size-4 ml-5" src={apperture}/>
+			<div class="ml-2">
+				{props.children}
+			</div>
+		</div>
+	);
+};
 
 // A solid-js component
 // Everything solid-js related is valid on this context
 const MyPlugin : Component = () => {
+
+	const [value, setValue] = createSignal<number>(0);
+	const [control, setControl] = createSignal<number>(0);
+	const [nukes, setNukes] = createSignal<boolean>(false);
+	const [fruit, setFruit] = createSignal<string>('banana');
+	const [random, setRandom] = createSignal<number>(0);
+	const [histRandom, setHistRandom] = createSignal<Array<number>>([]);
+	const HIST_SIZE = 1000;
+
+	onMount(() => {
+		const id = setInterval(() => setValue(value() + 1), 1000);
+		const id2 = setInterval(() => setRandom(Math.random()), 1000);
+		const id3 = setInterval(() => setHistRandom(Array.from({ length: HIST_SIZE }, () => Math.ceil(Math.random() * 10))), 1000);
+
+		onCleanup(() => {
+			clearInterval(id);
+			clearInterval(id2);
+			clearInterval(id3);
+		});
+	});
+
 	return (
-		<div>
-			Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras risus urna, rhoncus ut diam vel, semper molestie lacus. In mattis hendrerit dictum. Fusce at nibh ullamcorper, pretium tortor non, condimentum ante. Praesent tempus placerat nisi, a convallis nunc mollis nec. In eu rutrum nunc, vitae aliquet est. Pellentesque erat purus, eleifend eu rhoncus eu, commodo id nibh. Donec quis ligula erat.
+		<div class="container">
+			<p class="mb-5">
+				The mxfk sample plugin gives details on how to use the frontend API features from within
+				a typescript/javascript context.
+				Here are some of the features available directly as part of the API.
+			</p>
 
-			Sed tincidunt, ex a volutpat imperdiet, metus lorem dapibus lectus, sodales vehicula justo diam in sapien. Phasellus egestas leo porta elit vestibulum lacinia. Etiam accumsan ullamcorper ante eget laoreet. Vivamus vitae ex volutpat velit congue fringilla sit amet sed tortor. Mauris mollis nibh eu pellentesque elementum. Cras at pretium felis. Praesent dictum convallis lacus, ut congue magna rhoncus vitae. Nunc massa magna, dictum eget dignissim vitae, tempus vitae ante. Phasellus et consequat turpis.
+			<Detail>Value panels</Detail>
+			<div class="flex gap-5 py-5">
+				<MxValuePanel title="Title" value={42} size="small"/>
+				<MxValuePanel title="Title" value={42} size="medium"/>
+				<MxValuePanel title="Title" value={42} size="large"/>
+				<MxValuePanel title="Title" value={42} size="xlarge"/>
+				<p class="text-wrap w-1/2 text-justify">
+					Value panels feature small, medium, large and xlarge sizes respectively.
+					Values and title can programatically change when required.
+					To the right is the example of a reactive <code>MxValuePanel</code> with changing value.
+				</p>
+				<MxValuePanel title="Reactive" value={value()} size="xlarge" reactive/>
+			</div>
 
-			Fusce tristique eget massa quis luctus. Ut ultricies aliquam felis, eget laoreet enim porttitor non. Aliquam vulputate urna ac tortor rutrum mattis id sit amet quam. Morbi ullamcorper sollicitudin lorem eget ornare. Etiam sollicitudin placerat massa quis eleifend. Donec cursus libero sed tempor sollicitudin. Curabitur rutrum suscipit ex, vitae sollicitudin lorem congue in.
+			<Detail>Value Control</Detail>
+			<div class="flex gap-5 py-5">
+				<MxValueControl title="Control" value={control()} size="small" onChange={setControl}/>
+				<MxValueControl title="Control" value={control()} size="medium" onChange={setControl}/>
+				<MxValueControl title="Control" value={control()} size="large" onChange={setControl}/>
+				<MxValueControl title="Control" value={control()} size="xlarge" onChange={setControl}/>
+				<p class="text-wrap w-1/2 text-justify">
+					Control panels feature small, medium, large and xlarge sizes respectively.
+					Values and title can programatically change when required.
+					Control panels can have changing units, +/- buttons, and user limits.
+				</p>
+				<MxValueControl
+					title="Control"
+					value={control()}
+					size="xlarge"
+					onChange={setControl}
+					increment={1}
+					units="rad"
+					min={0}
+					max={10}
+					description="Some angle"
+				/>
+			</div>
 
-			Aliquam erat volutpat. Nullam in semper quam. Pellentesque efficitur purus vitae orci cursus, feugiat condimentum tortor rhoncus. Morbi consectetur condimentum nunc. Integer venenatis, tortor ac pretium ullamcorper, odio lectus tempus ex, eu suscipit nunc turpis sit amet dolor. Proin tempus velit vitae dolor dapibus, et eleifend lorem fermentum. Maecenas tempus mollis suscipit. Aliquam erat volutpat. Nunc porttitor eget nunc sed faucibus. Curabitur vel odio nec orci semper aliquet eget et erat. Morbi tincidunt convallis ipsum, id sodales lectus.
+			<Detail>Other controls</Detail>
+			<div class="grid grid-cols-2 grid-rows-2">
+				<div>
+					<Detail class="bg-yellow-100 ml-5 mt-5 w-1/4">Buttons</Detail>
+					<div class="flex gap-5 py-5 ml-5">
+						<div class="grid gap-2 grid-cols-2 grid-rows-2">
+							<MxButton onClick={() => {}}>A button that does nothing</MxButton>
+							<MxButton onClick={() => {}} type="error">A red button that does nothing</MxButton>
+							<MxButton onClick={() => {}} disabled>A disabled button</MxButton>
+						</div>
+					</div>
+				</div>
 
-			Integer congue, mauris quis tincidunt auctor, erat mi laoreet purus, eget pretium enim nulla eget augue. Maecenas et velit augue. Proin lacinia et massa ut faucibus. Nullam aliquet egestas semper. Sed sed arcu neque. Phasellus congue, augue eget tincidunt sodales, tortor ex laoreet nibh, et posuere elit felis at velit. Praesent at condimentum dui. Sed vulputate maximus enim, eget scelerisque ligula vestibulum quis. Sed suscipit maximus nunc ac venenatis. Mauris sed pharetra dui. Mauris at faucibus elit, vel vehicula magna. Sed interdum, sapien quis accumsan maximus, eros est ultrices urna, sed consectetur mi leo quis dui. In interdum tristique massa a egestas. Mauris et imperdiet ex. Nullam interdum orci venenatis elit pretium commodo. Donec elementum massa sed neque ultricies, vitae euismod odio auctor.
+				<div>
+					<Detail class="bg-yellow-100 ml-5 mt-5 w-1/4">Switches</Detail>
+					<div class="flex gap-5 py-5 ml-5">
+						<div class="grid gap-5 grid-cols-2 grid-rows-2">
+							<MxSwitch label="Activate nukes" value={nukes()} onChange={setNukes}/>
+							<MxSwitch label="Disabled" value={nukes()} onChange={setNukes} disabled/>
+							<MxDoubleSwitch labelFalse="I am off" labelTrue="I am on" value={nukes()} onChange={setNukes}/>
+							<MxDoubleSwitch labelFalse="I am off" labelTrue="I am on" value={nukes()} onChange={setNukes} disabled/>
+						</div>
+					</div>
+				</div>
 
-			Mauris vehicula dui nec urna sollicitudin, fringilla lobortis odio imperdiet. Mauris et velit mi. Nullam pretium, enim sed malesuada imperdiet, nisi lacus tempus nisi, sit amet dignissim justo lectus consectetur quam. Morbi eget tempor justo, at rutrum arcu. Maecenas vehicula risus vel ligula euismod aliquet. Nulla finibus augue quis odio vulputate sollicitudin. Sed at aliquet elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus sed dolor felis. Nam in nisl eu neque lacinia auctor. Cras feugiat venenatis semper. Ut ac quam dapibus, cursus ex nec, posuere dui. Mauris eleifend rhoncus ex, et tristique augue. Sed at bibendum enim, sit amet commodo metus.
+				<div class="col-span-2">
+					<Detail class="bg-yellow-100 ml-5 mt-5 w-1/4">Selectors</Detail>
+					<div class="flex gap-5 py-5 ml-5">
+						<MxSelector
+							title="Fruits" value={fruit()} onSelect={setFruit} size="small"
+							options={['banana', 'orange', 'coconut', 'avocado', 'strawberry']}
+							description="Favourite fruit."
+						/>
+						<MxSelector
+							title="Fruits" value={fruit()} onSelect={setFruit} size="medium"
+							options={['banana', 'orange', 'coconut', 'avocado', 'strawberry']}
+							description="Favourite fruit."
+						/>
+						<MxSelector
+							title="Fruits" value={fruit()} onSelect={setFruit} size="large"
+							options={['banana', 'orange', 'coconut', 'avocado', 'strawberry']}
+							description="Favourite fruit."
+						/>
+						<MxSelector
+							title="Fruits" value={fruit()} onSelect={setFruit} size="xlarge"
+							options={['banana', 'orange', 'coconut', 'avocado', 'strawberry']}
+							description="Favourite fruit."
+						/>
+						<p class="text-wrap w-1/4 text-justify">
+							Selectors allow you to change values out of multiple option.
+							Basically they are just a simple combobox replica.
+						</p>
+					</div>
+				</div>
+			</div>
+			<Detail class="bg-yellow-100 ml-5 mt-5 w-1/4">Spinner</Detail>
+			<div class="flex gap-5 py-5 ml-5">
+				<div class="grid gap-2 grid-cols-2 grid-rows-2">
+					<MxSpinner description="Waiting for something"/>
+				</div>
+			</div>
 
-			Etiam augue nulla, suscipit sed sollicitudin a, posuere et leo. Sed dictum justo id interdum venenatis. Nunc vel tincidunt augue. Quisque rutrum mi nec semper condimentum. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Nulla ac elit sed nisi ornare maximus. Aliquam efficitur turpis finibus nunc pulvinar, vel tristique nulla ultrices. Proin ac odio sapien. Maecenas vitae nisl et justo convallis tempus. Sed vel orci in ipsum faucibus faucibus at et mi. Sed bibendum mauris ut pretium condimentum. Sed ullamcorper purus eget aliquam viverra. Nulla vitae mollis massa. Vivamus non ipsum vel ipsum porttitor suscipit. Duis non interdum erat. Ut cursus sagittis arcu sit amet sagittis.
+			<Detail>Gauges</Detail>
+			<div class="flex gap-5 py-5">
+				<MxGaugeVertical min={10} max={50} value={random() * 40 + 10} width="200px" height="300px" title="Random value" displayMode="absolute"/>
+				<MxGaugeVertical min={10} max={50} value={random() * 40 + 10} width="200px" height="300px" title="Random value pct" displayMode="percentage"/>
+				<MxGaugeVertical min={10} max={50} value={42} width="200px" height="300px" title="Disk usage" displayMode="absolute"
+					units="PB"
+				/>
+				<p class="text-wrap w-1/4 text-justify">
+					Gauges give you a way to graphically visualize data.
+					Percentage and absolute modes are available. Vertical gauges only.
+				</p>
+			</div>
 
-			Vivamus convallis accumsan leo ac malesuada. Proin scelerisque quis lacus faucibus imperdiet. Suspendisse consequat libero vestibulum mauris venenatis, elementum venenatis magna convallis. Cras varius ullamcorper risus, vel lacinia diam sodales vitae. Vivamus accumsan vehicula ornare. Curabitur at justo nec lorem commodo luctus. Sed venenatis iaculis pellentesque. Sed aliquam porta massa, sed congue leo feugiat id. Duis magna neque, fermentum eu mattis sed, venenatis vel tortor. Cras feugiat augue velit, ac sodales quam vehicula id. Proin quis tellus nec tellus euismod consequat. Integer non erat ut quam posuere efficitur at gravida nisl. Praesent dapibus ornare lacinia.
+			<Detail>Plots</Detail>
+			<div class="flex gap-5 py-5">
+				<MxHistogramPlot
+					series={[{}, { label: 'Data 1', stroke: 'black' }, { label: 'Data 2', stroke: 'red' }]}
+					x={Array.from({ length: HIST_SIZE }, (_, i) => i + 1)}
+					y={[Array.from(histRandom(), (v, _) => v * 10), histRandom()]}
+					scales={{ x: { time: false }, y: { range: [0, 100] }}}
+					class="h-56 w-3/4"
+					// autoYScale
+				/>
+				<p class="text-wrap w-1/4 text-justify">
+					<code>MxHistogramPlot</code> plots as the name indicates can show you histograms in real time.
+					It uses the 'uplot' package for performance.
+					One can add multiple series if required.
+					Auto y scale is also available to conform the data.
+				</p>
+			</div>
+			<div class="flex gap-5 py-5">
+				<MxGenericPlot
+					series={[{}, { label: 'Data 1', stroke: 'blue' }, { label: 'Data 2', stroke: 'red' }]}
+					x={Array.from({ length: 100 }, (_, i) => i + 1)}
+					y={[Array.from({ length: 100 }, (_, i) => Math.exp(i * 0.02)), Array.from({ length: 100 }, (_, i) => Math.exp(-(i - 50) * 0.04))]}
+					scales={{ x: { time: false }, y: { range: [0, 10] }}}
+					class="h-56 w-3/4"
+					// autoYScale
+				/>
+				<p class="text-wrap w-1/4 text-justify">
+					<code>MxGenericPlot</code> plots as the name indicates can show you any type of plot in real time.
+					It uses the 'uplot' package for performance and is basically a wrapper around the uplot object.
+					You can look under the uplot package documentation for more details about this plot. Or alternatively,
+					inspect the <code>src/api/Plot.tsx</code> file.
+				</p>
+			</div>
 
-			Maecenas placerat id urna eu porta. Fusce facilisis ante eget leo rutrum, a interdum leo vestibulum. Nunc convallis porttitor ultrices. Interdum et malesuada fames ac ante ipsum primis in faucibus. In et libero id dui molestie fringilla. Duis odio dui, hendrerit eget egestas in, rutrum quis tellus. Suspendisse sapien ex, finibus in neque in, convallis suscipit nulla. Suspendisse eu nibh rutrum, rhoncus leo vitae, posuere velit. Aenean fringilla ac purus nec ornare. Vestibulum interdum dignissim diam at efficitur. Curabitur vitae elit eget sem pellentesque fermentum in at purus. Integer eu nisi ac odio egestas venenatis nec non est. Aliquam commodo mi nibh, nec efficitur lacus consequat id.
+			<Detail class="mt-5">Communication features</Detail>
+			<p class="text-wrap w-full text-justify mt-5">
+				This section features examples of server communication via the multiple options available.
+				For a more detailed description visit the wiki page regarding frontend development 
+				<a href="https://lprimemaster.github.io/mulex-fk/" style={{
+					"text-decoration": "underline",
+					"color": "blue"
+				}} target="_blank">here</a>.
+			</p>
 
-			Mauris ultricies dolor non tellus mattis ultricies. Integer elementum ex pulvinar dapibus sollicitudin. Proin tellus ipsum, laoreet at suscipit ut, semper ac dui. Curabitur sed scelerisque ante. Sed commodo ante sed mi scelerisque mollis. In efficitur vehicula luctus. Morbi ullamcorper nulla eu eros hendrerit, ut molestie arcu finibus. Nam non tincidunt est. Maecenas nec condimentum sapien. Sed imperdiet erat et ultricies molestie. Suspendisse ac sodales augue. Aliquam viverra ut odio in pretium.
+			<Detail class="bg-yellow-100 ml-5 mt-5 w-1/4">RPC</Detail>
+			<div class="flex gap-5 py-5">
+				{(() => {
+					const [ename, setEname] = createSignal<string>('');
+					return (
+						<>
+							<MxButton onClick={ async () => {
+								const handle = await MxRpc.Create();
+								const name: MxGenericType = await handle.SysGetExperimentName();
+								const expname: string = name.astype('string');
+								setEname(expname);
+							}}>Call <code>mulex::SysGetExperimentName</code></MxButton>
+							<MxValuePanel title="Experiment name" value={ename()} size="xlarge"/>
+						</>
+					);
+				})()}
+				<div class="text-wrap w-1/2 flex place-items-center">
+					<div class="border rounded-md p-5">
+						<code>const handle = await MxRpc.Create();</code><br/>
+						<code>const name: MxGenericType = await handle.SysGetExperimentName();</code><br/>
+						<code>const expname: string = name.astype('string');</code><br/>
+					</div>
+				</div>
+			</div>
 
-			Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras risus urna, rhoncus ut diam vel, semper molestie lacus. In mattis hendrerit dictum. Fusce at nibh ullamcorper, pretium tortor non, condimentum ante. Praesent tempus placerat nisi, a convallis nunc mollis nec. In eu rutrum nunc, vitae aliquet est. Pellentesque erat purus, eleifend eu rhoncus eu, commodo id nibh. Donec quis ligula erat.
+			<Detail class="bg-yellow-100 ml-5 mt-5 w-1/4">RDB</Detail>
+			<div class="flex gap-5 py-5">
+				{(() => {
+					const [cpu, setCpu] = createSignal<number>(0);
+					return (
+						<>
+							<MxButton onClick={ async () => {
+								const handle = new MxRdb();
+								const cpu_usage: number = await handle.read('/system/metrics/cpu_usage');
+								setCpu(cpu_usage);
+							}}>Fetch <code>/system/metrics/cpu_usage</code></MxButton>
+							<MxValuePanel title="Cpu Usage" value={cpu().toPrecision(2)} size="xlarge"/>
+						</>
+					);
+				})()}
+				<div class="text-wrap flex place-items-center">
+					<div class="border rounded-md p-5">
+						<code>const handle = new MxRdb();</code><br/>
+						<code>const cpu_usage: number = await handle.read('/system/metrics/cpu_usage');</code><br/>
+					</div>
+				</div>
+			</div>
+			<div class="flex gap-5 py-5">
+				{(() => {
+					const [cpu, setCpu] = createSignal<number>(0);
 
-			Sed tincidunt, ex a volutpat imperdiet, metus lorem dapibus lectus, sodales vehicula justo diam in sapien. Phasellus egestas leo porta elit vestibulum lacinia. Etiam accumsan ullamcorper ante eget laoreet. Vivamus vitae ex volutpat velit congue fringilla sit amet sed tortor. Mauris mollis nibh eu pellentesque elementum. Cras at pretium felis. Praesent dictum convallis lacus, ut congue magna rhoncus vitae. Nunc massa magna, dictum eget dignissim vitae, tempus vitae ante. Phasellus et consequat turpis.
+					const handle = new MxRdb();
+					handle.watch('/system/metrics/cpu_usage', (_: string, v: MxGenericType) => {
+						const cpu_usage: number = v.astype('float64');
+						setCpu(cpu_usage);
+					});
 
-			Fusce tristique eget massa quis luctus. Ut ultricies aliquam felis, eget laoreet enim porttitor non. Aliquam vulputate urna ac tortor rutrum mattis id sit amet quam. Morbi ullamcorper sollicitudin lorem eget ornare. Etiam sollicitudin placerat massa quis eleifend. Donec cursus libero sed tempor sollicitudin. Curabitur rutrum suscipit ex, vitae sollicitudin lorem congue in.
+					return (
+						<>
+							<div class="border rounded-md p-5 place-content-center">
+								Continuous watch
+							</div>
+							<MxValuePanel title="Cpu Usage" value={cpu().toPrecision(2)} size="xlarge"/>
+						</>
+					);
+				})()}
+				<div class="text-wrap flex place-items-center">
+					<div class="border rounded-md p-5">
+						<code>const handle = new MxRdb();</code><br/>
+						<code>
+							handle.watch(<br/>
+							&nbsp;'/system/metrics/cpu_usage',<br/>
+							&nbsp;(_: string, v: MxGenericType) =&gt; setCpu(v.astype('float64'))<br/>
+							);
+						</code><br/>
+					</div>
+				</div>
+			</div>
 
-			Aliquam erat volutpat. Nullam in semper quam. Pellentesque efficitur purus vitae orci cursus, feugiat condimentum tortor rhoncus. Morbi consectetur condimentum nunc. Integer venenatis, tortor ac pretium ullamcorper, odio lectus tempus ex, eu suscipit nunc turpis sit amet dolor. Proin tempus velit vitae dolor dapibus, et eleifend lorem fermentum. Maecenas tempus mollis suscipit. Aliquam erat volutpat. Nunc porttitor eget nunc sed faucibus. Curabitur vel odio nec orci semper aliquet eget et erat. Morbi tincidunt convallis ipsum, id sodales lectus.
+			<Detail class="bg-yellow-100 ml-5 mt-5 w-1/4">Events</Detail>
+			<div>
+				{(() => {
+					const [uvar, setUvar] = createSignal<BigInt>(BigInt(0));
+					const [ukey, setUkey] = createSignal<string>('');
 
-			Integer congue, mauris quis tincidunt auctor, erat mi laoreet purus, eget pretium enim nulla eget augue. Maecenas et velit augue. Proin lacinia et massa ut faucibus. Nullam aliquet egestas semper. Sed sed arcu neque. Phasellus congue, augue eget tincidunt sodales, tortor ex laoreet nibh, et posuere elit felis at velit. Praesent at condimentum dui. Sed vulputate maximus enim, eget scelerisque ligula vestibulum quis. Sed suscipit maximus nunc ac venenatis. Mauris sed pharetra dui. Mauris at faucibus elit, vel vehicula magna. Sed interdum, sapien quis accumsan maximus, eros est ultrices urna, sed consectetur mi leo quis dui. In interdum tristique massa a egestas. Mauris et imperdiet ex. Nullam interdum orci venenatis elit pretium commodo. Donec elementum massa sed neque ultricies, vitae euismod odio auctor.
+					MxWebsocket.instance.subscribe('mxevt::rdbw-6c83cf8ccd1e32e6', (data: Uint8Array) => {
+						const key = MxGenericType.fromData(data).astype('string');
+						const value = MxGenericType.fromData(data.subarray(512), 'generic').astype('uint64');
+						setUvar(value);
+						setUkey(key);
+					});
 
-			Mauris vehicula dui nec urna sollicitudin, fringilla lobortis odio imperdiet. Mauris et velit mi. Nullam pretium, enim sed malesuada imperdiet, nisi lacus tempus nisi, sit amet dignissim justo lectus consectetur quam. Morbi eget tempor justo, at rutrum arcu. Maecenas vehicula risus vel ligula euismod aliquet. Nulla finibus augue quis odio vulputate sollicitudin. Sed at aliquet elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus sed dolor felis. Nam in nisl eu neque lacinia auctor. Cras feugiat venenatis semper. Ut ac quam dapibus, cursus ex nec, posuere dui. Mauris eleifend rhoncus ex, et tristique augue. Sed at bibendum enim, sit amet commodo metus.
+					return (
+						<>
+							<div class="flex gap-5 py-5">
+								<div class="border rounded-md p-5 place-content-center">
+										Event subscription
+								</div>
+								<div class="text-wrap flex place-items-center">
+									<div class="border rounded-md p-5">
+										Simulating event reading via RDB watch events (which use built-in events).
+									</div>
+								</div>
+							</div>
+							<div class="flex gap-5 py-5">
+								<MxValuePanel title="Key" value={ukey()} size="xlarge"/>
+								<MxValuePanel title="Value" value={uvar().toString()} size="xlarge"/>
+							</div>
+						</>
+					);
+				})()}
+			</div>
 
-			Etiam augue nulla, suscipit sed sollicitudin a, posuere et leo. Sed dictum justo id interdum venenatis. Nunc vel tincidunt augue. Quisque rutrum mi nec semper condimentum. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Nulla ac elit sed nisi ornare maximus. Aliquam efficitur turpis finibus nunc pulvinar, vel tristique nulla ultrices. Proin ac odio sapien. Maecenas vitae nisl et justo convallis tempus. Sed vel orci in ipsum faucibus faucibus at et mi. Sed bibendum mauris ut pretium condimentum. Sed ullamcorper purus eget aliquam viverra. Nulla vitae mollis massa. Vivamus non ipsum vel ipsum porttitor suscipit. Duis non interdum erat. Ut cursus sagittis arcu sit amet sagittis.
+			<Detail class="mt-5">Summary</Detail>
+			<p class="text-wrap w-full text-justify mt-5">
+				The plugin frontend is a versatile tool to write GUI's to manage/control your backend(s).<br/>
+				A feature that is missing in this demo plugin is the user RPC call, which allows one to call
+				functions defined in one's backend binary. To know more about this visit the documentation page.<br/>
+			</p>
+			<div class="mt-5">
+				In summary here are a few tips on how to use the mechanisms showcased above:
 
-			Vivamus convallis accumsan leo ac malesuada. Proin scelerisque quis lacus faucibus imperdiet. Suspendisse consequat libero vestibulum mauris venenatis, elementum venenatis magna convallis. Cras varius ullamcorper risus, vel lacinia diam sodales vitae. Vivamus accumsan vehicula ornare. Curabitur at justo nec lorem commodo luctus. Sed venenatis iaculis pellentesque. Sed aliquam porta massa, sed congue leo feugiat id. Duis magna neque, fermentum eu mattis sed, venenatis vel tortor. Cras feugiat augue velit, ac sodales quam vehicula id. Proin quis tellus nec tellus euismod consequat. Integer non erat ut quam posuere efficitur at gravida nisl. Praesent dapibus ornare lacinia.
-
-			Maecenas placerat id urna eu porta. Fusce facilisis ante eget leo rutrum, a interdum leo vestibulum. Nunc convallis porttitor ultrices. Interdum et malesuada fames ac ante ipsum primis in faucibus. In et libero id dui molestie fringilla. Duis odio dui, hendrerit eget egestas in, rutrum quis tellus. Suspendisse sapien ex, finibus in neque in, convallis suscipit nulla. Suspendisse eu nibh rutrum, rhoncus leo vitae, posuere velit. Aenean fringilla ac purus nec ornare. Vestibulum interdum dignissim diam at efficitur. Curabitur vitae elit eget sem pellentesque fermentum in at purus. Integer eu nisi ac odio egestas venenatis nec non est. Aliquam commodo mi nibh, nec efficitur lacus consequat id.
-
-			Mauris ultricies dolor non tellus mattis ultricies. Integer elementum ex pulvinar dapibus sollicitudin. Proin tellus ipsum, laoreet at suscipit ut, semper ac dui. Curabitur sed scelerisque ante. Sed commodo ante sed mi scelerisque mollis. In efficitur vehicula luctus. Morbi ullamcorper nulla eu eros hendrerit, ut molestie arcu finibus. Nam non tincidunt est. Maecenas nec condimentum sapien. Sed imperdiet erat et ultricies molestie. Suspendisse ac sodales augue. Aliquam viverra ut odio in pretium.
+				<div class="bg-yellow-100 border rounded-md px-5 py-1 flex place-items-center mt-5 ml-5">
+					<img class="size-4 mr-2" src={apperture}/>
+					For slow/medium evolving variables (let's say &lt;10Hz) use RDB variables to share data.<br/>
+					These are also usefull when one want to change values without the need to build a custom frontend.
+				</div>
+				<div class="bg-yellow-100 border rounded-md px-5 py-1 flex place-items-center mt-5 ml-5">
+					<img class="size-4 mr-2" src={apperture}/>
+					For fast evolving variables use events to share data.<br/>
+					Events can be registered on a backend.<br/>
+					Unlike RDB variables, these are highly pipelinable.
+				</div>
+				<div class="bg-yellow-100 border rounded-md px-5 py-1 flex place-items-center mt-5 ml-5">
+					<img class="size-4 mr-2" src={apperture}/>
+					Displaying data is done with built-in value panels and generic plots.<br/>
+					However, one could use it's one code/libraries to do this as needed/wanted.
+				</div>
+				<div class="bg-yellow-100 border rounded-md px-5 py-1 flex place-items-center mt-5 ml-5">
+					<img class="size-4 mr-2" src={apperture}/>
+					To aid in development 'mxplug' contains a hotswap mode that rebuilds everytime a source file changes.<br/>
+					Try running this plugin with 'mxplug --build &lt;expname&gt; --hotswap' and change this source file to see changes in realtime.
+				</div>
+			</div>
 		</div>
 	);
 };
