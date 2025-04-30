@@ -136,6 +136,7 @@ static bool PlugBuildPlugin(const std::string& exp, const std::filesystem::path&
 int main(int argc, char* argv[])
 {
 	Mode mode = Mode::UNKNOWN;
+	bool hotswap = false;
 	auto path = std::filesystem::current_path();
 	std::string experiment;
 
@@ -163,6 +164,10 @@ int main(int argc, char* argv[])
 		path = std::filesystem::path(dir);
 	}, "Set the current working directory for mxplug.");
 
+	SysAddArgument("hotswap", 0, false, [&](const std::string&) {
+		hotswap = true;
+	}, "Enable hotswap. This builds and copies the plugin everytime a file is saved under cwd.");
+
 	if(!SysParseArguments(argc, argv))
 	{
 		LogError("[mxplug] Failed to parse arguments.");
@@ -171,6 +176,66 @@ int main(int argc, char* argv[])
 
 	// All arguments OK at this point
 	LogTrace("[mxplug] Arguments OK.");
+
+	if(hotswap)
+	{
+		if(mode != Mode::BUILD)
+		{
+			LogError("[mxplug] Hotswapping is only supported with the '--build' flag.");
+			return 0;
+		}
+		
+		auto watcher = std::make_unique<SysFileWatcher>(
+			(path / "src").c_str(),
+			[experiment, path](const SysFileWatcher::FileOp op, const std::string& file, const std::int64_t timestamp) {
+				auto fpath = std::filesystem::path(file);
+
+				// Skip directories
+				if(std::filesystem::is_directory(fpath)) return;
+
+				std::string filename = fpath.filename().string();
+
+				switch(op)
+				{
+					case SysFileWatcher::FileOp::CREATED:
+					{
+						return;
+					}
+					case SysFileWatcher::FileOp::MODIFIED:
+					{
+						LogMessage("[mxplug] File modified: <%s>. Rebuilding...", filename.c_str());
+						break;
+					}
+					case SysFileWatcher::FileOp::DELETED:
+					{
+						LogMessage("[mxplug] File deletion detected: <%s>. Rebuilding...", filename.c_str());
+						break;
+					}
+				}
+
+				if(!PlugBuildPlugin(experiment, path))
+				{
+					LogError("[mxplug] Failed to build plugin.");
+				}
+			},
+			250
+		);
+
+		const std::atomic<bool>* stop = mulex::SysSetupExitSignal();
+
+		LogMessage("[mxplug] Running hotswap for dir: <%s>.", path.c_str());
+		LogMessage("[mxplug] Consider using daemon mode '-D' if you want to continue using this shell.");
+		LogMessage("[mxplug] Press ctrl-C to exit.");
+
+		while(!*stop)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+
+		LogMessage("[mxplug] ctrl-C detected. Exiting...");
+
+		return 0;
+	}
 
 	switch(mode)
 	{
