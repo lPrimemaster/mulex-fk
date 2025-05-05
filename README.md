@@ -23,6 +23,5 @@ To get started using the mx system checkout [the docs](https://lprimemaster.gith
 
 ## Upcoming Features
 
-- Starting backends remotely
 - Event timeline view
 - Alarms

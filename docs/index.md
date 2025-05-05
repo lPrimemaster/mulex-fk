@@ -20,6 +20,5 @@ for multiple backends and frontends. As long as your machines have ethernet conn
 
 ## Upcoming Features
 
-- Starting backends remotely
 - Event timeline view
 - Alarms

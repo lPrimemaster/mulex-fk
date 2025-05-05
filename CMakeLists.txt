@@ -143,6 +143,7 @@ add_subdirectory(drv)
 add_subdirectory(run)
 add_subdirectory(bck)
 add_subdirectory(plug)
+add_subdirectory(rexs)
 
 if(BUILD_CTARGETS)
 	add_subdirectory(ctargets)
