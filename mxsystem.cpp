@@ -10,6 +10,7 @@
 #include "mxhttp.h"
 #include "mxrun.h"
 #include "mxmsg.h"
+#include "rexs/mxrexs.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -363,6 +364,20 @@ namespace mulex
 		RdbClose();
 	}
 
+	static void SysWriteRexClientInfo(const std::string& hostname)
+	{
+		const std::int64_t cid = SysGetClientId();
+		const std::string cwd = std::filesystem::current_path().string();
+
+		if(!RexUpdateClientInfo(cid, cwd, hostname))
+		{
+			if(!RexCreateClientInfo(cid, cwd, hostname))
+			{
+				LogError("SysWriteRexClientInfo: Failed to create/update rex client info.");
+			}
+		}
+	}
+
 	bool SysInitializeBackend(int argc, char* argv[])
 	{
 		std::string server_name = "localhost";
@@ -373,6 +388,9 @@ namespace mulex
 		{
 			return false;
 		}
+
+		// Setup Rex
+		SysWriteRexClientInfo(server_name);
 
 		// Now try to connect
 		if(!SysConnectToExperiment(server_name.c_str()))

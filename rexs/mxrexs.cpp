@@ -2,7 +2,9 @@
 #include "../mxsystem.h"
 #include "../mxlogger.h"
 #include <cerrno>
+#include <filesystem>
 #include <fstream>
+#include <sstream>
 
 #ifdef __linux__
 #include <sys/types.h>
@@ -13,9 +15,14 @@
 #include <signal.h>
 #endif
 
+#ifdef __linux__
+static int _rex_file_lock_fd;
+#else
+static HANDLE _rex_file_lock_fd;
+#endif
+
 namespace mulex
 {
-
 	static std::string RexGetLockFilePath()
 	{
 		std::string cache_dir(SysGetCacheDir());
@@ -154,5 +161,212 @@ namespace mulex
 		return false;
 #endif
 		return false;
+	}
+
+	static std::string RexGetClientListFilePath()
+	{
+		static std::string cache_dir(SysGetCacheDir());
+		if(cache_dir.empty())
+		{
+			return "";
+		}
+
+		static std::string rex_path = cache_dir + "/rex.bin";
+		return rex_path;
+	}
+
+	static std::string RexCreateEntryString(std::int64_t cid, const std::string& absbwd, const std::string& srvaddr)
+	{
+		std::ostringstream ss;
+		// NOTE: (Cesar) Cids, workdirs and server addresses cannot contain '|' (good spacer here)
+		ss << SysI64ToHexString(cid) << "|" << absbwd << "|" << srvaddr << "\n";
+		return ss.str();
+	}
+
+	// NOTE: (Cesar) Multiple processes might want to read/write on the file
+	static bool RexLockFile()
+	{
+#ifdef __linux__
+		_rex_file_lock_fd = ::open((RexGetClientListFilePath() + ".lock").c_str(), O_CREAT | O_RDWR, 0666);
+		if(::flock(_rex_file_lock_fd, LOCK_EX) == -1)
+		{
+			return false;
+		}
+		return true;
+#else
+		const std::string path = RexGetClientListFilePath();
+		_rex_file_lock_fd = CreateFile((path + ".lock").c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		
+		OVERLAPPED overlapped = { 0 };
+		return LockFileEx(_rex_file_lock_fd, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &overlapped) == TRUE;
+#endif
+	}
+
+	static bool RexUnlockFile()
+	{
+#ifdef __linux__
+		::flock(_rex_file_lock_fd, LOCK_UN);
+		::close(_rex_file_lock_fd);
+		return true;
+#else
+		OVERLAPPED overlapped = { 0 };
+		return UnlockFileEx(_rex_file_lock_fd, 0, MAXDWORD, MAXDWORD, &overlapped) == TRUE;
+#endif
+	}
+
+	static bool RexLineHasCid(std::int64_t cid, const std::string& line)
+	{
+		auto idx = line.find_first_of('|');
+		std::int64_t fcid = std::stoll(line.substr(0, idx), 0, 16);
+		return fcid == cid;
+	}
+
+	static void RexWriteBufferToFile(std::ostringstream& ss, const std::string& path)
+	{
+		std::ofstream file(path, std::ios::trunc);
+
+		if(!file)
+		{
+			LogError("[mxrexs] Failed to open <rex.bin> file.");
+			return;
+		}
+		file << ss.str();
+	}
+
+	struct RexLockGuard
+	{
+		RexLockGuard()
+		{
+			if(!RexLockFile())
+			{
+				LogError("[mxrexs] RexLockGuard failed to lock file.");
+				return;
+			}
+
+			_locked = true;
+		}
+
+		~RexLockGuard()
+		{
+			if(_locked && !RexUnlockFile())
+			{
+				LogError("[mxrexs] RexLockGuard failed to unlock file.");
+			}
+		}
+
+		bool _locked = false;
+	};
+
+	bool RexCreateClientListFile()
+	{
+		RexLockGuard lock;
+		std::string rex_path = RexGetClientListFilePath();
+		if(!std::filesystem::exists(rex_path))
+		{
+			std::ofstream file(rex_path);
+			if(!file)
+			{
+				LogError("[mxrexs] Failed to create <rex.bin> file.");
+				return false;
+			}
+		}
+
+		LogTrace("[mxrexs] RexCreateClientListFile() OK.");
+		return true;
+	}
+
+	bool RexCreateClientInfo(std::int64_t cid, const std::string& absbwd, const std::string& srvaddr)
+	{
+		RexLockGuard lock;
+		std::string path = RexGetClientListFilePath();
+		std::ofstream file(path, std::ios::app);
+
+		if(!file)
+		{
+			LogError("[mxrexs] Failed to open <rex.bin> file.");
+			return false;
+		}
+
+		file << RexCreateEntryString(cid, absbwd, srvaddr);
+		file << std::flush;
+		return true;
+	}
+
+	bool RexUpdateClientInfo(std::int64_t cid, const std::string& absbwd, const std::string& srvaddr)
+	{
+		RexLockGuard lock;
+		std::string path = RexGetClientListFilePath();
+		std::ostringstream ss;
+
+		std::ifstream file(path, std::ios::in);
+		bool found = false;
+
+		if(!file)
+		{
+			LogError("[mxrexs] Failed to open <rex.bin> file.");
+			return false;
+		}
+
+		std::string line;
+		while(std::getline(file, line))
+		{
+			if(RexLineHasCid(cid, line))
+			{
+				ss << RexCreateEntryString(cid, absbwd, srvaddr);
+				found = true;
+			}
+			else
+			{
+				ss << line << "\n";
+			}
+		}
+
+		if(!found)
+		{
+			LogDebug("[mxrexs] Failed to find cid entry <0x%llx> on file.", cid);
+			return false;
+		}
+
+		RexWriteBufferToFile(ss, path);
+		return true;
+	}
+
+	bool RexDeleteClientInfo(std::int64_t cid)
+	{
+		RexLockGuard lock;
+		std::string path = RexGetClientListFilePath();
+		std::ostringstream ss;
+
+		std::ifstream file(path, std::ios::in);
+		bool found = false;
+
+		if(!file)
+		{
+			LogError("[mxrexs] Failed to open <rex.bin> file.");
+			return false;
+		}
+
+		std::string line;
+		while(std::getline(file, line))
+		{
+			if(RexLineHasCid(cid, line))
+			{
+				// NOTE: (Cesar) Ellipsis line
+				found = true;
+			}
+			else
+			{
+				ss << line << "\n";
+			}
+		}
+
+		if(!found)
+		{
+			LogError("[mxrexs] Failed to find cid entry <0x%llx> on file.", cid);
+			return false;
+		}
+
+		RexWriteBufferToFile(ss, path);
+		return true;
 	}
 }

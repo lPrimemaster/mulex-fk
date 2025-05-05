@@ -88,6 +88,7 @@ add_library(MxRpc
 	mxevt.cpp
 	mxmsg.cpp
 	../mxsystem.cpp
+	../rexs/mxrexs.cpp
 )
 
 if(WIN32)
