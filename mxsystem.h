@@ -260,6 +260,7 @@ namespace mulex
 	std::string SysGetExperimentHome();
 	MX_RPC_METHOD mulex::mxstring<512> SysGetExperimentName();
 	std::string_view SysGetBinaryName();
+	std::string_view SysGetBinaryFullName();
 	std::string_view SysGetHostname();
 	std::uint64_t SysGetClientId();
 	std::string SysI64ToHexString(std::uint64_t value);
@@ -270,6 +271,8 @@ namespace mulex
 
 	std::uint64_t SysStringHash64(const std::string& key);
 	bool SysMatchPattern(const std::string& pattern, const std::string& target);
+
+	bool SysSpawnProcess(const std::string& binary, const std::string& workdir, const std::vector<std::string>& argv);
 
 	struct SysPerformanceMetrics
 	{

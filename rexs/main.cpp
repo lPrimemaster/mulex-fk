@@ -8,6 +8,7 @@ using namespace mulex;
 
 static std::function<void()> _rex_service_init;
 static std::function<void()> _rex_service_loop;
+static std::function<void()> _rex_service_cleanup;
 
 #ifdef _WIN32
 #include <windows.h>
@@ -104,6 +105,9 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR* argv)
 		// Service is running
 		_rex_service_loop();
 	}
+
+	// Service cleanup
+	_rex_service_cleanup();
 
 	_service_status.dwCurrentState = SERVICE_STOPPED;
 	SetServiceStatus(_status_handle, &_service_status);
@@ -203,6 +207,11 @@ static inline void RexInlineServiceLoopFunction(const std::function<void()>& f)
 	_rex_service_loop = f;
 }
 
+static inline void RexInlineServiceCleanupFunction(const std::function<void()>& f)
+{
+	_rex_service_cleanup = f;
+}
+
 static void RexRunService()
 {
 #ifdef __linux__
@@ -229,6 +238,8 @@ static void RexRunService()
 		_rex_service_loop();
 	}
 
+	_rex_service_cleanup();
+
 	LogMessage("[mxrexs] ctrl-C detected. Exiting...");
 
 	RexReleaseLock(lock);
@@ -247,7 +258,7 @@ static void RexRunService()
 #endif
 }
 
-enum class RexCommand
+enum class RexCLICommand
 {
 	START,
 	STOP,
@@ -256,25 +267,25 @@ enum class RexCommand
 
 int main(int argc, char* argv[])
 {
-	RexCommand cmd = RexCommand::UNDEFINED;
+	RexCLICommand cmd = RexCLICommand::UNDEFINED;
 	SysAddArgument("start", 0, false, [&](const std::string&){
-		if(cmd == RexCommand::STOP)
+		if(cmd == RexCLICommand::STOP)
 		{
 			LogError("[mxrexs] Cannot specify --start and --stop at the same time.");
 			::exit(0);
 		}
 
-		cmd = RexCommand::START;
+		cmd = RexCLICommand::START;
 	}, "Starts the mxrexs background service.");
 
 	SysAddArgument("stop", 0, false, [&](const std::string&){
-		if(cmd == RexCommand::START)
+		if(cmd == RexCLICommand::START)
 		{
 			LogError("[mxrexs] Cannot specify --start and --stop at the same time.");
 			::exit(0);
 		}
 
-		cmd = RexCommand::STOP;
+		cmd = RexCLICommand::STOP;
 	}, "Stops the mxrexs background service.");
 
 	if(!SysParseArguments(argc, argv))
@@ -286,14 +297,14 @@ int main(int argc, char* argv[])
 	// All arguments OK at this point
 	LogTrace("[mxrexs] Arguments OK.");
 
-	if(cmd == RexCommand::START)
+	if(cmd == RexCLICommand::START)
 	{
 		if(!RexStartBackgroundDaemon())
 		{
 			return 0;
 		}
 	}
-	else if(cmd == RexCommand::STOP)
+	else if(cmd == RexCLICommand::STOP)
 	{
 #ifdef __linux__
 		if(!RexInterruptDaemon())
@@ -319,12 +330,27 @@ int main(int argc, char* argv[])
 	}
 
 	RexInlineServiceInitFunction([]() {
-		LogDebug("Init");
+		LogDebug("[mxrexs] Service Init.");
+		if(!RexServerInit())
+		{
+			LogError("[mxrexs] Failed to init rexs server.");
+		}
+
+		// TEST: (Cesar)
+		RexServerExecuteCommand({
+			._backend = 0x42e11f9cce1400c,
+			._op = RexOperation::BACKEND_START
+		});
 	});
 
 	RexInlineServiceLoopFunction([]() {
-		LogDebug("Loop");
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		RexServerLoop();
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	});
+
+	RexInlineServiceCleanupFunction([]() {
+		LogDebug("[mxrexs] Service Stop.");
+		RexServerStop();
 	});
 
 	RexRunService();

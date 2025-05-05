@@ -1,7 +1,9 @@
 #include "mxsystem.h"
 #include <chrono>
+#include <cstdlib>
 #include <memory>
 #include <mutex>
+#include <pty.h>
 #include <signal.h>
 #include "mxlogger.h"
 #include "network/rpc.h"
@@ -34,6 +36,7 @@ static bool _sys_experiment_connected = false;
 static std::string _mxcachedir;
 static std::string _sys_expname;
 static std::string _sys_binname;
+static std::string _sys_fullbinname;
 static std::string _sys_hostname;
 static std::unique_ptr<mulex::RPCServerThread> _sys_rpc_thread;
 static std::unique_ptr<mulex::EvtServerThread> _sys_evt_thread;
@@ -366,12 +369,13 @@ namespace mulex
 
 	static void SysWriteRexClientInfo(const std::string& hostname)
 	{
-		const std::int64_t cid = SysGetClientId();
+		const std::uint64_t cid = SysGetClientId();
 		const std::string cwd = std::filesystem::current_path().string();
+		const std::string bpath(SysGetBinaryFullName());
 
-		if(!RexUpdateClientInfo(cid, cwd, hostname))
+		if(!RexUpdateClientInfo(cid, cwd, bpath, hostname))
 		{
-			if(!RexCreateClientInfo(cid, cwd, hostname))
+			if(!RexCreateClientInfo(cid, cwd, bpath, hostname))
 			{
 				LogError("SysWriteRexClientInfo: Failed to create/update rex client info.");
 			}
@@ -949,6 +953,31 @@ namespace mulex
 		return _sys_binname;
 	}
 
+	std::string_view SysGetBinaryFullName()
+	{
+		if(!_sys_fullbinname.empty())
+		{
+			return _sys_fullbinname;
+		}
+
+#ifdef __linux__
+		char binnamebuf[PATH_MAX];
+		ssize_t count = ::readlink("/proc/self/exe", binnamebuf, PATH_MAX);
+		if(count == -1)
+		{
+			LogError("SysGetBinaryFullName: Failed to fetch the current process' binary absolute path.");
+			return "";
+		}
+		_sys_fullbinname = std::string(binnamebuf, count);
+		return _sys_fullbinname;
+#else
+		char binnamebuf[MAX_PATH];
+		GetModuleFileNameA(nullptr, binnamebuf, MAX_PATH);
+		_sys_fullbinname = binnamebuf;
+		return _sys_fullbinname;
+#endif
+	}
+
 	std::string_view SysGetHostname()
 	{
 		if(!_sys_hostname.empty())
@@ -1152,44 +1181,138 @@ namespace mulex
 		return false;	
 	}
 
+	bool SysSpawnProcess(const std::string& binary, const std::string& workdir, const std::vector<std::string>& argv)
+	{
+#ifdef __linux__
+		pid_t pid = ::fork();
+		if(pid < 0)
+		{
+			LogError("SysSpawnProcess: Failed to fork process.");
+			return false;
+		}
+		
+		// Child process
+		if(pid == 0)
+		{
+			if(::chdir(workdir.c_str()) != 0)
+			{
+				LogError("SysSpawnProcess: Failed to change to working directory <%s>.", workdir.c_str());
+				::exit(EXIT_FAILURE);
+			}
+
+			std::string filename = binary.substr(binary.find_last_of('/') + 1);
+			std::vector<char*> args;
+
+			args.push_back(const_cast<char*>(filename.c_str()));
+			for(const auto& arg : argv)
+			{
+				args.push_back(const_cast<char*>(arg.c_str()));
+			}
+			args.push_back(NULL);
+
+			for(int i = 0; i < 3; i++)
+			{
+				::close(i);
+				int fd = ::open("/dev/null", O_RDWR, 0);
+				if(fd < 0)
+				{
+					fd = ::open("/dev/null", O_WRONLY, 0);
+				}
+				
+				if(fd < 0)
+				{
+					LogError("SysSpawnProcess: Failed to open /dev/null.");
+					return false;
+				}
+
+				if(fd != i)
+				{
+					LogError("SysSpawnProcess: Failed to assign file descriptor to /dev/null.");
+					return false;
+				}
+			}
+
+			setsid();
+
+			::execv(binary.c_str(), args.data());
+		}
+		
+		return true;
+#else
+		STARTUPINFOA si = { sizeof(STARTUPINFOA) };
+		PROCESS_INFORMATION pi;
+
+		std::string filename = binary.substr(binary.find_last_of('/') + 1);
+		std::istringstream ss;
+
+		ss << binary;
+		for(const auto& arg : argv)
+		{
+			ss << " " << arg;
+		}
+
+		BOOL success = CreateProcessA(
+			filename.c_str(),
+			ss.str().c_str(),
+			NULL,
+			NULL,
+			FALSE,
+			0,
+			NULL,
+			workdir.c_str(),
+			&si,
+			&pi
+		);
+		
+		if(!success)
+		{
+			return false;
+		}
+		
+		CloseHandle(pi.hThread);
+		CloseHandle(pi.hProcess);
+		return true;
+#endif
+	}
+
 	static double SysGetCpuUsage()
 	{
 #ifdef __linux__
-	static std::uint64_t prev_idle = 0;
-	static std::uint64_t prev_total = 0;
-	std::ifstream stat("/proc/stat");
-	std::string line;
-	std::getline(stat, line);
-	std::istringstream iss(line);
-	std::string cpu;
-	std::uint64_t times[8];
-	iss >> cpu >> times[0] >> times[1] >> times[2] >> times[3] >> times[4] >> times[5] >> times[6] >> times[7];
-	std::uint64_t total = times[0] + times[1] + times[2] + times[3] + times[4] + times[5] + times[6] + times[7];
-	std::uint64_t delta_total = total - prev_total;
-	std::uint64_t delta_idle = times[3] - prev_idle;
+		static std::uint64_t prev_idle = 0;
+		static std::uint64_t prev_total = 0;
+		std::ifstream stat("/proc/stat");
+		std::string line;
+		std::getline(stat, line);
+		std::istringstream iss(line);
+		std::string cpu;
+		std::uint64_t times[8];
+		iss >> cpu >> times[0] >> times[1] >> times[2] >> times[3] >> times[4] >> times[5] >> times[6] >> times[7];
+		std::uint64_t total = times[0] + times[1] + times[2] + times[3] + times[4] + times[5] + times[6] + times[7];
+		std::uint64_t delta_total = total - prev_total;
+		std::uint64_t delta_idle = times[3] - prev_idle;
 
-	prev_idle = times[3];
-	prev_total = total;
+		prev_idle = times[3];
+		prev_total = total;
 
-	return 100.0 * (delta_total - delta_idle) / delta_total;
+		return 100.0 * (delta_total - delta_idle) / delta_total;
 #else
-	static PDH_HQUERY cpu_query;
-	static PDH_HCOUNTER cpu_total;
-	static bool init = false;
-	if (!init)
-	{
-		PdhOpenQuery(nullptr, 0, &cpu_query);
-		PdhAddCounter(cpu_query, "\\Processor(_Total)\\% Processor Time", 0, &cpu_total);
+		static PDH_HQUERY cpu_query;
+		static PDH_HCOUNTER cpu_total;
+		static bool init = false;
+		if (!init)
+		{
+			PdhOpenQuery(nullptr, 0, &cpu_query);
+			PdhAddCounter(cpu_query, "\\Processor(_Total)\\% Processor Time", 0, &cpu_total);
+			PdhCollectQueryData(cpu_query);
+			init = true;
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+
 		PdhCollectQueryData(cpu_query);
-		init = true;
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	}
 
-	PdhCollectQueryData(cpu_query);
-
-	PDH_FMT_COUNTERVALUE cpu_value;
-	PdhGetFormattedCounterValue(cpu_total, PDH_FMT_DOUBLE, nullptr, &cpu_value);
-	return cpu_value.doubleValue;
+		PDH_FMT_COUNTERVALUE cpu_value;
+		PdhGetFormattedCounterValue(cpu_total, PDH_FMT_DOUBLE, nullptr, &cpu_value);
+		return cpu_value.doubleValue;
 #endif
 	}
 

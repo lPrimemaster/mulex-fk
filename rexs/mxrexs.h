@@ -1,12 +1,40 @@
 #include <cstdint>
 #include <string>
+#include <optional>
 
 namespace mulex
 {
 	static constexpr std::uint16_t REX_PORT = 5703;
 
-	class RexServerThread
+	enum class RexCommandStatus : std::uint8_t
 	{
+		BACKEND_START_OK,
+		BACKEND_START_FAILED,
+		BACKEND_STOP_OK,
+		BACKEND_STOP_FAILED,
+		NO_SUCH_BACKEND,
+		NO_SUCH_HOST,
+		NO_SUCH_COMMAND
+	};
+
+	enum class RexOperation : std::uint8_t
+	{
+		BACKEND_START,
+		BACKEND_STOP
+	};
+
+	struct RexCommand
+	{
+		std::uint64_t _backend;
+		RexOperation _op;
+	};
+
+	struct RexClientInfo
+	{
+		std::uint64_t _cid;
+		std::string   _bwd;
+		std::string   _bin_path;
+		std::string   _srv_host;
 	};
 
 	bool RexWriteLockFile();
@@ -14,8 +42,21 @@ namespace mulex
 	void RexReleaseLock(int fd);
 	bool RexInterruptDaemon();
 
+	bool RexServerInit();
+	void RexServerLoop();
+	void RexServerStop();
+
+	RexCommandStatus RexServerExecuteCommand(const RexCommand& command);
+
 	bool RexCreateClientListFile();
-	bool RexCreateClientInfo(std::int64_t cid, const std::string& absbwd, const std::string& srvaddr);
-	bool RexUpdateClientInfo(std::int64_t cid, const std::string& absbwd, const std::string& srvaddr);
-	bool RexDeleteClientInfo(std::int64_t cid);
+	bool RexCreateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& srvaddr);
+	bool RexUpdateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& srvaddr);
+	bool RexDeleteClientInfo(std::uint64_t cid);
+	std::optional<RexClientInfo> RexGetClientInfo(std::uint64_t cid);
+
+	RexCommandStatus RexStartBackend(const RexClientInfo& cinfo);
+	RexCommandStatus RexStopBackend(const RexClientInfo& cinfo);
+
+	MX_RPC_METHOD mulex::RexCommandStatus RexSendStartCommand(std::uint64_t backend, const std::string& host);
+	MX_RPC_METHOD mulex::RexCommandStatus RexSendStopCommand(std::uint64_t backend, const std::string& host);
 }
