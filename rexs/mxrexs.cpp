@@ -7,6 +7,7 @@
 #include <fstream>
 #include <optional>
 #include <sstream>
+#include <thread>
 
 #ifdef __linux__
 #include <sys/types.h>
@@ -24,6 +25,7 @@ static HANDLE _rex_file_lock_fd;
 #endif
 
 static mulex::Socket _server_socket;
+static std::mutex _rex_hosts_lock;
 
 namespace mulex
 {
@@ -200,10 +202,51 @@ namespace mulex
 				LogError("[mxrexs] Could not process request.");
 				return std::nullopt;
 			}
+
+			std::this_thread::sleep_for(std::chrono::microseconds(50));
 		}
 
 		RexCommand command;
 		std::memcpy(&command, buffer, sizeof(RexCommand));
+		return command;
+	}
+
+	static void RexClientSendCommand(const Socket& client, std::uint64_t cid, const RexOperation& op)
+	{
+		RexCommand command = {
+			._backend = cid,
+			._op = op
+		};
+		SocketSendBytes(client, reinterpret_cast<std::uint8_t*>(&command), sizeof(RexCommand));
+	}
+
+	// TODO: (Cesar) Implement timeout
+	static RexCommandStatus RexClientWaitResponse(const Socket& client)
+	{
+		static std::uint8_t buffer[sizeof(RexCommandStatus)];
+		std::uint64_t rlen, tsize = 0;
+		const std::int64_t ms = SysGetCurrentTime();
+		while(tsize < sizeof(RexCommandStatus))
+		{
+			SocketResult res = SocketRecvBytes(client, &buffer[tsize], sizeof(RexCommandStatus) - tsize, &rlen);
+			tsize += rlen;
+
+			if(res == SocketResult::ERROR || res == SocketResult::DISCONNECT)
+			{
+				LogError("[mxrexs] Could not process request.");
+				return RexCommandStatus::COMMAND_TX_ERROR;
+			}
+
+			if((SysGetCurrentTime() - ms >= REX_TIMEOUT))
+			{
+				return RexCommandStatus::COMMAND_TX_TIMEOUT;
+			}
+
+			std::this_thread::sleep_for(std::chrono::microseconds(50));
+		}
+
+		RexCommandStatus command;
+		std::memcpy(&command, buffer, sizeof(RexCommandStatus));
 		return command;
 	}
 
@@ -218,6 +261,7 @@ namespace mulex
 				{
 					return RexStartBackend(cinfo.value());
 				}
+				return RexCommandStatus::NO_SUCH_BACKEND;
 			}
 			case RexOperation::BACKEND_STOP:
 			{
@@ -226,10 +270,16 @@ namespace mulex
 				{
 					return RexStopBackend(cinfo.value());
 				}
+				return RexCommandStatus::NO_SUCH_BACKEND;
 			}
 		}
 
 		return RexCommandStatus::NO_SUCH_COMMAND;
+	}
+
+	static void RexServerSendResponse(const Socket& client, RexCommandStatus status)
+	{
+		SocketSendBytes(client, reinterpret_cast<std::uint8_t*>(&status), sizeof(RexCommandStatus));
 	}
 
 	void RexServerLoop()
@@ -247,10 +297,10 @@ namespace mulex
 		if(!client._error)
 		{
 			std::optional<RexCommand> cmd = RexServerProcessRequest(client);
-
 			if(cmd.has_value())
 			{
 				RexCommandStatus status = RexServerExecuteCommand(cmd.value());
+				RexServerSendResponse(client, status);
 			}
 
 			SocketClose(client);
@@ -274,6 +324,13 @@ namespace mulex
 		std::ostringstream ss;
 		// NOTE: (Cesar) Cids, workdirs and server addresses cannot contain '|' (good spacer here)
 		ss << SysI64ToHexString(cid) << "|" << absbwd << "|" << binpath << "|" << srvaddr << "\n";
+		return ss.str();
+	}
+	
+	static std::string RexCreateHostsEntryString(std::uint64_t cid, const std::string& cltaddr)
+	{
+		std::ostringstream ss;
+		ss << SysI64ToHexString(cid) << "|" << cltaddr << "\n";
 		return ss.str();
 	}
 
@@ -325,6 +382,95 @@ namespace mulex
 			return;
 		}
 		file << ss.str();
+	}
+
+	static std::string RexGetHostsFilePath()
+	{
+		static std::string cache_dir(SysGetCacheDir());
+		if(cache_dir.empty())
+		{
+			return "";
+		}
+
+		return cache_dir + "/rex.hosts";
+	}
+
+	bool RexUpdateHostsFile(std::uint64_t cid, const std::string& cltaddr)
+	{
+		std::unique_lock<std::mutex> lock(_rex_hosts_lock);
+		const static std::string path = RexGetHostsFilePath();
+		bool found = false;
+		std::ostringstream ss;
+
+		{
+			std::ifstream file(path, std::ios::app);
+			if(!file)
+			{
+				LogError("[mxrexs] Failed to open <rex.hosts> file.");
+				return false;
+			}
+
+			std::string line;
+			while(std::getline(file, line))
+			{
+				if(RexLineHasCid(cid, line))
+				{
+					// Found cid on file, replace
+					ss << RexCreateHostsEntryString(cid, cltaddr);
+					found = true;
+				}
+				else
+				{
+					ss << line << "\n";
+				}
+			}
+		}
+
+		// Append to end if cid was not found
+		if(!found)
+		{
+			std::ofstream file(path, std::ios::app);
+			file << RexCreateHostsEntryString(cid, cltaddr);
+			file << std::flush;
+		}
+		else
+		{
+			RexWriteBufferToFile(ss, path);
+		}
+
+		LogDebug("[mxrexs] Updated client <0x%llx> hosts file. Addr: %s.", cid, cltaddr.c_str());
+		return true;
+	}
+
+	static std::string RexParseHostsLine(const std::string& line)
+	{
+		return line.substr(line.find_first_of('|') + 1);
+	}
+
+	std::optional<std::string> RexFindBackendHost(std::uint64_t cid)
+	{
+		std::unique_lock<std::mutex> lock(_rex_hosts_lock);
+		const static std::string path = RexGetHostsFilePath();
+
+		std::ifstream file(path, std::ios::in);
+		if(!file)
+		{
+			LogError("[mxrexs] Failed to open <rex.hosts> file.");
+			return std::nullopt;
+		}
+
+		std::string line;
+		while(std::getline(file, line))
+		{
+			if(RexLineHasCid(cid, line))
+			{
+				LogTrace("[mxrexs] RexFindBackendHost() OK.");
+				return RexParseHostsLine(line);
+			}
+		}
+
+		LogError("[mxrexs] Could not find client <0x%llx> on <rex.hosts> file.", cid);
+		return std::nullopt;
 	}
 
 	struct RexLockGuard
@@ -525,13 +671,72 @@ namespace mulex
 
 	RexCommandStatus RexStopBackend(const RexClientInfo& cinfo)
 	{
+		return RexCommandStatus::NO_SUCH_COMMAND;
 	}
 
-	RexCommandStatus RexSendStartCommand(std::uint64_t backend, const std::string& host)
+	RexCommandStatus RexSendStartCommand(std::uint64_t backend)
 	{
+		std::optional<std::string> addr = RexFindBackendHost(backend);
+		if(!addr.has_value())
+		{
+			LogError("[mxrexs] Failed to start backend. Not found in the local <rex.hosts> file.");
+			return RexCommandStatus::NO_SUCH_BACKEND;
+		}
+
+		Socket socket = SocketInit();
+		SocketConnect(socket, addr.value(), REX_PORT);
+
+		if(socket._error)
+		{
+			LogError("[mxrexs] Failed to connect to REx server at: %s:%d", addr.value().c_str(), REX_PORT);
+			LogError("[mxrexs] Make sure the REx service is running on the target machine.");
+			return RexCommandStatus::NO_SUCH_HOST;
+		}
+
+		RexClientSendCommand(socket, backend, RexOperation::BACKEND_START);
+		RexCommandStatus status = RexClientWaitResponse(socket);
+		SocketClose(socket);
+
+		if(status != RexCommandStatus::BACKEND_START_OK)
+		{
+			LogError("[mxrexs] RexSendStartCommand failed with code <%d>.", static_cast<std::uint8_t>(status));
+			return status;
+		}
+
+		LogDebug("[mxrexs] Backend <0x%llx> started at host <%s>.", backend, addr.value().c_str());
+		return status;
 	}
 
-	RexCommandStatus RexSendStopCommand(std::uint64_t backend, const std::string& host)
+	RexCommandStatus RexSendStopCommand(std::uint64_t backend)
 	{
+		std::optional<std::string> addr = RexFindBackendHost(backend);
+		if(!addr.has_value())
+		{
+			LogError("[mxrexs] Failed to start backend. Not found in the local <rex.hosts> file.");
+			return RexCommandStatus::NO_SUCH_BACKEND;
+		}
+
+		Socket socket = SocketInit();
+		SocketConnect(socket, addr.value(), REX_PORT);
+
+		if(socket._error)
+		{
+			LogError("[mxrexs] Failed to connect to REx server at: %s:%d", addr.value().c_str(), REX_PORT);
+			LogError("[mxrexs] Make sure the REx service is running on the target machine.");
+			return RexCommandStatus::NO_SUCH_HOST;
+		}
+
+		RexClientSendCommand(socket, backend, RexOperation::BACKEND_STOP);
+		RexCommandStatus status = RexClientWaitResponse(socket);
+		SocketClose(socket);
+
+		if(status != RexCommandStatus::BACKEND_STOP_OK)
+		{
+			LogError("[mxrexs] RexSendStopCommand failed with code <%d>.", static_cast<std::uint8_t>(status));
+			return status;
+		}
+
+		LogDebug("[mxrexs] Backend <0x%llx> stopped at host <%s>.", backend, addr.value().c_str());
+		return status;
 	}
 }

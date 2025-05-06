@@ -150,10 +150,10 @@ namespace mulex
 			return client;
 		}
 #endif
-		char buffer[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &clientaddr.sin_addr, client._addr, 32);
 		LogDebug(
 			"Got new connection from: %s:%d",
-			inet_ntop(AF_INET, &clientaddr.sin_addr, buffer, INET_ADDRSTRLEN),
+			client._addr,
 			ntohs(clientaddr.sin_port)
 		);
 		LogTrace("SocketAccept() OK.");

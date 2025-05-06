@@ -16,12 +16,14 @@ namespace mulex
 	{
 		int _handle;
 		bool _error;
+		char _addr[32];
 	};
 #else
 	struct Socket
 	{
 		SOCKET _handle;
 		bool _error;
+		char _addr[32];
 	};
 #endif
 

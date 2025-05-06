@@ -1,3 +1,4 @@
+#pragma once
 #include <cstdint>
 #include <string>
 #include <optional>
@@ -5,6 +6,7 @@
 namespace mulex
 {
 	static constexpr std::uint16_t REX_PORT = 5703;
+	static constexpr std::int64_t REX_TIMEOUT = 10000;
 
 	enum class RexCommandStatus : std::uint8_t
 	{
@@ -14,7 +16,9 @@ namespace mulex
 		BACKEND_STOP_FAILED,
 		NO_SUCH_BACKEND,
 		NO_SUCH_HOST,
-		NO_SUCH_COMMAND
+		NO_SUCH_COMMAND,
+		COMMAND_TX_ERROR,
+		COMMAND_TX_TIMEOUT
 	};
 
 	enum class RexOperation : std::uint8_t
@@ -48,6 +52,9 @@ namespace mulex
 
 	RexCommandStatus RexServerExecuteCommand(const RexCommand& command);
 
+	bool RexUpdateHostsFile(std::uint64_t cid, const std::string& cltaddr);
+	std::optional<std::string> RexFindBackendHost(std::uint64_t cid);
+
 	bool RexCreateClientListFile();
 	bool RexCreateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& srvaddr);
 	bool RexUpdateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& srvaddr);
@@ -57,6 +64,6 @@ namespace mulex
 	RexCommandStatus RexStartBackend(const RexClientInfo& cinfo);
 	RexCommandStatus RexStopBackend(const RexClientInfo& cinfo);
 
-	MX_RPC_METHOD mulex::RexCommandStatus RexSendStartCommand(std::uint64_t backend, const std::string& host);
-	MX_RPC_METHOD mulex::RexCommandStatus RexSendStopCommand(std::uint64_t backend, const std::string& host);
+	MX_RPC_METHOD mulex::RexCommandStatus RexSendStartCommand(std::uint64_t backend);
+	MX_RPC_METHOD mulex::RexCommandStatus RexSendStopCommand(std::uint64_t backend);
 }

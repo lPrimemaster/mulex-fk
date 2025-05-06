@@ -127,3 +127,13 @@ target_include_directories(test_listen PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
 add_test(test_listen test_listen)
+
+
+add_executable(test_rex rex_bck.cpp)
+
+target_link_libraries(test_rex mxbck)
+
+target_include_directories(test_rex PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
+add_test(test_rex test_rex)

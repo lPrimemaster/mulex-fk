@@ -12,6 +12,7 @@
 #include <numeric>
 
 #include "../mxevt.h"
+#include "../rexs/mxrexs.h"
 
 #include "../mxlogger.h"
 #include "socket.h"
@@ -487,6 +488,7 @@ namespace mulex
 		mxstring<512> bname = name_data.substr(0, token);
 		mxstring<512> hname = name_data.substr(token + 1);
 		RegisterClientRdb(bname, hname, cid);
+		RexUpdateHostsFile(cid, socket._addr);
 	}
 
 	static void OnClientDisconnect(std::uint64_t cid)

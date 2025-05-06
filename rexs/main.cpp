@@ -335,12 +335,6 @@ int main(int argc, char* argv[])
 		{
 			LogError("[mxrexs] Failed to init rexs server.");
 		}
-
-		// TEST: (Cesar)
-		RexServerExecuteCommand({
-			._backend = 0x42e11f9cce1400c,
-			._op = RexOperation::BACKEND_START
-		});
 	});
 
 	RexInlineServiceLoopFunction([]() {
