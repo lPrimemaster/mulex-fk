@@ -256,6 +256,7 @@ namespace mulex
 	bool SysParseArguments(int argc, char* argv[]);
 	std::int64_t SysGetCurrentTime();
 	std::string_view SysGetCacheDir();
+	std::string_view SysGetCacheLockDir();
 	bool SysCreateNewExperiment(const std::string& expname);
 	std::string SysGetExperimentHome();
 	MX_RPC_METHOD mulex::mxstring<512> SysGetExperimentName();
@@ -273,6 +274,15 @@ namespace mulex
 	bool SysMatchPattern(const std::string& pattern, const std::string& target);
 
 	bool SysSpawnProcess(const std::string& binary, const std::string& workdir, const std::vector<std::string>& argv);
+#ifdef __linux__
+	using SysProcHandle = pid_t;
+#else
+	using SysProcHandle = DWORD;
+#endif
+	bool SysInterruptProcess(SysProcHandle handle);
+	std::string SysGetProcessBinaryName(SysProcHandle handle);
+	bool SysLockCurrentProcess();
+	bool SysUnlockCurrentProcess();
 
 	struct SysPerformanceMetrics
 	{

@@ -25,6 +25,7 @@
 #else
 #include <fcntl.h>
 #include <sys/sysinfo.h>
+#include <sys/file.h>
 #include <unistd.h>
 #endif
 
@@ -34,6 +35,7 @@
 static mulex::Experiment _sys_experiment;
 static bool _sys_experiment_connected = false;
 static std::string _mxcachedir;
+static std::string _mxcachelockdir;
 static std::string _sys_expname;
 static std::string _sys_binname;
 static std::string _sys_fullbinname;
@@ -52,6 +54,12 @@ static std::int64_t _sys_uptime_mark;
 static std::unique_ptr<std::thread> _sys_performance_metrics_thread;
 static std::atomic<bool> _sys_performance_metrics_running;
 static constexpr std::uint64_t SYS_PERF_GATHER_INTERVAL = 1000;
+
+#ifdef __linux__
+static int _sys_lock_handle;
+#else
+static HANDLE _sys_lock_handle;
+#endif
 
 namespace mulex
 {
@@ -365,6 +373,8 @@ namespace mulex
 
 		PdbClose();
 		RdbClose();
+
+		SysUnlockCurrentProcess();
 	}
 
 	static void SysWriteRexClientInfo(const std::string& hostname)
@@ -384,6 +394,16 @@ namespace mulex
 
 	bool SysInitializeBackend(int argc, char* argv[])
 	{
+		// NOTE: (Cesar)
+		// Try to lock
+		// This prevents multiple instances of the same backend to run simultaneously
+		if(!SysLockCurrentProcess())
+		{
+			LogError("SysInitializeBackend: Failed to lock current process.");
+			LogDebug("Maybe it's already running?");
+			return false;
+		}
+
 		std::string server_name = "localhost";
 
 		SysAddArgument("server", 's', true, [&](const std::string& server){ server_name = server; }, "Set the server to connect to.");
@@ -866,6 +886,25 @@ namespace mulex
 		return _mxcachedir;	
 	}
 
+	std::string_view SysGetCacheLockDir()
+	{
+		if(!_mxcachelockdir.empty())
+		{
+			return _mxcachelockdir;
+		}
+
+		std::string lock = std::string(SysGetCacheDir()) + "/lock";
+	
+		if(!std::filesystem::is_directory(lock) && !std::filesystem::create_directory(lock))
+		{
+			LogError("SysGetCacheDir: Failed to create new directory for system cache lock.");
+			return "";
+		}
+
+		_mxcachelockdir = lock;
+		return _mxcachelockdir;	
+	}
+
 	bool SysCreateNewExperiment(const std::string& expname)
 	{
 		// Write to cache
@@ -1272,6 +1311,127 @@ namespace mulex
 		CloseHandle(pi.hThread);
 		CloseHandle(pi.hProcess);
 		return true;
+#endif
+	}
+
+	bool SysInterruptProcess(SysProcHandle handle)
+	{
+#ifdef __linux__
+		return (::kill(handle, SIGINT) == 0);
+#else
+		// Try SIGINT equivalent if not hard terminate
+		if(AttachConsole(handle))
+		{
+			SetConsoleCtrlHandler(NULL, TRUE);
+			GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+			FreeConsole();
+			return true;
+		}
+
+		HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, handle);
+		if(h)
+		{
+			TerminateProcess(h, 1);
+			CloseHandle(h);
+			return true;
+		}
+
+		return false;
+#endif
+	}
+
+	std::string SysGetProcessBinaryName(SysProcHandle handle)
+	{
+#ifdef __linux__
+		char binnamebuf[PATH_MAX];
+		std::string link = "/proc/" + std::to_string(handle) + "/exe";
+		ssize_t count = ::readlink(link.c_str(), binnamebuf, PATH_MAX);
+		if(count == -1)
+		{
+			LogError("SysGetBinaryFullName: Failed to fetch the current process' binary absolute path.");
+			return "";
+		}
+		return std::string(binnamebuf, count);
+#else
+		HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, handle);
+		if(!h) return "";
+
+		char binnamebuf[MAX_PATH];
+		DWORD size = MAX_PATH;
+
+		if(QueryFullProcessImageNameA(h, 0, binnamebuf, &size))
+		{
+			CloseHandle(h);
+			return std::string(binnamebuf);
+		}
+		
+		CloseHandle(h);
+		return "";
+#endif
+	}
+
+	bool SysLockCurrentProcess()
+	{
+		const static std::string proc_lock_file = std::string(SysGetCacheLockDir()) + "/" + std::string(SysGetBinaryName()) + ".lock";
+#ifdef __linux__
+		_sys_lock_handle = ::open(proc_lock_file.c_str(), O_RDWR | O_CREAT, 0640);
+		if(_sys_lock_handle < 0)
+		{
+			LogError("SysLockCurrentProcess: Error on opening lockfile.");
+			return false;
+		}
+
+		if(::flock(_sys_lock_handle, LOCK_EX | LOCK_NB) < 0)
+		{
+			LogError("SysLockCurrentProcess: Another instance of this process is already running.");
+			::close(_sys_lock_handle);
+			return false;
+		}
+
+		// Erase file and write PID
+		::ftruncate(_sys_lock_handle, 0);
+		std::string pid = std::to_string(::getpid());
+		::write(_sys_lock_handle, pid.c_str(), pid.size() + 1);
+#else
+		_sys_lock_handle = CreateFileA(
+			proc_lock_file.c_str(),
+			GENERIC_READ | GENERIC_WRITE,
+			FILE_SHARE_READ,
+			NULL,
+			OPEN_ALWAYS,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL
+		);
+		if(_sys_lock_handle == INVALID_HANDLE_VALUE)
+		{
+			LogError("SysLockCurrentProcess: Error on opening lockfile.");
+			return false;
+		}
+
+		OVERLAPPED o = { 0 };
+		if(!LockFileEx(_sys_lock_handle, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD, &o))
+		{
+			LogError("SysLockCurrentProcess: Another instance of this process is already running.");
+			CloseHandle(_sys_lock_handle);
+			return false;
+		}
+
+		SetEndOfFile(_sys_lock_handle);
+		std::string pid = std::to_string(GetCurretProcessId());
+		SetFilePointer(_sys_lock_handle, 0, NULL, FILE_BEGIN);
+		DWORD written;
+		WriteFile(_sys_lock_handle, pid.c_str(), pid.size() + 1, &written, NULL);
+		SetEndOfFile(_sys_lock_handle);
+#endif
+		return true;
+	}
+
+	bool SysUnlockCurrentProcess()
+	{
+#ifdef __linux__
+		return ::close(_sys_lock_handle) == 0;
+#else
+		return CloseHandle(_sys_lock_handle) != 0;
 #endif
 	}
 

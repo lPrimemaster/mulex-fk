@@ -104,6 +104,7 @@ namespace mulex
 		{
 			_experiment = nullptr;
 			SysDisconnectFromExperiment();
+			SysUnlockCurrentProcess();
 		}
 	}
 

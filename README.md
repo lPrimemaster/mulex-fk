@@ -17,6 +17,7 @@ for multiple backends and frontends. As long as your machines have ethernet conn
 - Frontend API written in typescript but again extensible
 - Out of the box support for USB/TCP/Serial drivers for backends
 - Low CPU impact
+- Backend remote start/stop
 
 ## Getting Started
 To get started using the mx system checkout [the docs](https://lprimemaster.github.io/mulex-fk/).

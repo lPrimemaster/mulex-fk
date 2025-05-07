@@ -192,9 +192,6 @@ export const Project : Component = () => {
 												<span>{Plugin.author ?? 'Unspecified'}</span>
 
 												<span class="font-bold text-right">Modified:&nbsp;</span>
-												{
-													// TODO: (Cesar) Get it from some RPC Call
-												}
 												<span>{timestamp_tolocaldatetime(Plugin.modified)}</span>
 
 												<span class="font-bold text-right">Version:&nbsp;</span>

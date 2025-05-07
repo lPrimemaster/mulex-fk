@@ -220,7 +220,6 @@ namespace mulex
 		SocketSendBytes(client, reinterpret_cast<std::uint8_t*>(&command), sizeof(RexCommand));
 	}
 
-	// TODO: (Cesar) Implement timeout
 	static RexCommandStatus RexClientWaitResponse(const Socket& client)
 	{
 		static std::uint8_t buffer[sizeof(RexCommandStatus)];
@@ -671,6 +670,48 @@ namespace mulex
 
 	RexCommandStatus RexStopBackend(const RexClientInfo& cinfo)
 	{
+		// Check if the backend is running on this system
+		std::string bname = cinfo._bin_path.substr(cinfo._bin_path.find_last_of('/') + 1);
+		std::string lockfile = std::string(SysGetCacheLockDir()) + "/" + bname + ".lock";
+		if(!std::filesystem::exists(lockfile))
+		{
+			return RexCommandStatus::NO_SUCH_BACKEND;
+		}
+
+		// Read the lockfile
+		std::ifstream file(lockfile);
+		if(!file)
+		{
+			return RexCommandStatus::BACKEND_STOP_FAILED;
+		}
+
+		SysProcHandle handle;
+		file >> handle;
+		std::string pname = SysGetProcessBinaryName(handle);
+
+		if(!pname.empty())
+		{
+#ifdef __linux__
+			// NOTE: (Cesar)
+			// If we delete the binary file
+			// it keeps running on linux, for that matter, readlink
+			// returns the full file path appended by ' (deleted)'
+			auto pos = pname.rfind(" (deleted)");
+			if(pos != std::string::npos)
+			{
+				pname.resize(pos);
+			}
+#endif
+			if(pname == cinfo._bin_path)
+			{
+				if(!SysInterruptProcess(handle))
+				{
+					return RexCommandStatus::BACKEND_STOP_FAILED;
+				}
+				return RexCommandStatus::BACKEND_STOP_OK;
+			}
+		}
+
 		return RexCommandStatus::NO_SUCH_COMMAND;
 	}
 
