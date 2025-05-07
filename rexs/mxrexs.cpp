@@ -675,6 +675,7 @@ namespace mulex
 		std::string lockfile = std::string(SysGetCacheLockDir()) + "/" + bname + ".lock";
 		if(!std::filesystem::exists(lockfile))
 		{
+			LogError("[mxrexs] Failed to locate lockfile for <%s>.", bname.c_str());
 			return RexCommandStatus::NO_SUCH_BACKEND;
 		}
 
@@ -682,6 +683,7 @@ namespace mulex
 		std::ifstream file(lockfile);
 		if(!file)
 		{
+			LogError("[mxrexs] Failed to open lockfile for <%s>.", bname.c_str());
 			return RexCommandStatus::BACKEND_STOP_FAILED;
 		}
 
@@ -691,6 +693,8 @@ namespace mulex
 
 		if(pname.empty())
 		{
+			LogError("[mxrexs] Failed to locate <%s> with PID <%d>.", bname.c_str(), handle);
+			LogDebug("[mxrexs] Maybe backend is not running?");
 			return RexCommandStatus::BACKEND_STOP_FAILED;
 		}
 #ifdef __linux__
@@ -708,6 +712,7 @@ namespace mulex
 		{
 			if(!SysInterruptProcess(handle))
 			{
+				LogError("[mxrexs] Failed to send interrupt signal to process <%d>.", handle);
 				return RexCommandStatus::BACKEND_STOP_FAILED;
 			}
 			return RexCommandStatus::BACKEND_STOP_OK;
