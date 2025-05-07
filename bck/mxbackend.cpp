@@ -244,6 +244,11 @@ namespace mulex
 
 	void MxBackend::spin()
 	{
+		if(!_init_ok)
+		{
+			return;
+		}
+
 		while(!*stop)
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
