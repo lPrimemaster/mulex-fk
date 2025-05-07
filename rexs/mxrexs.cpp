@@ -689,27 +689,28 @@ namespace mulex
 		file >> handle;
 		std::string pname = SysGetProcessBinaryName(handle);
 
-		if(!pname.empty())
+		if(pname.empty())
 		{
+			return RexCommandStatus::BACKEND_STOP_FAILED;
+		}
 #ifdef __linux__
-			// NOTE: (Cesar)
-			// If we delete the binary file
-			// it keeps running on linux, for that matter, readlink
-			// returns the full file path appended by ' (deleted)'
-			auto pos = pname.rfind(" (deleted)");
-			if(pos != std::string::npos)
-			{
-				pname.resize(pos);
-			}
+		// NOTE: (Cesar)
+		// If we delete the binary file
+		// it keeps running on linux, for that matter, readlink
+		// returns the full file path appended by ' (deleted)'
+		auto pos = pname.rfind(" (deleted)");
+		if(pos != std::string::npos)
+		{
+			pname.resize(pos);
+		}
 #endif
-			if(pname == cinfo._bin_path)
+		if(pname == cinfo._bin_path)
+		{
+			if(!SysInterruptProcess(handle))
 			{
-				if(!SysInterruptProcess(handle))
-				{
-					return RexCommandStatus::BACKEND_STOP_FAILED;
-				}
-				return RexCommandStatus::BACKEND_STOP_OK;
+				return RexCommandStatus::BACKEND_STOP_FAILED;
 			}
+			return RexCommandStatus::BACKEND_STOP_OK;
 		}
 
 		return RexCommandStatus::NO_SUCH_COMMAND;
