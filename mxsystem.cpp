@@ -893,7 +893,7 @@ namespace mulex
 			return _mxcachelockdir;
 		}
 
-		std::string lock = std::string(SysGetCacheDir()) + "/lock";
+		std::string lock = std::string(SysGetCacheDir()) + "/.lock";
 	
 		if(!std::filesystem::is_directory(lock) && !std::filesystem::create_directory(lock))
 		{

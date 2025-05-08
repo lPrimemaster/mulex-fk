@@ -22,8 +22,8 @@ if(CROSS_COMP_WINDOWS)
 endif()
 
 # Version configuration
-project(mulex-fk VERSION 0.8.0)
-set(PROJECT_VNAME Luyten)
+project(mulex-fk VERSION 0.9.0)
+set(PROJECT_VNAME Ross)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
