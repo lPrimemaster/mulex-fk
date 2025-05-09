@@ -1,11 +1,14 @@
-#include "mxrexs.h"
 #include "../mxsystem.h"
+#include "mxrexs.h"
 #include "../mxlogger.h"
-#include <cerrno>
 #include <cstdint>
+#include <fileapi.h>
 #include <filesystem>
 #include <fstream>
+#include <handleapi.h>
+#include <minwinbase.h>
 #include <optional>
+#include <processthreadsapi.h>
 #include <sstream>
 #include <thread>
 
@@ -40,15 +43,26 @@ namespace mulex
 		return cache_dir + "/rexs.lock";
 	}
 
-#ifdef __linux__
-	static bool RexPidIsRunning(pid_t pid)
+	static bool RexPidIsRunning(RexPid pid)
 	{
+#ifdef __linux__
 		std::string proc_file = "/proc/" + std::to_string(pid);
 		struct stat st;
 		return stat(proc_file.c_str(), &st) == 0;
+#else
+		HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+		if(p)
+		{
+			DWORD exitcode;
+			bool running = GetExitCodeProcess(p, &exitcode) && exitcode == STILL_ACTIVE;
+			CloseHandle(p);
+			return running;
+		}
+		return false;
+#endif
 	}
 
-	static int RexGetDaemonPid()
+	static std::optional<RexPid> RexGetDaemonPid()
 	{
 		const std::string lock_path = RexGetLockFilePath();
 
@@ -56,13 +70,13 @@ namespace mulex
 		{
 			LogError("[mxrexs] RexGetLockFilePath() failed.");
 			LogDebug("[mxrexs] Aborting execution.");
-			return -1;
+			return std::nullopt;
 		}
 
 		std::ifstream lock_file(lock_path);
 		if(lock_file)
 		{
-			pid_t pid;
+			RexPid pid;
 			lock_file >> pid;
 
 			if(RexPidIsRunning(pid))
@@ -71,13 +85,11 @@ namespace mulex
 			}
 		}
 
-		return -1;
+		return std::nullopt;
 	}
-#endif
 
 	bool RexWriteLockFile()
 	{
-#ifdef __linux__
 		const std::string lock_path = RexGetLockFilePath();
 
 		if(lock_path.empty())
@@ -91,7 +103,7 @@ namespace mulex
 			std::ifstream lock_file(lock_path);
 			if(lock_file)
 			{
-				pid_t pid;
+				RexPid pid;
 				lock_file >> pid;
 
 				if(RexPidIsRunning(pid))
@@ -106,17 +118,17 @@ namespace mulex
 		}
 		
 		std::ofstream lock_file(lock_path, std::ios::trunc);
+#ifdef __linux__
 		lock_file << getpid() << "\n";
+#else
+		lock_file << _getpid() << "\n";
+#endif
 
 		LogTrace("[mxrexs] RexWriteLockFile() OK.");
 		return true;
-#else
-		LogError("[mxrexs] Windows service does not require a lock file.");
-		return false;
-#endif
 	}
 
-	int RexAcquireLock()
+	RexLockHandle RexAcquireLock()
 	{
 #ifdef __linux__
 		int fd = ::open(RexGetLockFilePath().c_str(), O_RDWR, 0666);
@@ -134,44 +146,60 @@ namespace mulex
 
 		return fd;
 #else
-		LogError("[mxrexs] Windows service does not require locking.");
-		return false;
+		OVERLAPPED o;
+		ZeroMemory(&o, sizeof(o));
+		HANDLE h = CreateFile(
+			RexGetLockFilePath().c_str(),
+			GENERIC_WRITE,
+			FILE_SHARE_READ,
+			NULL,
+			OPEN_ALWAYS,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL
+		);
+
+		if(h == INVALID_HANDLE_VALUE)
+		{
+			LogError("[mxrexs] Failed to open lock file.");
+			return INVALID_HANDLE_VALUE;
+		}
+
+		return h;
 #endif
 	}
 
-	void RexReleaseLock(int fd)
+	void RexReleaseLock(RexLockHandle h)
 	{
 #ifdef __linux__
-		::close(fd);
+		::close(h);
+		LogTrace("[mxrexs] RexReleaseLock() OK.");
+#else
+		CloseHandle(h);
 		LogTrace("[mxrexs] RexReleaseLock() OK.");
 #endif
 	}
 
 	bool RexInterruptDaemon()
 	{
-#ifdef __linux__
-		pid_t pid = RexGetDaemonPid();
-		if(pid == -1)
+		std::optional<RexPid> pid = RexGetDaemonPid();
+		if(!pid.has_value())
 		{
 			LogError("[mxrexs] Could not find mxrexs daemon PID. Maybe not running?");
 			return false;
 		}
 		
-		if(::kill(pid, SIGINT) == 0)
+		if(SysInterruptProcess(pid.value()))
 		{
-			LogTrace("[mxrexs] Sent SIGINT to daemon <%d>.", pid);
+			LogTrace("[mxrexs] Sent SIGINT to daemon <%d>.", pid.value());
 			return true;
 		}
 
-		LogError("[mxrexs] Failed to interrupt daemon. Code = %d.", errno);
-		return false;
-#endif
+		LogError("[mxrexs] Failed to interrupt daemon.");
 		return false;
 	}
 
 	bool RexServerInit()
 	{
-		ZoneScoped;
 		_server_socket = SocketInit();
 		SocketBindListen(_server_socket, REX_PORT);
 		if(!SocketSetNonBlocking(_server_socket))
@@ -347,7 +375,9 @@ namespace mulex
 		const std::string path = RexGetClientListFilePath();
 		_rex_file_lock_fd = CreateFile((path + ".lock").c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 		
-		OVERLAPPED overlapped = { 0 };
+		OVERLAPPED overlapped;
+		ZeroMemory(&overlapped, sizeof(overlapped));
+
 		return LockFileEx(_rex_file_lock_fd, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &overlapped) == TRUE;
 #endif
 	}
@@ -359,8 +389,11 @@ namespace mulex
 		::close(_rex_file_lock_fd);
 		return true;
 #else
-		OVERLAPPED overlapped = { 0 };
-		return UnlockFileEx(_rex_file_lock_fd, 0, MAXDWORD, MAXDWORD, &overlapped) == TRUE;
+		OVERLAPPED overlapped;
+		ZeroMemory(&overlapped, sizeof(overlapped));
+		bool unlocked = UnlockFileEx(_rex_file_lock_fd, 0, MAXDWORD, MAXDWORD, &overlapped) == TRUE;
+		CloseHandle(_rex_file_lock_fd);
+		return unlocked;
 #endif
 	}
 
@@ -668,10 +701,24 @@ namespace mulex
 		return RexCommandStatus::BACKEND_START_OK;
 	}
 
+	static std::optional<RexPid> RexReadLockfile(const std::string& lockfile)
+	{
+		std::ifstream file(lockfile, std::ios::in);
+		if(!file)
+		{
+			LogError("[mxrexs] Failed to open lockfile.");
+			return std::nullopt;
+		}
+
+		RexPid handle;
+		file >> handle;
+		return handle;
+	}
+
 	RexCommandStatus RexStopBackend(const RexClientInfo& cinfo)
 	{
 		// Check if the backend is running on this system
-		std::string bname = cinfo._bin_path.substr(cinfo._bin_path.find_last_of('/') + 1);
+		std::string bname = cinfo._bin_path.substr(cinfo._bin_path.find_last_of("/\\") + 1);
 		std::string lockfile = std::string(SysGetCacheLockDir()) + "/" + bname + ".lock";
 		if(!std::filesystem::exists(lockfile))
 		{
@@ -680,20 +727,17 @@ namespace mulex
 		}
 
 		// Read the lockfile
-		std::ifstream file(lockfile);
-		if(!file)
+		std::optional<RexPid> handle = RexReadLockfile(lockfile);
+		if(!handle.has_value())
 		{
 			LogError("[mxrexs] Failed to open lockfile for <%s>.", bname.c_str());
 			return RexCommandStatus::BACKEND_STOP_FAILED;
 		}
-
-		SysProcHandle handle;
-		file >> handle;
-		std::string pname = SysGetProcessBinaryName(handle);
+		std::string pname = SysGetProcessBinaryName(handle.value());
 
 		if(pname.empty())
 		{
-			LogError("[mxrexs] Failed to locate <%s> with PID <%d>.", bname.c_str(), handle);
+			LogError("[mxrexs] Failed to locate <%s> with PID <%d>.", bname.c_str(), handle.value());
 			LogDebug("[mxrexs] Maybe backend is not running?");
 			return RexCommandStatus::BACKEND_STOP_FAILED;
 		}
@@ -710,9 +754,9 @@ namespace mulex
 #endif
 		if(pname == cinfo._bin_path)
 		{
-			if(!SysInterruptProcess(handle))
+			if(!SysInterruptProcess(handle.value()))
 			{
-				LogError("[mxrexs] Failed to send interrupt signal to process <%d>.", handle);
+				LogError("[mxrexs] Failed to send interrupt signal to process <%d>.", handle.value());
 				return RexCommandStatus::BACKEND_STOP_FAILED;
 			}
 			return RexCommandStatus::BACKEND_STOP_OK;

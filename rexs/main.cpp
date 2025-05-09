@@ -2,7 +2,9 @@
 #include "../mxlogger.h"
 #include "mxrexs.h"
 #include <functional>
+#include <minwinbase.h>
 #include <thread>
+#include <winbase.h>
 
 using namespace mulex;
 
@@ -13,6 +15,7 @@ static std::function<void()> _rex_service_cleanup;
 #ifdef _WIN32
 #include <windows.h>
 #include <tchar.h>
+#include <strsafe.h>
 
 #define SVCNAME TEXT("mxrexs")
 
@@ -20,164 +23,13 @@ static SERVICE_STATUS _service_status = {};
 static SERVICE_STATUS_HANDLE _status_handle = nullptr;
 static HANDLE _service_stop_evt = nullptr;
 
-// Log error on Windows event log
-void RexReportEvent(LPTSTR func)
-{
-	HANDLE source;
-	LPCTSTR strs[2];
-	TCHAR buffer[80];
-
-	source = RegisterEventSource(NULL, SVCNAME);
-
-	if(source != NULL)
-	{
-		StringCchPrintf(buffer, 80, TEXT("%s failed with %d"), func, GetLastError());
-
-		strs[0] = SVCNAME;
-		strs[1] = buffer;
-
-		ReportEvent(
-			source,
-			EVENTLOG_ERROR_TYPE,
-			0,
-			SVC_ERROR,
-			NULL,
-			2,
-			0,
-			strs,
-			NULL
-		);
-
-		DeregisterEventSource(source);
-	}
-}
-
-void WINAPI ServiceCtrlHandler(DWORD ctrlcode)
-{
-	switch(ctrlcode)
-	{
-		case SERVICE_CONTROL_STOP:
-		{
-			_service_status.dwCurrentState = SERVICE_STOP_PENDING;
-			SetServiceStatus(_status_handle, &_service_status);
-			SetEvent(_service_stop_evt);
-			break;
-		}
-		default:
-		{
-			break;
-		}
-	}
-}
-
-void WINAPI ServiceMain(DWORD argc, LPTSTR* argv)
-{
-	_status_handle = RegisterServiceCtrlHandler(SVCNAME, ServiceCtrlHandler);
-
-	if(!_status_handle)
-	{
-		RexReportEvent(TEXT("RegisterServiceCtrlHandler"));
-		return;
-	}
-
-	_service_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-	_service_status.dwServiceSpecifigExitCode = 0;
-	_service_status.dwControlsAccepted = SERVICE_ACCEPT_STOP;
-	_service_status.dwCurrentState = SERVICE_START_PENDING;
-	SetServiceStatus(_status_handle, &_service_status);
-
-	_service_stop_evt = CreateEvent(NULL, TRUE, FALSE, NULL);
-	if(!_service_stop_evt)
-	{
-		_service_status.dwCurrentState = SERVICE_STOPPED;
-		SetServiceStatus(_status_handle, &_service_status);
-		return;
-	}
-
-	_service_status.dwCurrentState = SERVICE_RUNNING;
-	SetServiceStatus(_status_handle, &_service_status);
-
-	// Service init
-	_rex_service_init();
-
-	while(WaitForSingleObject(_service_stop_evt, INFINITE) != WAIT_OBJECT_0)
-	{
-		// Service is running
-		_rex_service_loop();
-	}
-
-	// Service cleanup
-	_rex_service_cleanup();
-
-	_service_status.dwCurrentState = SERVICE_STOPPED;
-	SetServiceStatus(_status_handle, &_service_status);
-}
-
-bool ServiceInstall()
-{
-	SC_HANDLE hscm;
-	SC_HANDLE hservice;
-	TCHAR path[MAX_PATH];
-
-	if(!GetModuleFileName(NULL, path, MAX_PATH))
-	{
-		LogError("[mxrexs] Cannot install service (%d).", GetLastError());
-		return false;
-	}
-
-	TCHAR qpath[MAX_PATH];
-	StringCbPrintf(qpath, MAX_PATH, TEXT("\"%s\""), path);
-
-	hscm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
-	if(!hscm)
-	{
-		LogError("[mxrexs] OpenSCManager failed (%d).", GetLastError());
-		return false;
-	}
-
-	hservice = CreateService(
-		hscm,
-		SVCNAME,
-		SVCNAME,
-		SERVICE_ALL_ACCESS,
-		SERVICE_WIN32_OWN_PROCESS,
-		SERVICE_AUTO_START,
-		SERVICE_ERROR_NORMAL,
-		qpath,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL
-	);
-
-	if(!hservice)
-	{
-		DWORD err = GetLastError();
-		if(err == ERROR_SERVICE_EXISTS)
-		{
-			LogError("[mxrexs] CreateService failed (%d).", err);
-			CloseServiceHandle(hscm);
-			return false;
-		}
-
-		// Service already exists
-		// Silently ignore
-		LogTrace("[mxrexs] Service already exists. Ignoring...");
-	}
-
-	CloseServiceHandle(hservice);
-	CloseServiceHandle(hscm);
-	return true;
-}
-
 #endif
 
-static bool RexStartBackgroundDaemon()
+static bool RexStartBackgroundDaemon(const char* self)
 {
 #ifdef __linux__
-	// On linux just make this process a daemon and continue
-	LogMessage("[mxrexs] Rexs daemon started.");
+	// On Linux just make this process a daemon and continue
+	(void)self;
 	if(!SysDaemonize())
 	{
 		LogError("[mxrexs] Daemonize failed or not available on this system.");
@@ -185,14 +37,28 @@ static bool RexStartBackgroundDaemon()
 		return false;
 	}
 
+	LogMessage("[mxrexs] Rexs daemon started.");
 	return true;
 #else
-	if(!ServiceInstall())
+	// On Windows spawn this process in the background without arguments
+	STARTUPINFOA si;
+	PROCESS_INFORMATION pi;
+	ZeroMemory(&si, sizeof(si));
+	ZeroMemory(&pi, sizeof(pi));
+
+	if(!CreateProcess(
+		NULL, const_cast<char*>(self), NULL, NULL, FALSE,
+		CREATE_NO_WINDOW | DETACHED_PROCESS,
+		NULL, NULL, &si, &pi
+	))
 	{
-		LogError("[mxrexs] ServiceInstall failed.");
-		LogDebug("[mxrexs] Aborting execution.");
+		LogError("[mxrexs] Failed to start rexs daemon.");
 		return false;
 	}
+
+	LogMessage("[mxrexs] Rexs daemon started.");
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
 	return true;
 #endif
 }
@@ -214,15 +80,18 @@ static inline void RexInlineServiceCleanupFunction(const std::function<void()>& 
 
 static void RexRunService()
 {
-#ifdef __linux__
 	// This is daemonized already just run as normal
 	if(!RexWriteLockFile())
 	{
 		return;
 	}
-	int lock = RexAcquireLock();
+	RexLockHandle lock = RexAcquireLock();
 
+#ifdef __linux__
 	if(lock == -1)
+#else
+	if(lock == INVALID_HANDLE_VALUE)
+#endif
 	{
 		LogError("[mxrexs] Failed to acquire file lock.");
 		LogDebug("[mxrexs] Aborting execution.");
@@ -243,19 +112,6 @@ static void RexRunService()
 	LogMessage("[mxrexs] ctrl-C detected. Exiting...");
 
 	RexReleaseLock(lock);
-
-#else
-	// On Windows start the service
-	SERVICE_TABLE_ENTRY dispatch_table[] = {
-		{ SVCNAME, (LPSERVICE_MAIN_FUNCTION)ServiceMain },
-		{ NULL, NULL }
-	};
-
-	if(!StartServiceCtrlDispatcher(dispatch_table))
-	{
-		RexReportEvent(TEXT("StartServiceCtrlDispatcher"));
-	}
-#endif
 }
 
 enum class RexCLICommand
@@ -299,14 +155,17 @@ int main(int argc, char* argv[])
 
 	if(cmd == RexCLICommand::START)
 	{
-		if(!RexStartBackgroundDaemon())
+		if(!RexStartBackgroundDaemon(argv[0]))
 		{
 			return 0;
 		}
+#ifdef _WIN32
+		// No fork on Windows so the child process starts over
+		return 0;
+#endif
 	}
 	else if(cmd == RexCLICommand::STOP)
 	{
-#ifdef __linux__
 		if(!RexInterruptDaemon())
 		{
 			LogDebug("[mxrexs] Aborting execution.");
@@ -314,19 +173,11 @@ int main(int argc, char* argv[])
 		}
 		LogMessage("[mxrexs] Rexs daemon stopped.");
 		return 0;
-#else
-		// TODO: (Cesar) Windows service stop
-		LogMessage("[mxrexs] Rexs service stopped.");
-		return 0;
-#endif
 	}
 	else
 	{
-#ifdef __linux__
 		LogWarning("[mxrexs] The service is running on this shell.");
 		LogWarning("[mxrexs] Setting up background via '--start' is preferred.");
-#endif
-		// Otherwise the service runs via scm on windows
 	}
 
 	RexInlineServiceInitFunction([]() {

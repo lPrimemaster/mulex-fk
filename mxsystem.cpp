@@ -2,8 +2,8 @@
 #include <chrono>
 #include <cstdlib>
 #include <memory>
+#include <minwinbase.h>
 #include <mutex>
-#include <pty.h>
 #include <signal.h>
 #include "mxlogger.h"
 #include "network/rpc.h"
@@ -1240,6 +1240,13 @@ namespace mulex
 			}
 
 			std::string filename = binary.substr(binary.find_last_of('/') + 1);
+			std::ostringstream ss;
+
+			ss << binary;
+			for(const auto& arg : argv)
+			{
+				ss << " " << arg;
+			}
 			std::vector<char*> args;
 
 			args.push_back(const_cast<char*>(filename.c_str()));
@@ -1248,6 +1255,11 @@ namespace mulex
 				args.push_back(const_cast<char*>(arg.c_str()));
 			}
 			args.push_back(NULL);
+
+			LogDebug("Details:");
+			LogDebug("\tName: %s", filename.c_str());
+			LogDebug("\tArgs: %s", ss.str().c_str());
+			LogDebug("\tWorkdir: %s", workdir.c_str());
 
 			for(int i = 0; i < 3; i++)
 			{
@@ -1278,11 +1290,15 @@ namespace mulex
 		
 		return true;
 #else
-		STARTUPINFOA si = { sizeof(STARTUPINFOA) };
-		PROCESS_INFORMATION pi;
+		STARTUPINFOA si;
+		ZeroMemory( &si, sizeof(si) );
+		si.cb = sizeof(si);
 
-		std::string filename = binary.substr(binary.find_last_of('/') + 1);
-		std::istringstream ss;
+		PROCESS_INFORMATION pi;
+		ZeroMemory( &pi, sizeof(pi) );
+
+		std::string filename = binary.substr(binary.find_last_of("/\\") + 1);
+		std::ostringstream ss;
 
 		ss << binary;
 		for(const auto& arg : argv)
@@ -1290,13 +1306,18 @@ namespace mulex
 			ss << " " << arg;
 		}
 
+		LogDebug("Details:");
+		LogDebug("\tName: %s", filename.c_str());
+		LogDebug("\tArgs: %s", ss.str().c_str());
+		LogDebug("\tWorkdir: %s", workdir.c_str());
+
 		BOOL success = CreateProcessA(
-			filename.c_str(),
-			ss.str().c_str(),
+			NULL, //filename.c_str(),
+			const_cast<char*>(ss.str().c_str()),
 			NULL,
 			NULL,
 			FALSE,
-			0,
+			CREATE_NO_WINDOW | DETACHED_PROCESS,
 			NULL,
 			workdir.c_str(),
 			&si,
@@ -1305,6 +1326,8 @@ namespace mulex
 		
 		if(!success)
 		{
+			LogError("SysSpawnProcess: Failed to start process.");
+			LogError("Windows error: %d", GetLastError());
 			return false;
 		}
 		
@@ -1395,33 +1418,37 @@ namespace mulex
 #else
 		_sys_lock_handle = CreateFileA(
 			proc_lock_file.c_str(),
-			GENERIC_READ | GENERIC_WRITE,
+			GENERIC_WRITE,
 			FILE_SHARE_READ,
 			NULL,
-			OPEN_ALWAYS,
+			CREATE_ALWAYS,
 			FILE_ATTRIBUTE_NORMAL,
 			NULL
 		);
 		if(_sys_lock_handle == INVALID_HANDLE_VALUE)
 		{
 			LogError("SysLockCurrentProcess: Error on opening lockfile.");
-			return false;
-		}
-
-		OVERLAPPED o = { 0 };
-		if(!LockFileEx(_sys_lock_handle, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD, &o))
-		{
 			LogError("SysLockCurrentProcess: Another instance of this process is already running.");
-			CloseHandle(_sys_lock_handle);
 			return false;
 		}
 
-		SetEndOfFile(_sys_lock_handle);
-		std::string pid = std::to_string(GetCurretProcessId());
-		SetFilePointer(_sys_lock_handle, 0, NULL, FILE_BEGIN);
+		// OVERLAPPED o;
+		// ZeroMemory(&o, sizeof(o));
+		//
+		// if(!LockFileEx(_sys_lock_handle, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD, &o))
+		// {
+		// 	LogError("SysLockCurrentProcess: Another instance of this process is already running.");
+		// 	CloseHandle(_sys_lock_handle);
+		// 	return false;
+		// }
+
+		// SetEndOfFile(_sys_lock_handle);
+		std::string pid = std::to_string(GetCurrentProcessId());
+		std::cout << pid << std::endl;
+		// SetFilePointer(_sys_lock_handle, 0, NULL, FILE_BEGIN);
 		DWORD written;
-		WriteFile(_sys_lock_handle, pid.c_str(), pid.size() + 1, &written, NULL);
-		SetEndOfFile(_sys_lock_handle);
+		WriteFile(_sys_lock_handle, pid.c_str(), pid.size(), &written, NULL);
+		// SetEndOfFile(_sys_lock_handle);
 #endif
 		return true;
 	}

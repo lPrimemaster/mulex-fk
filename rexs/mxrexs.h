@@ -3,10 +3,22 @@
 #include <string>
 #include <optional>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace mulex
 {
 	static constexpr std::uint16_t REX_PORT = 5703;
 	static constexpr std::int64_t REX_TIMEOUT = 10000;
+
+#ifdef __linux__
+	using RexPid = pid_t;
+	using RexLockHandle = int;
+#else
+	using RexPid = DWORD;
+	using RexLockHandle = HANDLE;
+#endif
 
 	enum class RexCommandStatus : std::uint8_t
 	{
@@ -41,10 +53,10 @@ namespace mulex
 		std::string   _srv_host;
 	};
 
+	RexLockHandle RexAcquireLock();
 	bool RexWriteLockFile();
-	int RexAcquireLock();
-	void RexReleaseLock(int fd);
 	bool RexInterruptDaemon();
+	void RexReleaseLock(RexLockHandle h);
 
 	bool RexServerInit();
 	void RexServerLoop();
