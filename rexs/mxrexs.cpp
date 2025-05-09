@@ -2,13 +2,9 @@
 #include "mxrexs.h"
 #include "../mxlogger.h"
 #include <cstdint>
-#include <fileapi.h>
 #include <filesystem>
 #include <fstream>
-#include <handleapi.h>
-#include <minwinbase.h>
 #include <optional>
-#include <processthreadsapi.h>
 #include <sstream>
 #include <thread>
 
@@ -19,6 +15,11 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#else
+#include <processthreadsapi.h>
+#include <minwinbase.h>
+#include <handleapi.h>
+#include <fileapi.h>
 #endif
 
 #ifdef __linux__

@@ -2,7 +2,6 @@
 #include <chrono>
 #include <cstdlib>
 #include <memory>
-#include <minwinbase.h>
 #include <mutex>
 #include <signal.h>
 #include "mxlogger.h"
@@ -18,6 +17,7 @@
 #include <sstream>
 
 #ifdef _WIN32
+#include <minwinbase.h>
 #include <windows.h>
 #include <shlwapi.h>
 #include <pdh.h>

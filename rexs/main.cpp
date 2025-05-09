@@ -2,9 +2,7 @@
 #include "../mxlogger.h"
 #include "mxrexs.h"
 #include <functional>
-#include <minwinbase.h>
 #include <thread>
-#include <winbase.h>
 
 using namespace mulex;
 
@@ -16,6 +14,8 @@ static std::function<void()> _rex_service_cleanup;
 #include <windows.h>
 #include <tchar.h>
 #include <strsafe.h>
+#include <winbase.h>
+#include <minwinbase.h>
 
 #define SVCNAME TEXT("mxrexs")
 

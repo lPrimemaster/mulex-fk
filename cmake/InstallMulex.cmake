@@ -5,6 +5,9 @@ macro(install_mulex)
 	# Install plugin manager
 	install(TARGETS mxplug DESTINATION bin)
 
+	# Install rex remote executioner
+	install(TARGETS mxrexs DESTINATION bin)
+
 	# Common includes
 	install(FILES network/socket.h DESTINATION include/network)
 	install(FILES network/rpc.h DESTINATION include/network)
