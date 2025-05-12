@@ -183,6 +183,24 @@ namespace mulex
 		rdb[root_key + "user_status/color"] = mxstring<512>(color);
 	}
 
+	RexDependencyManager MxBackend::registerDependency(const std::string& backend, const std::string& host)
+	{
+		RexDependencyManager rdm(this, backend, host, 0x0, [this]() -> MsgEmitter& { return log; });
+		return rdm;
+	}
+
+	RexDependencyManager MxBackend::registerDependency(const std::uint64_t id)
+	{
+		RexDependencyManager rdm(this, "", "", id, [this]() -> MsgEmitter& { return log; });
+		return rdm;
+	}
+
+	void MxBackend::terminate() const
+	{
+		LogDebug("[mxbackend] Received stop signal via terminate().");
+		_prog_stop.store(true);
+	}
+
 	void MxBackend::deferExec(std::function<void()> func, std::int64_t delay, std::int64_t interval)
 	{
 		_io.schedule(func, delay, interval);
@@ -250,7 +268,7 @@ namespace mulex
 			return;
 		}
 
-		while(!*stop)
+		while(!*stop && !_prog_stop)
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			std::this_thread::yield();

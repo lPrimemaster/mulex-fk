@@ -26,6 +26,8 @@ public:
 			dispatchEvent("TestBackend::dummy", data);
 			log.info("Test message triggering on events page...");
 		}, 0, 500);
+
+		// registerDependency("pmc8742.exe").required(true).onFail(RexDependencyManager::LOG_ERROR);
 	}
 
 	void onRunStart(std::uint64_t runno)

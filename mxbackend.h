@@ -4,6 +4,7 @@
 #include "mxmsg.h"
 #include "mxsystem.h"
 #include "network/rpc.h"
+#include "rexs/mxrexs.h"
 #include <algorithm>
 #include <string>
 #include <functional>
@@ -52,6 +53,10 @@ namespace mulex
 		// Set the backend custom status flag
 		void setStatus(const std::string& status, const std::string& color);
 
+		// Setup possible dependencies
+		RexDependencyManager registerDependency(const std::string& backend, const std::string& host = "");
+		RexDependencyManager registerDependency(const std::uint64_t id);
+
 	private:
 		// User RPC
 		void userRpcInternal(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* udata);
@@ -61,6 +66,9 @@ namespace mulex
 	public:
 		void init();
 		void spin();
+
+		// Stop via code
+		void terminate() const;
 
 		// Execution defer
 		template<std::derived_from<MxBackend> D>
@@ -89,6 +97,9 @@ namespace mulex
 		// User start/stop
 		void (MxBackend::* _user_run_start)(std::uint64_t) = nullptr;
 		void (MxBackend::* _user_run_stop)(std::uint64_t) = nullptr;
+
+		// Programatically stop backend
+		mutable std::atomic<bool> _prog_stop = false;
 	};
 
 	template<typename T>

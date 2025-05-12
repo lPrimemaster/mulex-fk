@@ -18,6 +18,7 @@ called from other contexts (backends or plugins)
 - Sending logs to the frontend
 - Registering user functions that act as data
 gathering (e.g. periodic, on trigger, ...)
+- Remote launch other backends that are marked as dependencies
 
 Other than that, a backend is a standalone C++ executable that can run
 any type of logic the user pretends.
@@ -278,6 +279,30 @@ Of course proper data handling must take place at the backend user function.
 
 The plugin containing this code will call the backend user rpc function
 as long as it is connected to the mx system.
+
+## Setting dependencies
+It will often happen that some backends require other backends to properly function.
+This is where the `registerDependency` function comes in. It allows you to specify
+that this backend relies on some other to properly function. This also can come in
+handy if one would want to write a startup script, it could be done via a "composer"
+backend that orchestrates the startup of the system's critical elements.
+
+```cpp
+MyBackend::MyBackend(int argc, char* argv[]) //...
+{
+    // This would terminate this backend if <other_backend_name> failed to start/was not running
+    // The `required()` function if true, tries to remotely start the backend if found
+    registerDependency("other_backend_name", "host_name (optional but recommended)").required(true).onFail(RexDependencyManager::TERMINATE);
+
+    // Also works via cid
+    // Only warn if the depency is not found/running
+    // Do not try to start it up (`required(false)`)
+    registerDependency(0xc6a4a7935bd1e995).required(false).onFail(RexDependencyManager::LOG_WARN);
+}
+```
+
+> :warning: Dependency checking occurs at the time of expression evaluation.
+The backend still runs its io loop for a while before terminate is called.
 
 ## Setting custom arguments
 Let's say you want to add some custom argument as to where some config

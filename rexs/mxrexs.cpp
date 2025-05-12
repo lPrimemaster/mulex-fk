@@ -1,12 +1,14 @@
 #include "../mxsystem.h"
 #include "mxrexs.h"
 #include "../mxlogger.h"
+#include "../mxbackend.h"
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <sstream>
 #include <thread>
+#include <rpcspec.inl>
 
 #ifdef __linux__
 #include <sys/types.h>
@@ -830,5 +832,174 @@ namespace mulex
 
 		LogDebug("[mxrexs] Backend <0x%llx> stopped at host <%s>.", backend, addr.value().c_str());
 		return status;
+	}
+
+	RexDependencyManager::RexDependencyManager(
+		const MxBackend* bck,
+		const std::string& dependency,
+		const std::string& host,
+		std::uint64_t cid,
+		std::function<MsgEmitter&()> log_hook
+	) : _dep_ptr(bck), _dep_name(dependency), _dep_host(host), _dep_cid(cid), _dep_hook(log_hook)
+	{
+	}
+
+	RexDependencyManager::~RexDependencyManager()
+	{
+		auto failLog = [this](const std::string& msg){
+			static const std::string log = "This backend requires dependency <%s> <0x%llx> <%s>. " + msg;
+			if(_dep_fail == TERMINATE)
+			{
+				_dep_hook().error(log.c_str(), _dep_name.c_str(), _dep_cid, _dep_host.c_str());
+				if(_dep_ptr) _dep_ptr->terminate();
+				LogError("[rexdependencymanager] Required dependency marked as TERMINATE. Signal interrupt.");
+			}
+			else if(_dep_fail == LOG_WARN)
+			{
+				_dep_hook().warn(log.c_str(), _dep_name.c_str(), _dep_cid, _dep_host.c_str());
+			}
+			else if(_dep_fail == LOG_ERROR)
+			{
+				_dep_hook().error(log.c_str(), _dep_name.c_str(), _dep_cid, _dep_host.c_str());
+			}
+		};
+		
+		// Check for dependencies at the end of constructor
+		if(!checkDependencyExists())
+		{
+			LogDebug(
+				"[rexdependencymanager] Dependency <%s> <0x%llx> (HOST: <%s>) was not found on the mx registry.",
+				_dep_name.c_str(),
+				_dep_cid,
+				_dep_host.c_str()
+			);
+			failLog("Not found on system.");
+			return;
+		}
+
+		if(!checkDependencyRunning())
+		{
+			LogDebug(
+				"[rexdependencymanager] Dependency <%s> <0x%llx> (HOST: <%s>) not running.",
+				_dep_name.c_str(),
+				_dep_cid,
+				_dep_host.c_str()
+			);
+			if(_dep_req)
+			{
+				// Try to launch dependency via REx
+				auto exp = SysGetConnectedExperiment();
+				if(!exp.has_value())
+				{
+					failLog("Not connected to an experiment.");
+				}
+				else
+				{
+					RexCommandStatus status = exp.value()->_rpc_client->call<RexCommandStatus>(RPC_CALL_MULEX_REXSENDSTARTCOMMAND, _dep_cid);
+					if(status != RexCommandStatus::BACKEND_START_OK)
+					{
+						failLog("Failed to start. Marked as required.");
+					}
+					else
+					{
+						LogDebug("[rexdependencymanager] Start dependency OK (<%s> | <0x%llx>).", _dep_name.c_str(), _dep_cid);
+					}
+				}
+			}
+			else
+			{
+				failLog("Not running. Not marked required.");
+			}
+		}
+
+		LogDebug("[rexdependencymanager] Dependency <%s> already running.", _dep_name.c_str());
+	}
+
+	bool RexDependencyManager::checkDependencyExists()
+	{
+		RdbAccess rdb;
+		auto extractCid = [](const std::string& key) -> std::uint64_t {
+			std::string nkey = key.substr(0, key.find_last_of('/'));
+			nkey = nkey.substr(nkey.find_last_of('/') + 1);
+			return std::stoull(nkey, 0, 16);
+		};
+
+		auto readHost = [&rdb](const std::string& key) -> std::string {
+			std::string nkey = key.substr(0, key.find_last_of('/')) + "/host";
+			return static_cast<mulex::mxstring<512>>(rdb[nkey]).c_str();
+		};
+
+		auto readName = [&rdb](const std::string& key) -> std::string {
+			std::string nkey = key.substr(0, key.find_last_of('/')) + "/name";
+			return static_cast<mulex::mxstring<512>>(rdb[nkey]).c_str();
+		};
+
+		if(_dep_cid)
+		{
+			std::string key = "/system/backends/" + SysI64ToHexString(_dep_cid) + "/connected";
+			bool exists = rdb[key].exists();
+			if(exists)
+			{
+				_dep_host = readHost(key);
+				_dep_name = readName(key);
+			}
+
+			return exists;
+		}
+		else if(!_dep_name.empty())
+		{
+			auto exp = SysGetConnectedExperiment();
+			if(!exp.has_value())
+			{
+				return false;
+			}
+
+			std::vector<RdbKeyName> keys = exp.value()->_rpc_client->call<RPCGenericType>(RPC_CALL_MULEX_RDBLISTSUBKEYS, RdbKeyName("/system/backends/*/name"));
+			for(const RdbKeyName& key : keys)
+			{
+				std::string name = static_cast<mulex::mxstring<512>>(rdb[key.c_str()]).c_str();
+				
+				if(name == _dep_name)
+				{
+					std::string host = readHost(key.c_str());
+					if(_dep_host.empty())
+					{
+						LogWarning("[rexdependencymanager] Specifying backend name without host could be dangerous.");
+						LogWarning("[rexdependencymanager] Selecting first available key under found name.");
+
+						_dep_cid = extractCid(key.c_str());
+						_dep_host = host;
+
+						return true;
+					}
+					else if(_dep_host == host)
+					{
+						_dep_cid = extractCid(key.c_str());
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	bool RexDependencyManager::checkDependencyRunning()
+	{
+		RdbAccess rdb;
+		bool running = rdb["/system/backends/" + SysI64ToHexString(_dep_cid) + "/connected"];
+		return running;
+	}
+
+	RexDependencyManager& RexDependencyManager::required(bool r)
+	{
+		_dep_req = r;
+		return *this;
+	}
+
+	RexDependencyManager& RexDependencyManager::onFail(const RDMFailFlags& flag)
+	{
+		_dep_fail = flag;
+		return *this;
 	}
 }

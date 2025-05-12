@@ -9,6 +9,7 @@ nav:
   - Getting Started: getting_started.md
   - RDB: rdb.md
   - PDB: pdb.md
+  - REX: rex.md
   - Events: events.md
   - Backends: backends.md
   - Plugins: plugins.md
