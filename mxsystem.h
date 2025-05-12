@@ -1,5 +1,6 @@
 #pragma once
 #include <queue>
+#include <type_traits>
 #include <vector>
 #include <cstdint>
 #include <optional>
@@ -91,6 +92,34 @@ namespace mulex
 		std::vector<std::uint8_t> buffer;
 		(SysPackArguments(buffer, args), ...);
 		return buffer;
+	}
+
+	template<typename T, typename ...Args>
+	inline std::tuple<T, Args...> SysUnpackArguments(const std::uint8_t* data, std::int64_t size)
+	{
+		if constexpr(sizeof...(Args) > 0)
+		{
+			return std::tuple_cat(SysUnpackArguments<T>(data, size), SysUnpackArguments<Args...>(data + sizeof(T), size - sizeof(T)));
+		}
+		else
+		{
+			static_assert(
+				std::is_trivially_copyable_v<T> && std::is_default_constructible_v<T>,
+				"SysUnpackArguments requires trivially copyable and default constructible types."
+			);
+
+			if(size < sizeof(T))
+			{
+				return std::make_tuple(T());
+			}
+			return std::make_tuple(*reinterpret_cast<const T*>(data));
+		}
+	}
+
+	template<typename T, typename ...Args>
+	inline std::tuple<T, Args...> SysUnpackArguments(const std::vector<std::uint8_t>& buffer)
+	{
+		return SysUnpackArguments<T, Args...>(buffer.data());
 	}
 
 	template<typename T>

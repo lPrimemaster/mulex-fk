@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <string>
 #include <functional>
+#include <tuple>
 
 namespace mulex
 {
@@ -54,8 +55,41 @@ namespace mulex
 		void setStatus(const std::string& status, const std::string& color);
 
 		// Setup possible dependencies
-		RexDependencyManager registerDependency(const std::string& backend, const std::string& host = "");
+		RexDependencyManager registerDependency(const std::string& backend);
 		RexDependencyManager registerDependency(const std::uint64_t id);
+
+		// Call user RPC
+		std::tuple<BckUserRpcStatus, RPCGenericType> callUserRpc(const std::string& backend, const std::vector<uint8_t>& data, std::int64_t timeout);
+
+		// Make timeout meaningfull on a multiple parameter call
+		struct CallTimeout
+		{
+			explicit constexpr CallTimeout(std::int64_t timeout) : _timeout(timeout) { }
+			explicit CallTimeout() = delete;
+			CallTimeout(const CallTimeout&) = delete;
+			CallTimeout(CallTimeout&&) = delete;
+			CallTimeout& operator=(const CallTimeout&) = delete;
+			CallTimeout& operator=(CallTimeout&&) = delete;
+			std::int64_t _timeout;
+		};
+
+		template<typename T, typename... Args>
+		inline std::tuple<BckUserRpcStatus, T> callUserRpc(const std::string& backend, const CallTimeout& timeout, Args... args)
+		{
+			auto [status, ret] = callUserRpc(backend, SysPackArguments(args...), timeout._timeout);
+			if(status != BckUserRpcStatus::OK)
+			{
+				return std::make_tuple(status, T());
+			}
+			return std::make_tuple(status, static_cast<T>(ret));
+		}
+
+		template<typename... Args>
+		inline BckUserRpcStatus callUserRpc(const std::string& backend, const CallTimeout& timeout, Args... args)
+		{
+			auto [status, _] = callUserRpc(backend, SysPackArguments(args...), timeout._timeout);
+			return status;
+		}
 
 	private:
 		// User RPC

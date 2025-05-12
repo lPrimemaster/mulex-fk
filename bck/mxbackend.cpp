@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <thread>
 #include <vector>
+#include <rpcspec.inl>
 
 static const std::atomic<bool>* stop;
 
@@ -183,16 +184,36 @@ namespace mulex
 		rdb[root_key + "user_status/color"] = mxstring<512>(color);
 	}
 
-	RexDependencyManager MxBackend::registerDependency(const std::string& backend, const std::string& host)
+	RexDependencyManager MxBackend::registerDependency(const std::string& backend)
 	{
-		RexDependencyManager rdm(this, backend, host, 0x0, [this]() -> MsgEmitter& { return log; });
-		return rdm;
+		return RexDependencyManager(this, backend, 0x0, [this]() -> MsgEmitter& { return log; });
 	}
 
 	RexDependencyManager MxBackend::registerDependency(const std::uint64_t id)
 	{
-		RexDependencyManager rdm(this, "", "", id, [this]() -> MsgEmitter& { return log; });
-		return rdm;
+		return RexDependencyManager(this, "", id, [this]() -> MsgEmitter& { return log; });
+	}
+
+	std::tuple<BckUserRpcStatus, RPCGenericType> MxBackend::callUserRpc(const std::string& backend, const std::vector<uint8_t>& data, std::int64_t timeout)
+	{
+		RPCGenericType retval = _experiment->_rpc_client->call<RPCGenericType>(
+			RPC_CALL_MULEX_BCKCALLUSERRPC,
+			string32(backend),
+			RPCGenericType(data),
+			timeout
+		);
+
+		const std::uint8_t* ptr = retval.getData();
+		BckUserRpcStatus status = static_cast<BckUserRpcStatus>(*ptr);
+		if(status == BckUserRpcStatus::OK && retval.getSize() > sizeof(BckUserRpcStatus))
+		{
+			return std::make_tuple(
+				status,
+				RPCGenericType::FromData(retval.getData() + sizeof(BckUserRpcStatus), retval.getSize() - sizeof(BckUserRpcStatus))
+			);
+		}
+		
+		return std::make_tuple(status, RPCGenericType());
 	}
 
 	void MxBackend::terminate() const

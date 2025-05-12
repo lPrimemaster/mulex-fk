@@ -70,7 +70,6 @@ namespace mulex
 		RexDependencyManager(
 			const MxBackend* bck,
 			const std::string& dependency,
-			const std::string& host,
 			std::uint64_t cid,
 			std::function<MsgEmitter&()> log_hook
 		);
@@ -92,7 +91,6 @@ namespace mulex
 
 	private:
 		std::string   				 _dep_name = "";
-		std::string   				 _dep_host = "";
 		std::uint64_t 				 _dep_cid = 0;
 		bool		  		 		 _dep_req = false;
 		bool						 _dep_con = false;

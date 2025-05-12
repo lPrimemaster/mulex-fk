@@ -27,6 +27,16 @@ public:
 			log.info("Test message triggering on events page...");
 		}, 0, 500);
 
+		auto [status, ret] = callUserRpc<std::int32_t>(
+			"pmc8742.exe",
+			CallTimeout(1000),
+			string32("pleaseSmt"),
+			std::int32_t(0),
+			std::int32_t(1),
+			std::int32_t(2)
+		);
+		std::cout << static_cast<int>(status) << " -> " << ret << std::endl;
+
 		// registerDependency("pmc8742.exe").required(true).onFail(RexDependencyManager::LOG_ERROR);
 	}
 
