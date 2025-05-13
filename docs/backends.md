@@ -227,6 +227,39 @@ mulex::RPCGenericType MyBackend::my_rpc(const std::vector<std::uint8_t>& data)
     // return {}; if no return is required
 }
 ```
+
+> :warning: Each backend can only have **one** user RPC function.
+
+> :warning: You can, however, implement custom logic to branch to multiple other functions.
+
+### Frontend
+:warning: The frontend cannot register user RPC functions.
+
+## Calling the user RPC function
+
+### Backend
+```cpp
+void MyBackend::any_function()
+{
+    // Calling above 'my_rpc' function as example
+    auto [status, ret] = callUserRpc<double>("backend_name", CallTimeout(1000), std::int32_t(42));
+    // status is BckUserRpcStatus::OK if call succeeded
+    if(status == BckUserRpcStatus::OK)
+    {
+        log.info("Got %lf from 'user_rpc' at '<backend_name>'.", ret);
+    }
+
+    // If function was void omit template arguments
+    string32 other_arg = "hello";
+    auto status = callUserRpc("other_backend", CallTimeout(1000), other_arg);
+}
+```
+
+The example is pretty self explanatory. Take in mind that the arguments passed via template pack
+need to be trivially copyable and default constructible (alternatively wrap them on a `RPCGenericType`).
+`CallTimeout` specifies the time to wait (in milliseconds) for a response from the other backend. Assign this according
+to your needs.
+
 ### Frontend
 ```ts
 const rpc = MxRpc.Create();
@@ -292,7 +325,7 @@ MyBackend::MyBackend(int argc, char* argv[]) //...
 {
     // This would terminate this backend if <other_backend_name> failed to start/was not running
     // The `required()` function if true, tries to remotely start the backend if found
-    registerDependency("other_backend_name", "host_name (optional but recommended)").required(true).onFail(RexDependencyManager::TERMINATE);
+    registerDependency("other_backend_name").required(true).onFail(RexDependencyManager::TERMINATE);
 
     // Also works via cid
     // Only warn if the depency is not found/running
@@ -301,8 +334,9 @@ MyBackend::MyBackend(int argc, char* argv[]) //...
 }
 ```
 
-> :warning: Dependency checking occurs at the time of expression evaluation.
-The backend still runs its io loop for a while before terminate is called.
+> :warning: Dependency checking occurs at the time of expression evaluation but 
+the backend still runs its i/o loop for at least once before terminate is called.
+Do not rely on this feature to terminate the backend consistently.
 
 ## Setting custom arguments
 Let's say you want to add some custom argument as to where some config

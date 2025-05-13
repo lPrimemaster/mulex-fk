@@ -36,7 +36,6 @@ public:
 			std::int32_t(2)
 		);
 		std::cout << static_cast<int>(status) << " -> " << ret << std::endl;
-
 		// registerDependency("pmc8742.exe").required(true).onFail(RexDependencyManager::LOG_ERROR);
 	}
 
