@@ -33,6 +33,7 @@
     "solid-transition-group": "^0.2.3",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
-    "uplot": "^1.6.31"
+    "uplot": "^1.6.31",
+    "vite-plugin-solid-svg": "^0.8.1"
   }
 }

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
+import solidSvg from 'vite-plugin-solid-svg';
 import path from "path";
 import fs from 'fs';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -15,6 +16,7 @@ export default defineConfig({
     */
     // devtools(),
     solidPlugin(),
+	solidSvg(),
 	VitePWA({
 		registerType: 'autoUpdate',
 		manifest: {

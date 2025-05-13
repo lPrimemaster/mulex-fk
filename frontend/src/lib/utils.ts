@@ -119,3 +119,19 @@ export function download_data(filename: string, data: any, mimetype: string = 'a
 	el.click();
 	URL.revokeObjectURL(url);
 }
+
+export function calculate_text_color_yiq(color: string, alpha: number = 255) {
+	const h = color.replace('#', '');
+	let r = parseInt(h.substring(0, 2), 16);
+	let g = parseInt(h.substring(2, 4), 16);
+	let b = parseInt(h.substring(4, 6), 16);
+
+	if(alpha < 255) {
+		r = 255 - alpha * (255 - r);
+		g = 255 - alpha * (255 - g);
+		b = 255 - alpha * (255 - b);
+	}
+
+	const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+	return yiq >= 128 ? 'black' : 'white';
+}

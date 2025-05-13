@@ -95,45 +95,51 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 		}
 	}
 
+	function sync_and_sub_logs() {
+		// Fetch the logs
+		MxWebsocket.instance.rpc_call('mulex::MsgGetLastLogs', [MxGenericType.uint32(props.maxLogs)], 'generic').then((res: MxGenericType) => {
+			const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
+			for(const l of logs.reverse()) {
+				const [ _, level, cid, timestamp, message ] = l;
+				addMessage(cid, timestamp, level, message, false);
+			}
+		});
+
+		// Watch on new logs
+		MxWebsocket.instance.subscribe('mxmsg::message', (data: Uint8Array) => {
+			// MEMO:
+			// struct MsgMessage
+			// {
+			// 	std::uint64_t _client;
+			// 	std::int64_t  _timestamp;
+			// 	MsgClass 	  _type;
+			//  std::uint8_t  _padding[7];
+			// 	std::uint64_t _size;
+			// 	char		  _message[];
+			// };
+
+			const view = new DataView(data.buffer);
+			let offset = 0;
+			const cid  = view.getBigUint64(offset, true); offset += 8;
+			const ts   = view.getBigInt64(offset, true); offset += 8;
+			const type = view.getUint8(offset); offset += 8; // With padding
+			// const size = view.getBigUint64(offset, true); offset += 8;
+			const msg  = data.subarray(32, -1);
+
+			const decoder = new TextDecoder('latin1');
+			const message = decoder.decode(msg);
+
+			addMessage(cid, ts, type, message);
+		});
+	}
+
 	MxWebsocket.instance.on_connection_change((conn: boolean) => {
 		if(conn) {
-			// Fetch the logs
-			MxWebsocket.instance.rpc_call('mulex::MsgGetLastLogs', [MxGenericType.uint32(props.maxLogs)], 'generic').then((res: MxGenericType) => {
-				const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
-				for(const l of logs.reverse()) {
-					const [ _, level, cid, timestamp, message ] = l;
-					addMessage(cid, timestamp, level, message, false);
-				}
-			});
-
-			// Watch on new logs
-			MxWebsocket.instance.subscribe('mxmsg::message', (data: Uint8Array) => {
-				// MEMO:
-				// struct MsgMessage
-				// {
-				// 	std::uint64_t _client;
-				// 	std::int64_t  _timestamp;
-				// 	MsgClass 	  _type;
-				//  std::uint8_t  _padding[7];
-				// 	std::uint64_t _size;
-				// 	char		  _message[];
-				// };
-
-				const view = new DataView(data.buffer);
-				let offset = 0;
-				const cid  = view.getBigUint64(offset, true); offset += 8;
-				const ts   = view.getBigInt64(offset, true); offset += 8;
-				const type = view.getUint8(offset); offset += 8; // With padding
-				// const size = view.getBigUint64(offset, true); offset += 8;
-				const msg  = data.subarray(32, -1);
-
-				const decoder = new TextDecoder('latin1');
-				const message = decoder.decode(msg);
-
-				addMessage(cid, ts, type, message);
-			});
+			sync_and_sub_logs();
 		}
 	});
+
+	sync_and_sub_logs();
 
 	return <LogContext.Provider value={{ logs: logs, setLogs: setLogs }}>{props.children}</LogContext.Provider>
 };

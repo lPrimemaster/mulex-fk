@@ -3,10 +3,13 @@ import { render, Show } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { Toaster } from '~/components/ui/toast';
 
+import { init_global_state } from '~/lib/globalstate';
+
 import './index.css';
 import Home from './Home';
 import { Project } from './Project';
 import { RdbViewer } from './RdbViewer';
+import { BackendViewer } from './BackendViewer';
 import { LogProvider } from './components/LogTable';
 import { HistoryViewer } from './HistoryViewer';
 import { EventsViewer } from './EventsViewer';
@@ -22,6 +25,8 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 	);
 }
 
+await init_global_state();
+
 render(() => (
 		<MetaProvider>
 			<Link rel="icon" href="/favicon.ico"/>
@@ -33,6 +38,7 @@ render(() => (
 						<Route path='/rdb' component={RdbViewer}/>
 						<Route path='/history' component={HistoryViewer}/>
 						<Route path='/events' component={EventsViewer}/>
+						<Route path='/backends' component={BackendViewer}/>
 						<DynamicRouter/>
 						<RouterCatcher/>
 					</Router>

@@ -9,6 +9,9 @@ export const MxButton : Component<{ children: JSXElement, type?: string, onClick
 	if(props.type && props.type === 'error') {
 		baseatr += 'bg-red-500 border-red-800 text-white hover:bg-red-600 active:bg-red-700 disabled:bg-red-200 disabled:text-gray-500 shadow-md';
 	}
+	else if(props.type && props.type === 'success') {
+		baseatr += 'bg-green-500 border-green-800 hover:bg-green-600 active:bg-green-700 disabled:bg-green-200 disabled:text-gray-500 shadow-md';
+	}
 	else {
 		baseatr += 'bg-gray-200 border-gray-400 hover:bg-gray-300 active:bg-gray-400 disabled:bg-gray-500 disabled:text-gray-600 shadow-md';
 	}
