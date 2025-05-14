@@ -12,7 +12,7 @@ export const MxPopup: Component<MxPopupProps> = (props) => {
 	return (
 		<AlertDialog open={props.open} onOpenChange={props.onOpenChange}>
 			<AlertDialogTrigger></AlertDialogTrigger>
-			<AlertDialogContent>
+			<AlertDialogContent class="w-3/4 max-w-svh">
 				<AlertDialogTitle>{props.title}</AlertDialogTitle>
 				<AlertDialogDescription>{props.children}</AlertDialogDescription>
 			</AlertDialogContent>

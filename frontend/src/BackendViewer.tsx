@@ -21,7 +21,7 @@ import { MxWebsocket } from "./lib/websocket";
 import { MxGenericType } from "./lib/convert";
 import { showToast } from "./components/ui/toast";
 import { MxLogContext, LogContext, MxLog } from "./components/LogTable";
-import { MxPopup } from "./components/Popup";
+import { Dialog, DialogContentWide, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
 
 const BackendLogViewer: Component<{cid: string}> = (props) => {
 	const { blogs } = useContext(LogContext) as MxLogContext;
@@ -252,15 +252,31 @@ export const BackendViewer: Component = () => {
 							</Card>
 						);
 					}}</For>
-					<MxPopup
-						title={`Logs ${currentLog() !== '' ? '(' + backends[currentLog()].name + ')': ''}`}
-						open={currentLog() !== ''}
-						onOpenChange={(o: boolean) => { if(!o) setCurrentLog(''); }}
-					>
-						<Show when={currentLog() !== ''}>
-							<BackendLogViewer cid={currentLog()}/>
-						</Show>
-					</MxPopup>
+					<Dialog open={currentLog() !== ''} onOpenChange={(o: boolean) => { if(!o) setCurrentLog(''); }}>
+						<DialogTrigger></DialogTrigger>
+						<DialogContentWide>
+							<DialogHeader>
+								<DialogTitle>{`Logs ${currentLog() !== '' ? '(' + backends[currentLog()].name + ')': ''}`}</DialogTitle>
+								<DialogDescription>
+									Displaying up to the last 100 logs.
+								</DialogDescription>
+							</DialogHeader>
+							<Show when={currentLog() !== ''}>
+								<BackendLogViewer cid={currentLog()}/>
+							</Show>
+						</DialogContentWide>
+					</Dialog>
+					{
+					// <MxPopup
+					// 	title={`Logs ${currentLog() !== '' ? '(' + backends[currentLog()].name + ')': ''}`}
+					// 	open={currentLog() !== ''}
+					// 	onOpenChange={(o: boolean) => { if(!o) setCurrentLog(''); }}
+					// >
+					// 	<Show when={currentLog() !== ''}>
+					// 		<BackendLogViewer cid={currentLog()}/>
+					// 	</Show>
+					// </MxPopup>
+					}
 				</div>
 			</div>
 		</div>
