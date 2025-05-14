@@ -2,6 +2,7 @@ import { createStore } from "solid-js/store";
 import { MxGenericType } from "./convert";
 import { MxWebsocket } from "./websocket";
 import { MxRdb } from "./rdb";
+import { extract_backend_name } from "./utils";
 
 class BackendStatus {
 	name: string;
@@ -52,10 +53,6 @@ async function create_client_status(clientid: string): Promise<BackendStatus> {
 	const ucolor: string = (await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [entry], 'generic')).astype('string');
 
 	return new BackendStatus(cname, chost, cconn, Number(ctime), ustatus, ucolor);
-}
-
-function extract_backend_name(key: string): string {
-	return key.replace('/system/backends/', '').split('/').shift() as string;
 }
 
 async function init_client_status() {

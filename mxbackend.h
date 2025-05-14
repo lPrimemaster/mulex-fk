@@ -4,7 +4,6 @@
 #include "mxmsg.h"
 #include "mxsystem.h"
 #include "network/rpc.h"
-#include "rexs/mxrexs.h"
 #include <algorithm>
 #include <string>
 #include <functional>
@@ -21,6 +20,8 @@ namespace mulex
 	};
 
 	MX_RPC_METHOD mulex::RPCGenericType BckCallUserRpc(mulex::string32 evt, mulex::RPCGenericType data, std::int64_t timeout);
+
+	class MxRexDependencyManager;
 
 	class MxBackend
 	{
@@ -55,8 +56,8 @@ namespace mulex
 		void setStatus(const std::string& status, const std::string& color);
 
 		// Setup possible dependencies
-		RexDependencyManager registerDependency(const std::string& backend);
-		RexDependencyManager registerDependency(const std::uint64_t id);
+		MxRexDependencyManager registerDependency(const std::string& backend);
+		MxRexDependencyManager registerDependency(const std::uint64_t id);
 
 		// Call user RPC
 		std::tuple<BckUserRpcStatus, RPCGenericType> callUserRpc(const std::string& backend, const std::vector<uint8_t>& data, std::int64_t timeout);
@@ -171,6 +172,43 @@ namespace mulex
 		operator const std::vector<std::uint8_t>&() { return _buffer; }
 	private:
 		std::vector<std::uint8_t> _buffer;
+	};
+
+	class MxRexDependencyManager
+	{
+	public:
+		enum RDMFailFlags
+		{
+			LOG_WARN,
+			LOG_ERROR,
+			TERMINATE
+		};
+
+		MxRexDependencyManager(
+			const MxBackend* bck,
+			const std::string& dependency,
+			std::uint64_t cid,
+			std::function<MsgEmitter&()> log_hook
+		);
+		~MxRexDependencyManager();
+
+		MxRexDependencyManager& required(bool r);
+		MxRexDependencyManager& onFail(const RDMFailFlags& flag);
+
+	private:
+		bool checkDependencyExists();
+		bool checkDependencyRunning();
+		void calculateMissingVariables();
+
+
+	private:
+		std::string   				 _dep_name = "";
+		std::uint64_t 				 _dep_cid = 0;
+		bool		  		 		 _dep_req = false;
+		bool						 _dep_con = false;
+		RDMFailFlags  				 _dep_fail = LOG_WARN;
+		std::function<MsgEmitter&()> _dep_hook;
+		const MxBackend*			 _dep_ptr;
 	};
 
 } // namespace mulex

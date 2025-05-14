@@ -54,51 +54,6 @@ namespace mulex
 		std::string   _srv_host;
 	};
 
-	class MxBackend;
-	class MsgEmitter;
-
-	class RexDependencyManager
-	{
-	public:
-		enum RDMFailFlags
-		{
-			LOG_WARN,
-			LOG_ERROR,
-			TERMINATE
-		};
-
-		RexDependencyManager(
-			const MxBackend* bck,
-			const std::string& dependency,
-			std::uint64_t cid,
-			std::function<MsgEmitter&()> log_hook
-		);
-		~RexDependencyManager();
-
-		RexDependencyManager& required(bool r);
-		RexDependencyManager& onFail(const RDMFailFlags& flag);
-
-		// RexDependencyManager(const RexDependencyManager&) = delete;
-		// RexDependencyManager(RexDependencyManager&&) = delete;
-		// RexDependencyManager& operator=(const RexDependencyManager&) = delete;
-		// RexDependencyManager& operator=(RexDependencyManager&&) = delete;
-
-	private:
-		bool checkDependencyExists();
-		bool checkDependencyRunning();
-		void calculateMissingVariables();
-
-
-	private:
-		std::string   				 _dep_name = "";
-		std::uint64_t 				 _dep_cid = 0;
-		bool		  		 		 _dep_req = false;
-		bool						 _dep_con = false;
-		RDMFailFlags  				 _dep_fail = LOG_WARN;
-		std::function<MsgEmitter&()> _dep_hook;
-		const MxBackend*			 _dep_ptr;
-	};
-
 	RexLockHandle RexAcquireLock();
 	bool RexWriteLockFile();
 	bool RexInterruptDaemon();
