@@ -1,7 +1,7 @@
 import { Component, For, createSignal, createEffect, createContext, JSXElement, Setter, useContext, Accessor } from "solid-js";
 import { MxWebsocket } from "../lib/websocket";
 import { MxGenericType } from "~/lib/convert";
-import { extract_backend_name, timestamp_tolocaltime } from "~/lib/utils";
+import { extract_backend_name, timestamp_tolocaldatetime_short, timestamp_tolocaltime } from "~/lib/utils";
 import { showToast } from "./ui/toast";
 import { BadgeLabel } from "./ui/badge-label";
 import { createStore } from "solid-js/store";
@@ -56,7 +56,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 		}
 	});
 
-	async function computeLog(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean): Promise<MxLog> {
+	async function computeLog(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean, fullTs: boolean): Promise<MxLog> {
 		if(!clientMsgList.has(cid)) {
 			const res = await MxWebsocket.instance.rpc_call(
 				'mulex::RdbReadValueDirect',
@@ -67,7 +67,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 			clientMsgList.set(cid, bck_name);
 
 			return {
-				timestamp: timestamp_tolocaltime(Number(ts)),
+				timestamp: fullTs ? timestamp_tolocaldatetime_short(Number(ts)) : timestamp_tolocaltime(Number(ts)),
 				backend: bck_name,
 				type: typeToString(type),
 				message: message,
@@ -76,7 +76,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 		}
 
 		return {
-			timestamp: timestamp_tolocaltime(Number(ts)),
+			timestamp: fullTs ? timestamp_tolocaldatetime_short(Number(ts)) : timestamp_tolocaltime(Number(ts)),
 			backend: clientMsgList.get(cid)!,
 			type: typeToString(type),
 			message: message,
@@ -84,12 +84,12 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 		};
 	}
 
-	async function addMessageGeneric(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean, job: (log: MxLog) => void) {
-		job(await computeLog(cid, ts, type, message, displayToast));
+	async function addMessageGeneric(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean, fullTs: boolean, job: (log: MxLog) => void) {
+		job(await computeLog(cid, ts, type, message, displayToast, fullTs));
 	}
 
 	function addMessageToAll(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean = true) {
-		addMessageGeneric(cid, ts, type, message, displayToast, (log) => {
+		addMessageGeneric(cid, ts, type, message, displayToast, false, (log) => {
 			setLogs((prev) => {
 				const nlogs = [...prev, log];
 				return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
@@ -112,7 +112,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 	}
 
 	function addMessageToSingle(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean = true) {
-		addMessageGeneric(cid, ts, type, message, displayToast, (log) => {
+		addMessageGeneric(cid, ts, type, message, displayToast, true, (log) => {
 			const key = cid.toString(16);
 
 			if(!blogs.hasOwnProperty(key)) {
@@ -126,21 +126,8 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 	}
 
 	function addMessageToBoth(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean = true) {
-		addMessageGeneric(cid, ts, type, message, displayToast, (log) => {
-			setLogs((prev) => {
-				const nlogs = [...prev, log];
-				return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
-			});
-
-			const key = cid.toString(16);
-			if(!blogs.hasOwnProperty(key)) {
-				setBlogs(key, () => [log]);
-			}
-			else {
-				let nlogs = [...blogs[key], log];
-				setBlogs(key, () => props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs);
-			}
-		});
+		addMessageToAll(cid, ts, type, message, displayToast);
+		addMessageToSingle(cid, ts, type, message, displayToast);
 	}
 
 	function sync_and_sub_logs() {

@@ -42,6 +42,11 @@ export function timestamp_tolocaldatetime(ts: number): string {
 	return date.toTimeString().split(' ')[0] + ' ' + date.toDateString();
 }
 
+export function timestamp_tolocaldatetime_short(ts: Number): string {
+	const date = new Date(Number(ts));
+	return date.toLocaleString('en-UK');
+}
+
 export function scroll_to_element(element: HTMLDivElement | undefined) {
 	element?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
