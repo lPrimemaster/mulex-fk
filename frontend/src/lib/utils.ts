@@ -135,3 +135,7 @@ export function calculate_text_color_yiq(color: string, alpha: number = 255) {
 	const yiq = (r * 299 + g * 587 + b * 114) / 1000;
 	return yiq >= 128 ? 'black' : 'white';
 }
+
+export function extract_backend_name(key: string): string {
+	return key.replace('/system/backends/', '').split('/').shift() as string;
+}

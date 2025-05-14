@@ -1,4 +1,3 @@
-import { createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { MxGenericType } from "./convert";
 import { MxWebsocket } from "./websocket";

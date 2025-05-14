@@ -5,6 +5,7 @@
 #include "rpc.h"
 
 #include <cstdarg>
+#include <tracy/Tracy.hpp>
 #include <vector>
 #include <sstream>
 #include <queue>
@@ -169,6 +170,28 @@ namespace mulex
 			return PdbReadTable("SELECT * FROM logs ORDER BY id DESC;", types);
 		}
 		return PdbReadTable("SELECT * FROM logs ORDER BY id DESC LIMIT " + std::to_string(count) + ";", types);
+	}
+
+	 mulex::RPCGenericType MsgGetLastClientLogs(std::uint64_t cid, std::uint32_t count)
+	{
+		ZoneScoped;
+		std::unique_lock<std::mutex> lock(_msg_queue_lock);
+
+		// Force queue flush when getting last logs
+		MsgFlushSQLQueue();
+
+		const static std::vector<PdbValueType> types = { PdbValueType::INT32, PdbValueType::UINT8, PdbValueType::UINT64, PdbValueType::INT64, PdbValueType::STRING };
+
+		std::string query = "SELECT * FROM logs WHERE client == 0x" + SysI64ToHexString(cid) + " ORDER BY id DESC";
+
+		if(count == 0)
+		{
+			query += ";";
+			return PdbReadTable(query, types);
+		}
+
+		query += " LIMIT " + std::to_string(count) + ";";
+		return PdbReadTable(query, types);
 	}
 
 	void MsgInit()

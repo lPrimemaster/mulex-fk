@@ -1,9 +1,10 @@
 import { Component, For, createSignal, createEffect, createContext, JSXElement, Setter, useContext, Accessor } from "solid-js";
 import { MxWebsocket } from "../lib/websocket";
 import { MxGenericType } from "~/lib/convert";
-import { timestamp_tolocaltime } from "~/lib/utils";
+import { extract_backend_name, timestamp_tolocaltime } from "~/lib/utils";
 import { showToast } from "./ui/toast";
 import { BadgeLabel } from "./ui/badge-label";
+import { createStore } from "solid-js/store";
 
 export interface MxLog {
 	timestamp: string;
@@ -16,11 +17,17 @@ export interface MxLog {
 export interface MxLogContext {
 	logs: Accessor<Array<MxLog>>;
 	setLogs: Setter<Array<MxLog>>;
+	blogs: BackendLogList;
 };
 
-const LogContext = createContext<MxLogContext>();
+interface BackendLogList {
+	[key: string]: Array<MxLog>;
+};
+
+export const LogContext = createContext<MxLogContext>();
 export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> = (props) => {
 	const [logs, setLogs] = createSignal<Array<MxLog>>([]);
+	const [blogs, setBlogs] = createStore<BackendLogList>();
 	const clientMsgList = new Map<BigInt, string>();
 
 	function typeToString(type: number): string {
@@ -49,50 +56,91 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 		}
 	});
 
-	function addMessage(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean = true) {
-		// MEMO
-		// enum class MsgClass : std::uint8_t
-		// {
-		// 	INFO,
-		// 	WARN,
-		// 	ERROR
-		// };
+	async function computeLog(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean): Promise<MxLog> {
 		if(!clientMsgList.has(cid)) {
-			MxWebsocket.instance.rpc_call(
+			const res = await MxWebsocket.instance.rpc_call(
 				'mulex::RdbReadValueDirect',
 				[MxGenericType.str512('/system/backends/' + cid.toString(16) + '/name')],
 				'generic'
-			).then((res: MxGenericType) => {
-				const bck_name: string = res.astype('string');
-				clientMsgList.set(cid, bck_name);
+			);
+			const bck_name: string = res.astype('string');
+			clientMsgList.set(cid, bck_name);
 
-				setLogs((prev) => {
-					const log = {
-						timestamp: timestamp_tolocaltime(Number(ts)),
-						backend: bck_name,
-						type: typeToString(type),
-						message: message,
-						displayToast: displayToast
-					};
-					const nlogs = [...prev, log];
-					return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
-				});
-			});
+			return {
+				timestamp: timestamp_tolocaltime(Number(ts)),
+				backend: bck_name,
+				type: typeToString(type),
+				message: message,
+				displayToast: displayToast
+			};
 		}
-		else {
-			const bck_name = clientMsgList.get(cid)!;
+
+		return {
+			timestamp: timestamp_tolocaltime(Number(ts)),
+			backend: clientMsgList.get(cid)!,
+			type: typeToString(type),
+			message: message,
+			displayToast: displayToast
+		};
+	}
+
+	async function addMessageGeneric(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean, job: (log: MxLog) => void) {
+		job(await computeLog(cid, ts, type, message, displayToast));
+	}
+
+	function addMessageToAll(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean = true) {
+		addMessageGeneric(cid, ts, type, message, displayToast, (log) => {
 			setLogs((prev) => {
-				const log = {
-					timestamp: timestamp_tolocaltime(Number(ts)),
-					backend: bck_name,
-					type: typeToString(type),
-					message: message,
-					displayToast: displayToast
-				};
 				const nlogs = [...prev, log];
 				return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
 			});
-		}
+		});
+	}
+
+	function fetchSingleLogs(cid: BigInt) {
+		MxWebsocket.instance.rpc_call(
+			'mulex::MsgGetLastClientLogs',
+			[MxGenericType.uint64(cid), MxGenericType.uint32(props.maxLogs)],
+			'generic'
+		).then((res: MxGenericType) => {
+			const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
+			for(const l of logs.reverse()) {
+				const [ _, level, cid, timestamp, message ] = l;
+				addMessageToSingle(cid, timestamp, level, message, false);
+			}
+		});
+	}
+
+	function addMessageToSingle(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean = true) {
+		addMessageGeneric(cid, ts, type, message, displayToast, (log) => {
+			const key = cid.toString(16);
+
+			if(!blogs.hasOwnProperty(key)) {
+				setBlogs(key, () => [log]);
+			}
+			else {
+				let nlogs = [...blogs[key], log];
+				setBlogs(key, () => props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs);
+			}
+		});
+	}
+
+	function addMessageToBoth(cid: BigInt, ts: BigInt, type: number, message: string, displayToast: boolean = true) {
+		addMessageGeneric(cid, ts, type, message, displayToast, (log) => {
+			setLogs((prev) => {
+				const nlogs = [...prev, log];
+				return props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs;
+			});
+
+			const key = cid.toString(16);
+			if(!blogs.hasOwnProperty(key)) {
+				setBlogs(key, () => [log]);
+			}
+			else {
+				let nlogs = [...blogs[key], log];
+				setBlogs(key, () => props.maxLogs ? nlogs.slice(-props.maxLogs) : nlogs);
+			}
+		});
 	}
 
 	function sync_and_sub_logs() {
@@ -101,7 +149,15 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 			const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
 			for(const l of logs.reverse()) {
 				const [ _, level, cid, timestamp, message ] = l;
-				addMessage(cid, timestamp, level, message, false);
+				addMessageToAll(cid, timestamp, level, message, false);
+			}
+		});
+
+		// Fetch the single logs
+		MxWebsocket.instance.rpc_call('mulex::RdbListSubkeys', [MxGenericType.str512('/system/backends/*/name')], 'generic').then((res: MxGenericType) => {
+			const keys = res.astype('stringarray');
+			for(const key of keys) {
+				fetchSingleLogs(BigInt('0x' + extract_backend_name(key)));
 			}
 		});
 
@@ -129,7 +185,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 			const decoder = new TextDecoder('latin1');
 			const message = decoder.decode(msg);
 
-			addMessage(cid, ts, type, message);
+			addMessageToBoth(cid, ts, type, message);
 		});
 	}
 
@@ -141,7 +197,7 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 
 	sync_and_sub_logs();
 
-	return <LogContext.Provider value={{ logs: logs, setLogs: setLogs }}>{props.children}</LogContext.Provider>
+	return <LogContext.Provider value={{ logs: logs, setLogs: setLogs, blogs: blogs }}>{props.children}</LogContext.Provider>
 };
 
 export const LogTable: Component = () => {

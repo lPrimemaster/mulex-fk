@@ -1,4 +1,4 @@
-import { Component, For, Show, createSignal } from "solid-js";
+import { Component, For, Show, createEffect, createSignal, useContext } from "solid-js";
 import { DynamicTitle } from "./components/DynamicTitle";
 import Sidebar from "./components/Sidebar";
 import { gBackends as backends } from './lib/globalstate';
@@ -20,9 +20,40 @@ import { MxButton } from "./api";
 import { MxWebsocket } from "./lib/websocket";
 import { MxGenericType } from "./lib/convert";
 import { showToast } from "./components/ui/toast";
+import { MxLogContext, LogContext, MxLog } from "./components/LogTable";
+import { MxPopup } from "./components/Popup";
+
+const BackendLogViewer: Component<{cid: string}> = (props) => {
+	const { blogs } = useContext(LogContext) as MxLogContext;
+	let ref!: HTMLDivElement;
+
+	createEffect(() => {
+		if(blogs[props.cid].length > 0) {
+			ref.scrollTo({ top: ref.scrollHeight });
+		}
+	});
+
+	return (
+		<div class="border bg-white rounded-md md:h-40 lg:h-64 overflow-y-scroll" ref={ref}>
+			<For each={blogs[props.cid]}>{(log: MxLog) => {
+				const bg_color = (log.type == 'error') ? 'bg-red-100' : (log.type == 'warn') ? 'bg-yellow-100' : '';
+				const class_style = 'px-1 py-0.5 border-b border-gray-300 ' + bg_color;
+				const label_type = (log.type == 'error') ? 'error' : (log.type == 'warn') ? 'warning' : 'display';
+				return (
+					<div class={class_style}>
+						<BadgeLabel class="py-0.5 px-1 place-content-center" style="width: 4rem;" type="display">{log.timestamp}</BadgeLabel>
+						<BadgeLabel class="py-0.5 px-1 ml-1" type={label_type}>{log.type}</BadgeLabel>
+						<span class="ml-1 py-0.5">{log.message}</span>
+					</div>
+				);
+			}}</For>
+		</div>
+	);
+};
 
 export const BackendViewer: Component = () => {
 
+	const [currentLog, setCurrentLog] = createSignal<string>('');
 	const [time, setTime] = createSignal(Date.now() as number);
 	setInterval(() => setTime(Date.now() as number), 1000);
 
@@ -209,8 +240,7 @@ export const BackendViewer: Component = () => {
 										<div class="flex place-content-start items-center px-5">
 											<MxButton
 												class="mr-2 flex place-content-center"
-												onClick={() => {}} // TODO: (Cesar)
-												disabled
+												onClick={() => setCurrentLog(clientid)}
 											>
 												{/* @ts-ignore */}
 												<LogsIcon class="size-7 mr-2"/>
@@ -222,6 +252,15 @@ export const BackendViewer: Component = () => {
 							</Card>
 						);
 					}}</For>
+					<MxPopup
+						title={`Logs ${currentLog() !== '' ? '(' + backends[currentLog()].name + ')': ''}`}
+						open={currentLog() !== ''}
+						onOpenChange={(o: boolean) => { if(!o) setCurrentLog(''); }}
+					>
+						<Show when={currentLog() !== ''}>
+							<BackendLogViewer cid={currentLog()}/>
+						</Show>
+					</MxPopup>
 				</div>
 			</div>
 		</div>
