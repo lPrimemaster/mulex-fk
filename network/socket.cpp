@@ -52,6 +52,15 @@ namespace mulex
 		return lhs._handle < rhs._handle;
 	}
 
+	static inline bool SocketCheckStatus(const Socket& socket)
+	{
+#ifdef __linux__
+		return !(socket._handle < 0);
+#else
+		return socket._handle != INVALID_SOCKET;
+#endif
+	}
+
 	Socket SocketInit()
 	{
 		ZoneScoped;
@@ -61,7 +70,7 @@ namespace mulex
 		Socket socket;
 		socket._error = false;
 		socket._handle = ::socket(AF_INET, SOCK_STREAM, 0);
-		if(socket._handle < 0)
+		if(!SocketCheckStatus(socket))
 		{
 			LogError("Failed to create socket. socket returned %d", socket._handle);
 			socket._error = true;
@@ -100,7 +109,7 @@ namespace mulex
 	bool SocketSetNonBlocking(const Socket& socket)
 	{
 		ZoneScoped;
-		if(socket._handle < 0) 
+		if(!SocketCheckStatus(socket)) 
 		{
 			return false;
 		}
@@ -120,7 +129,7 @@ namespace mulex
 	bool SocketSetBlocking(const Socket& socket)
 	{
 		ZoneScoped;
-		if(socket._handle < 0) 
+		if(!SocketCheckStatus(socket)) 
 		{
 			return false;
 		}
@@ -155,7 +164,11 @@ namespace mulex
 
 		int opt;
 		socklen_t optlen = sizeof(opt);
+#ifdef __linux__
 		::getsockopt(socket._handle, SOL_SOCKET, SO_ERROR, &opt, &optlen);
+#else
+		::getsockopt(socket._handle, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&opt), &optlen);
+#endif
 		if(opt)
 		{
 			socket._error = true;
@@ -187,7 +200,7 @@ namespace mulex
 			return client;
 		}
 #else
-		if(client._handle == SOCKET_ERROR)
+		if(client._handle == INVALID_SOCKET)
 		{
 			if(WSAGetLastError() == WSAEWOULDBLOCK)
 			{
@@ -358,7 +371,7 @@ namespace mulex
 #else
 			if(::connect(socket._handle, p->ai_addr, p->ai_addrlen) == SOCKET_ERROR)
 			{
-				if(timeout > 0 && WSAGetLastError() == WSAWOULDBLOCK && SocketAwaitConnection(socket, timeout))
+				if(timeout > 0 && WSAGetLastError() == WSAEWOULDBLOCK && SocketAwaitConnection(socket, timeout))
 	   			{
 					socket._error = false;
 					LogDebug("Connection established");
