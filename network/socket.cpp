@@ -3,6 +3,7 @@
 // Brief  : Common functions for setting up sockets on Windows and Linux
 
 #include "socket.h"
+#include <cerrno>
 
 #ifdef __unix__
 #include <netinet/in.h>
@@ -114,6 +115,54 @@ namespace mulex
 		unsigned long nonblocking = 1;
 		return (::ioctlsocket(socket._handle, FIONBIO, &nonblocking) == 0);
 #endif
+	}
+
+	bool SocketSetBlocking(const Socket& socket)
+	{
+		ZoneScoped;
+		if(socket._handle < 0) 
+		{
+			return false;
+		}
+#ifdef __linux__
+		int flags = ::fcntl(socket._handle, F_GETFL, 0);
+		if(flags == -1)
+		{
+			return false;
+		}
+		return (::fcntl(socket._handle, F_SETFL, flags & (~O_NONBLOCK)) == 0);
+#else
+		unsigned long nonblocking = 0;
+		return (::ioctlsocket(socket._handle, FIONBIO, &nonblocking) == 0);
+#endif
+	}
+
+	bool SocketAwaitConnection(Socket& socket, std::int64_t timeout)
+	{
+		fd_set wait;
+		FD_ZERO(&wait);
+		FD_SET(socket._handle, &wait);
+		struct timeval tstruct;
+		tstruct.tv_sec = 0;
+		tstruct.tv_usec = timeout * 1000;
+
+		if(::select(socket._handle + 1, nullptr, &wait, nullptr, &tstruct) < 0)
+		{
+			socket._error = true;	
+			LogError("SocketAwaitConnection timeout reached.");
+			return false;
+		}
+
+		int opt;
+		socklen_t optlen = sizeof(opt);
+		::getsockopt(socket._handle, SOL_SOCKET, SO_ERROR, &opt, &optlen);
+		if(opt)
+		{
+			socket._error = true;
+			return false;
+		}
+		
+		return true;
 	}
 
 	Socket SocketAccept(const Socket& socket, bool* would_block)
@@ -255,7 +304,7 @@ namespace mulex
 		return SocketResult::OK;
 	}
 
-	void SocketConnect(Socket& socket, const std::string& hostname, std::uint16_t port)
+	void SocketConnect(Socket& socket, const std::string& hostname, std::uint16_t port, std::int64_t timeout)
 	{
 		ZoneScoped;
 		addrinfo hints;
@@ -287,10 +336,36 @@ namespace mulex
 
 		LogDebug("Trying connection to: %s", ipv4);
 
+		if(timeout > 0 && !SocketSetNonBlocking(socket))
+		{
+			LogError("SocketSetNonBlocking failed.");
+			socket._error = true;
+			::freeaddrinfo(result);
+			return;
+		}
+
 		for(addrinfo* p = result; p != nullptr; p = p->ai_next)
 		{
+#ifdef __linux__
 			if(::connect(socket._handle, p->ai_addr, p->ai_addrlen) < 0)
 			{
+				if(timeout > 0 && errno == EINPROGRESS && SocketAwaitConnection(socket, timeout))
+				{
+					socket._error = false;
+					LogDebug("Connection established");
+					break;
+				}
+#else
+			if(::connect(socket._handle, p->ai_addr, p->ai_addrlen) == SOCKET_ERROR)
+			{
+				if(timeout > 0 && WSAGetLastError() == WSAWOULDBLOCK && SocketAwaitConnection(socket, timeout))
+	   			{
+					socket._error = false;
+					LogDebug("Connection established");
+					break;
+				}
+#endif
+
 				socket._error = true;
 				LogError("Failed to connect.");
 				LogMessage("Trying next node.");
@@ -300,6 +375,12 @@ namespace mulex
 			socket._error = false;
 			LogDebug("Connection established");
 			break;
+		}
+
+		if(timeout > 0 && !SocketSetBlocking(socket))
+		{
+			LogError("SocketSetBlocking failed.");
+			socket._error = true;
 		}
 
 		::freeaddrinfo(result);

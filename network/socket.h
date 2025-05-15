@@ -40,10 +40,12 @@ namespace mulex
 	Socket SocketInit();
 	void SocketBindListen(Socket& socket, std::uint16_t port);
 	bool SocketSetNonBlocking(const Socket& socket);
+	bool SocketSetBlocking(const Socket& socket);
+	bool SocketAwaitConnection(Socket& socket, std::int64_t timeout);
 	Socket SocketAccept(const Socket& socket, bool* would_block);
 	SocketResult SocketRecvBytes(const Socket& socket, std::uint8_t* buffer, std::uint64_t len, std::uint64_t* rlen);
 	SocketResult SocketSendBytes(const Socket& socket, std::uint8_t* buffer, std::uint64_t len);
-	void SocketConnect(Socket& socket, const std::string& hostname, std::uint16_t port);
+	void SocketConnect(Socket& socket, const std::string& hostname, std::uint16_t port, std::int64_t timeout = 0);
 	void SocketClose(Socket& socket);
 
 } // namespace mulex
