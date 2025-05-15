@@ -1444,7 +1444,6 @@ namespace mulex
 
 		// SetEndOfFile(_sys_lock_handle);
 		std::string pid = std::to_string(GetCurrentProcessId());
-		std::cout << pid << std::endl;
 		// SetFilePointer(_sys_lock_handle, 0, NULL, FILE_BEGIN);
 		DWORD written;
 		WriteFile(_sys_lock_handle, pid.c_str(), pid.size(), &written, NULL);
