@@ -481,13 +481,13 @@ namespace mulex
 	static void HttpDeferCallAll(std::function<void(decltype(_active_ws_connections)::key_type)> func)
 	{
 		ZoneScoped;
-		_ws_loop_thread->defer([&func]() {
-			// std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
-			for(auto* ws : _active_ws_connections)
-			{
+		std::lock_guard<std::mutex> lock(_mutex); // Given defer this should not be needed
+		for(auto* ws : _active_ws_connections)
+		{
+			_ws_loop_thread->defer([&func, ws]() {
 				func(ws);
-			}
-		});
+			});
+		}
 	}
 
 	static void HttpSendEvent(UWSType* ws, const std::string& event, const std::uint8_t* data, std::uint64_t len)
