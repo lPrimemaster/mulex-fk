@@ -11,7 +11,7 @@
 namespace mulex
 {
 	static constexpr std::uint16_t REX_PORT = 5703;
-	static constexpr std::int64_t REX_TIMEOUT = 10000;
+	static constexpr std::int64_t REX_TIMEOUT = 5000;
 
 #ifdef __linux__
 	using RexPid = pid_t;

@@ -155,9 +155,9 @@ namespace mulex
 		tstruct.tv_sec = 0;
 		tstruct.tv_usec = timeout * 1000;
 
-		if(::select(socket._handle + 1, nullptr, &wait, nullptr, &tstruct) < 0)
+		if(::select(socket._handle + 1, nullptr, &wait, nullptr, &tstruct) <= 0)
 		{
-			socket._error = true;	
+			socket._error = true;
 			LogError("SocketAwaitConnection timeout reached.");
 			return false;
 		}
@@ -172,6 +172,7 @@ namespace mulex
 		if(opt)
 		{
 			socket._error = true;
+			LogError("SocketAwaitConnection timeout reached.");
 			return false;
 		}
 		
@@ -365,8 +366,12 @@ namespace mulex
 				if(timeout > 0 && errno == EINPROGRESS && SocketAwaitConnection(socket, timeout))
 				{
 					socket._error = false;
-					LogDebug("Connection established");
+					LogDebug("Connection established.");
 					break;
+				}
+				else
+	  			{
+					LogError("Connection timed out.");
 				}
 #else
 			if(::connect(socket._handle, p->ai_addr, p->ai_addrlen) == SOCKET_ERROR)
@@ -377,6 +382,10 @@ namespace mulex
 					LogDebug("Connection established");
 					break;
 				}
+				else
+	  			{
+					LogError("Connection timed out.");
+				}
 #endif
 
 				socket._error = true;
@@ -386,7 +395,7 @@ namespace mulex
 			}
 
 			socket._error = false;
-			LogDebug("Connection established");
+			LogDebug("Connection established.");
 			break;
 		}
 

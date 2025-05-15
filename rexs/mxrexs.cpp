@@ -778,7 +778,7 @@ namespace mulex
 		}
 
 		Socket socket = SocketInit();
-		SocketConnect(socket, addr.value(), REX_PORT, 5000); // NOTE: (Cesar) Timeout after 5 seconds
+		SocketConnect(socket, addr.value(), REX_PORT, REX_TIMEOUT); // NOTE: (Cesar) Timeout after 5 seconds
 
 		if(socket._error)
 		{
@@ -811,7 +811,7 @@ namespace mulex
 		}
 
 		Socket socket = SocketInit();
-		SocketConnect(socket, addr.value(), REX_PORT, 5000); // NOTE: (Cesar) Timeout after 5 seconds
+		SocketConnect(socket, addr.value(), REX_PORT, REX_TIMEOUT); // NOTE: (Cesar) Timeout after 5 seconds
 
 		if(socket._error)
 		{
