@@ -34,6 +34,7 @@ static std::map<std::uint16_t, std::set<std::uint64_t>> _evt_current_subscriptio
 static std::mutex _evt_sub_lock;
 
 static std::map<std::uint16_t, std::function<void(const mulex::Socket&, std::uint64_t, std::uint16_t, const std::uint8_t*, std::uint64_t)>> _evt_server_callbacks;
+static std::mutex _evt_server_callback_lock;
 
 #ifdef __linux__
 static std::map<int, std::uint64_t> _evt_client_socket_pair;
@@ -675,7 +676,7 @@ namespace mulex
 		_evt_notifier.notify_one();
 
 		static constexpr std::uint64_t buffersize = SYS_RECV_THREAD_BUFFER_SIZE;
-		static std::vector<std::uint8_t> fbuffer(buffersize);
+		std::vector<std::uint8_t> fbuffer(buffersize);
 
 		while(_evt_thread_running.load() && _evt_thread_sig.at(socket).load())
 		{
@@ -848,11 +849,13 @@ namespace mulex
 		{
 			return;
 		}
+		std::unique_lock lock(_evt_server_callback_lock);
 		_evt_server_callbacks.insert_or_assign(eid, callback);
 	}
 
 	void EvtTryRunServerCallback(std::uint64_t clientid, std::uint16_t eventid, const std::uint8_t* data, std::uint64_t len, const Socket& socket)
 	{
+		std::unique_lock lock(_evt_server_callback_lock);
 		auto eidit = _evt_server_callbacks.find(eventid);
 		if(eidit != _evt_server_callbacks.end())
 		{

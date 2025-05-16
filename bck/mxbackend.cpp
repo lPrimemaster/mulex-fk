@@ -34,27 +34,27 @@ namespace mulex
 		}
 
 		// Wait for response
-		std::mutex mtx;
-		std::condition_variable cv;
-		bool proceed = false;
-		std::vector<std::uint8_t> response;
-		EvtServerRegisterCallback(evt_res, [&](auto, auto, auto, const std::uint8_t* data, std::uint64_t len) {
+		std::shared_ptr<std::mutex> mtx = std::make_shared<std::mutex>();
+		std::shared_ptr<std::condition_variable> cv = std::make_shared<std::condition_variable>();
+		std::shared_ptr<bool> proceed = std::make_shared<bool>(false);
+		std::shared_ptr<std::vector<std::uint8_t>> response = std::make_shared<std::vector<std::uint8_t>>();
+		EvtServerRegisterCallback(evt_res, [=](auto, auto, auto, const std::uint8_t* data, std::uint64_t len) {
 			LogTrace("[bck] Relaying RPC response.");
 			if(len > 0)
 			{
-				std::unique_lock<std::mutex> lock(mtx);
-				response.resize(len);
-				std::memcpy(response.data(), data, len);
-				proceed = true;
+				std::unique_lock<std::mutex> lock(*mtx);
+				response->resize(len);
+				std::memcpy(response->data(), data, len);
+				*proceed = true;
 			}
-			cv.notify_one();
+			cv->notify_one();
 		});
 
 		// Wait timeout
-		std::unique_lock<std::mutex> lock(mtx);
+		std::unique_lock<std::mutex> lock(*mtx);
 		if(timeout > 0)
 		{
-			if(!cv.wait_for(lock, std::chrono::milliseconds(timeout), [&](){ return proceed; }))
+			if(!cv->wait_for(lock, std::chrono::milliseconds(timeout), [&](){ return *proceed; }))
 			{
 				response_full.push_back(static_cast<std::uint8_t>(BckUserRpcStatus::RESPONSE_TIMEOUT));
 				return response_full;
@@ -64,17 +64,17 @@ namespace mulex
 		{
 			static std::once_flag flag;
 			std::call_once(flag, [](){ LogWarning("[mxbackend] Calling user RPC functions with zero timeout is discouraged."); });
-			cv.wait(lock, [&](){ return proceed; });
+			cv->wait(lock, [&](){ return *proceed; });
 		}
 
-		if(response.empty())
+		if(response->empty())
 		{
 			response_full.push_back(static_cast<std::uint8_t>(BckUserRpcStatus::OK));
 			return response_full;
 		}
 
 		response_full.push_back(static_cast<std::uint8_t>(BckUserRpcStatus::OK));
-		response_full.insert(response_full.end(), response.begin(), response.end());
+		response_full.insert(response_full.end(), response->begin(), response->end());
 		return response_full;
 	}
 
