@@ -1,4 +1,4 @@
-import { Component, createMemo, createSignal, For, onCleanup, onMount, Show, useContext } from 'solid-js';
+import { Component, createComponent, createMemo, createSignal, For, onCleanup, onMount, Show, useContext } from 'solid-js';
 import Sidebar from './components/Sidebar';
 import { MxPlugin, mxRegisterPluginFromFile, mxDeletePlugin, plugins } from './lib/plugin';
 import { MxRdb } from './lib/rdb';
@@ -23,6 +23,8 @@ export const Project : Component = () => {
 			const [height, setHeight] = createSignal<number>(0);
 			const [showDocs, setShowDocs] = createSignal<boolean>(false);
 			const calculateScale = createMemo(() => showDocs() ? 1 : Math.max(1 - scroll() / height(), 0));
+			const cleanupCallbacks: (() => void)[] = [];
+			const PluginComponent = () => createComponent(plugin.render, { cleanup: (fn: () => void) => cleanupCallbacks.push(fn) });
 			let id: HTMLDivElement | undefined;
 
 			function onScroll() {
@@ -35,6 +37,11 @@ export const Project : Component = () => {
 				window.addEventListener('scroll', onScroll);
 				onCleanup(() => {
 					window.removeEventListener('scroll', onScroll);
+
+					// Emulate some onCleanup
+					// In reality this does not cleanup components inside the plugin
+					// But at least the user can setup somecleanup logic
+					cleanupCallbacks.forEach(c => c());
 				});
 			});
 
@@ -74,7 +81,7 @@ export const Project : Component = () => {
 					</div>
 					<div class="p-5 mt-20 ml-36 mr-auto">
 						<Show when={!showDocs()}>
-							<plugin.render/>
+							<PluginComponent/>
 						</Show>
 						<Show when={showDocs()}>
 							<plugin.description/>

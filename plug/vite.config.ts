@@ -33,7 +33,8 @@ export default defineConfig((_) => {
 					manualChunks: undefined
 				}
 			},
-			outDir: './dist'
+			outDir: './dist',
+			jsx: 'preserve'
 		},
 		resolve: {
 			alias: {
