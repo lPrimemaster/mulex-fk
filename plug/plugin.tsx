@@ -27,8 +27,7 @@ const Detail : Component<{ children: JSXElement, class?: string }> = (props) => 
 
 // A solid-js component
 // Everything solid-js related is valid on this context
-const MyPlugin : Component = () => {
-
+const MyPlugin : Component<{ cleanup: (cb: () => void) => void }> = (props) => {
 	const [value, setValue] = createSignal<number>(0);
 	const [control, setControl] = createSignal<number>(0);
 	const [nukes, setNukes] = createSignal<boolean>(false);
@@ -42,7 +41,9 @@ const MyPlugin : Component = () => {
 		const id2 = setInterval(() => setRandom(Math.random()), 1000);
 		const id3 = setInterval(() => setHistRandom(Array.from({ length: HIST_SIZE }, () => Math.ceil(Math.random() * 10))), 1000);
 
-		onCleanup(() => {
+		// solidjs onCleanup does not work
+		// these are the limitations of precompiled js served files
+		props.cleanup(() => {
 			clearInterval(id);
 			clearInterval(id2);
 			clearInterval(id3);
