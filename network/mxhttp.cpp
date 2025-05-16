@@ -122,7 +122,9 @@ namespace mulex
 						break;
 					}
 				}
-			}
+			},
+			1000, // 1s interval poll
+			false // not recursive (ignore chunk fulder)
 		);
 
 		LogDebug("[mxhttp] Plugin watcher realtime thread OK.");

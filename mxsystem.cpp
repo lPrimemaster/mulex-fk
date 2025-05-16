@@ -712,12 +712,13 @@ namespace mulex
 	SysFileWatcher::SysFileWatcher(
 		const std::string& dir,
 		std::function<void(const FileOp op, const std::string& filename, const std::int64_t timestamp)> f,
-		std::uint32_t interval
+		std::uint32_t interval,
+		bool recursive
 	)
 	{
 		_watcher_on.store(true);
 		LogDebug("SysFileWatcher: Watching dir <%s>. [interval=%d]", dir.c_str(), interval);
-		_thread = std::make_unique<std::thread>([this, dir, f, interval](){
+		_thread = std::make_unique<std::thread>([this, dir, f, interval, recursive](){
 			std::unordered_map<std::string, std::filesystem::file_time_type> file_mod_time;
 
 			// NOTE: (César) clock_cast is not yet available under GCC for C++20
@@ -727,41 +728,83 @@ namespace mulex
 				return std::chrono::duration_cast<std::chrono::milliseconds>(sys_file_time).count();
 			};
 
-			while(_watcher_on.load())
+			if(recursive)
 			{
-				for(const auto& file : std::filesystem::recursive_directory_iterator(dir))
+				while(_watcher_on.load())
 				{
-					const std::string& file_path = file.path().string();
-					const auto& last_write_ts = std::filesystem::last_write_time(file);
+					for(const auto& file : std::filesystem::recursive_directory_iterator(dir))
+					{
+						const std::string& file_path = file.path().string();
+						const auto& last_write_ts = std::filesystem::last_write_time(file);
 
-					if(file_mod_time.find(file_path) == file_mod_time.end())
-					{
-						// This is a new file
-						file_mod_time[file_path] = last_write_ts;
-						f(FileOp::CREATED, file_path, to_systime(last_write_ts));
+						if(file_mod_time.find(file_path) == file_mod_time.end())
+						{
+							// This is a new file
+							file_mod_time[file_path] = last_write_ts;
+							f(FileOp::CREATED, file_path, to_systime(last_write_ts));
+						}
+						else if(file_mod_time[file_path] != last_write_ts)
+						{
+							// This is a modified file
+							file_mod_time[file_path] = last_write_ts;
+							f(FileOp::MODIFIED, file_path, to_systime(last_write_ts));
+						}
 					}
-					else if(file_mod_time[file_path] != last_write_ts)
+
+					auto fit = file_mod_time.begin();
+					while(fit != file_mod_time.end())
 					{
-						// This is a modified file
-						file_mod_time[file_path] = last_write_ts;
-						f(FileOp::MODIFIED, file_path, to_systime(last_write_ts));
+						if(!std::filesystem::exists(fit->first))
+						{
+							f(FileOp::DELETED, fit->first, to_systime(fit->second));
+							fit = file_mod_time.erase(fit);
+							continue;
+						}
+						fit++;
 					}
+
+					std::this_thread::sleep_for(std::chrono::milliseconds(interval));
 				}
-
-				auto fit = file_mod_time.begin();
-				while(fit != file_mod_time.end())
-				{
-					if(!std::filesystem::exists(fit->first))
-					{
-						f(FileOp::DELETED, fit->first, to_systime(fit->second));
-						fit = file_mod_time.erase(fit);
-						continue;
-					}
-					fit++;
-				}
-
-				std::this_thread::sleep_for(std::chrono::milliseconds(interval));
 			}
+			else
+			{
+				while(_watcher_on.load())
+				{
+					for(const auto& file : std::filesystem::directory_iterator(dir))
+					{
+						const std::string& file_path = file.path().string();
+						const auto& last_write_ts = std::filesystem::last_write_time(file);
+
+						if(file_mod_time.find(file_path) == file_mod_time.end())
+						{
+							// This is a new file
+							file_mod_time[file_path] = last_write_ts;
+							f(FileOp::CREATED, file_path, to_systime(last_write_ts));
+						}
+						else if(file_mod_time[file_path] != last_write_ts)
+						{
+							// This is a modified file
+							file_mod_time[file_path] = last_write_ts;
+							f(FileOp::MODIFIED, file_path, to_systime(last_write_ts));
+						}
+					}
+
+					auto fit = file_mod_time.begin();
+					while(fit != file_mod_time.end())
+					{
+						if(!std::filesystem::exists(fit->first))
+						{
+							f(FileOp::DELETED, fit->first, to_systime(fit->second));
+							fit = file_mod_time.erase(fit);
+							continue;
+						}
+						fit++;
+					}
+
+					std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+				}
+			}
+
 		});
 	}
 
