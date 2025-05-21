@@ -1,5 +1,6 @@
 add_library(MxBackend
 	mxbackend.cpp
+	$<TARGET_OBJECTS:mxsys>
 )
 
 if(WIN32)
@@ -7,7 +8,7 @@ if(WIN32)
 endif()
 
 target_link_libraries(MxBackend PUBLIC mxrdb mxhttp mxrpc)
-target_link_libraries(MxBackend PRIVATE $<TARGET_OBJECTS:mxsys>)
+# target_link_libraries(MxBackend PRIVATE $<TARGET_OBJECTS:mxsys>)
 # target_link_libraries(MxBackend mxrdb mxrpc)
 
 # Enforce c++20

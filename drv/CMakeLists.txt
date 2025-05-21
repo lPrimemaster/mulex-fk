@@ -5,9 +5,8 @@ endif()
 add_library(MxDrivers
 	../network/socket.cpp
 	mxdrv.cpp
+	$<TARGET_OBJECTS:mxsys>
 )
-
-target_link_libraries(MxDrivers PRIVATE $<TARGET_OBJECTS:mxsys>)
 
 if(USB_SUPPORT)
 	target_link_libraries(MxDrivers PRIVATE ${LIBUSB_LIBRARY})
