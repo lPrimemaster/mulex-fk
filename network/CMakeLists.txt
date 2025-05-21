@@ -87,13 +87,14 @@ add_library(MxRpc
 	socket.cpp
 	mxevt.cpp
 	mxmsg.cpp
-	../mxsystem.cpp
 	../rexs/mxrexs.cpp
 )
 
 if(WIN32)
 	target_link_libraries(MxRpc wsock32 ws2_32 Shlwapi)
 endif()
+
+target_link_libraries(MxRpc $<TARGET_OBJECTS:mxsys>)
 
 target_include_directories(MxRpc PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>

@@ -1,7 +1,6 @@
 add_executable(mxrexs
 	main.cpp
 	mxrexs.cpp
-	../mxsystem.cpp
 )
 
 # Link main

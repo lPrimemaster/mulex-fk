@@ -252,7 +252,7 @@ namespace mulex
 		std::thread   _handle;
 	};
 
-	static constexpr std::uint64_t SYS_RECV_THREAD_BUFFER_SIZE = 0x6400000; // 100MB Maximum return size !
+	static constexpr std::uint64_t SYS_RECV_THREAD_BUFFER_SIZE = 0x640000; // 10MB Maximum return size !
 
 	[[nodiscard]] std::unique_ptr<SysRecvThread> SysStartRecvThread(const Socket& socket, std::uint64_t headersize, std::uint64_t headeroffset);
 	bool SysRecvThreadCanStart([[maybe_unused]] const Socket& socket);

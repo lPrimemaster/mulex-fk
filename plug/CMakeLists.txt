@@ -2,7 +2,6 @@ mx_resource_clear()
 
 add_executable(mxplug
 	main.cpp
-	../mxsystem.cpp
 )
 
 # Link main

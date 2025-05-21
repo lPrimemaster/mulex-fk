@@ -17,7 +17,7 @@ if(mxrpcret EQUAL "1")
 	message(FATAL_ERROR "mxrpcgen failed")
 endif()
 
-add_executable(test_rpc rpc.cpp ../mxsystem.cpp)
+add_executable(test_rpc rpc.cpp)
 
 if(WIN32)
 	target_link_libraries(test_rpc wsock32 ws2_32 Shlwapi)
@@ -31,7 +31,7 @@ target_include_directories(test_rpc PRIVATE
 )
 add_test(test_rpc test_rpc)
 
-add_executable(test_rdb rdb.cpp ../mxsystem.cpp)
+add_executable(test_rdb rdb.cpp)
 
 if(WIN32)
 	target_link_libraries(test_rdb wsock32 ws2_32 Shlwapi)
@@ -45,7 +45,7 @@ target_include_directories(test_rdb PRIVATE
 
 add_test(test_rdb test_rdb)
 
-add_executable(test_drv drv.cpp ../mxsystem.cpp)
+add_executable(test_drv drv.cpp)
 
 if(WIN32)
 	target_link_libraries(test_drv PRIVATE wsock32 ws2_32 Shlwapi)
@@ -68,7 +68,7 @@ endif()
 
 add_test(test_drv test_drv)
 
-add_executable(test_argparse argparse.cpp ../mxsystem.cpp)
+add_executable(test_argparse argparse.cpp)
 
 if(WIN32)
 	target_link_libraries(test_argparse wsock32 ws2_32 Shlwapi)
@@ -82,7 +82,7 @@ target_include_directories(test_argparse PRIVATE
 
 add_test(test_argparse test_argparse)
 
-add_executable(test_evt evt.cpp ../mxsystem.cpp)
+add_executable(test_evt evt.cpp)
 
 if(WIN32)
 	target_link_libraries(test_evt wsock32 ws2_32 Shlwapi)
@@ -104,7 +104,7 @@ target_include_directories(test_bck PRIVATE
 )
 add_test(test_bck test_bck)
 
-add_executable(test_ksmatch ksmatch.cpp ../mxsystem.cpp)
+add_executable(test_ksmatch ksmatch.cpp)
 
 if(WIN32)
 	target_link_libraries(test_ksmatch wsock32 ws2_32 Shlwapi)
@@ -138,7 +138,7 @@ target_include_directories(test_rex PRIVATE
 )
 add_test(test_rex test_rex)
 
-add_executable(test_argpack argpack.cpp ../mxsystem.cpp)
+add_executable(test_argpack argpack.cpp)
 
 if(WIN32)
 	target_link_libraries(test_argpack wsock32 ws2_32 Shlwapi)

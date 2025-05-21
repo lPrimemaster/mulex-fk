@@ -22,7 +22,7 @@ if(CROSS_COMP_WINDOWS)
 endif()
 
 # Version configuration
-project(mulex-fk VERSION 0.9.5)
+project(mulex-fk VERSION 0.9.6)
 set(PROJECT_VNAME Ross)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -152,6 +152,12 @@ target_include_directories(mxmain PRIVATE
 if(WIN32)
 	set(WINDOWS_GLIBS pdh)
 endif()
+
+# Create system object library
+add_library(mxsys OBJECT mxsystem.cpp plug/fxfer.cpp)
+target_include_directories(mxsys PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
 
 # Add mulex functionalities
 add_subdirectory(network)

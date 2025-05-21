@@ -11,6 +11,7 @@
 #include "mxhttp.h"
 #include "mxrun.h"
 #include "mxmsg.h"
+#include "plug/plug.h"
 #include "rexs/mxrexs.h"
 #include <filesystem>
 #include <fstream>
@@ -353,6 +354,9 @@ namespace mulex
 
 		HttpStartServer(port, loopback);
 
+		// Init plugfs server
+		PlugFSInitServerThread();
+
 		return true;
 	}
 
@@ -360,6 +364,8 @@ namespace mulex
 	{
 		// Force run stop if running
 		RunStop();
+
+		PlugFSShutdownServerThread();
 
 		MsgClose();
 

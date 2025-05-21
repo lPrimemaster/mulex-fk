@@ -1,4 +1,5 @@
 #include "../mxsystem.h"
+#include "plug.h"
 #include <mxres.h>
 #include <filesystem>
 #include <unordered_map>
@@ -84,23 +85,29 @@ static bool PlugCreateWorkspace(const std::filesystem::path& path)
 	return PlugUnpackFiles(path);
 }
 
-static bool PlugBuildPlugin(const std::string& exp, const std::filesystem::path& path)
+static bool PlugBuildPlugin(const std::string& exp, const std::filesystem::path& path, const std::string& host)
 {
-	std::string exp_dir = std::string(SysGetCacheDir()) + "/" + exp;
-
-	if(!std::filesystem::is_directory(exp_dir))
+	// Copy locally
+	if(host.empty())
 	{
-		LogError("[mxplug] The specified experiment could no be found under mxcache.");
-		LogError("[mxplug] Looked under <%s>.", exp_dir.c_str());
-		return false;
+		const std::string exp_dir = std::string(SysGetCacheDir()) + "/" + exp;
+
+		if(!std::filesystem::is_directory(exp_dir))
+		{
+			LogError("[mxplug] The specified experiment could no be found under mxcache.");
+			LogError("[mxplug] Looked under <%s>.", exp_dir.c_str());
+			return false;
+		}
+
+		if(!std::filesystem::is_directory(exp_dir + "/plugins"))
+		{
+			LogError("[mxplug] Found experiment directory but could not find /plugins directory inside.");
+			LogError("[mxplug] Looked under <%s>.", exp_dir.c_str());
+			return false;
+		}
 	}
 
-	if(!std::filesystem::is_directory(exp_dir + "/plugins"))
-	{
-		LogError("[mxplug] Found experiment directory but could not find /plugins directory inside.");
-		LogError("[mxplug] Looked under <%s>.", exp_dir.c_str());
-		return false;
-	}
+	// On remote build before checking to avoid timeouts
 
 	if(!std::filesystem::is_regular_file(path / "package.json"))
 	{
@@ -126,10 +133,43 @@ static bool PlugBuildPlugin(const std::string& exp, const std::filesystem::path&
 		return false;
 	}
 
-	std::filesystem::copy(path / "dist", exp_dir + "/plugins", std::filesystem::copy_options::overwrite_existing | std::filesystem::copy_options::recursive);
+	// Copy locally
+	if(host.empty())
+	{
+		const std::string exp_dir = std::string(SysGetCacheDir()) + "/" + exp;
 
-	LogMessage("[mxplug] Plugin built for experiment.");
-	LogMessage("[mxplug] Copied file under <%s>.", (exp_dir + "/plugins").c_str());
+		std::filesystem::copy(path / "dist", exp_dir + "/plugins", std::filesystem::copy_options::overwrite_existing | std::filesystem::copy_options::recursive);
+
+		LogMessage("[mxplug] Plugin built for experiment.");
+		LogMessage("[mxplug] Copied file under <%s>.", (exp_dir + "/plugins").c_str());
+	}
+	else
+	{
+		// Connect to remote
+		Socket server = PlugFSConnectToServer(host);
+		if(server._error)
+		{
+			LogError("[mxplug] Failed to connect to plugfs server at: %s.", host.c_str());
+			return false;
+		}
+
+		// Check experiment exists
+		if(!PlugFSCheckExperimentRemote(server, exp))
+		{
+			LogError("[mxplug] Failed to fetch experiment <%s> at plugfs server cache.", exp.c_str());
+			PlugFSDisconnectFromServer(server);
+			return false;
+		}
+
+		if(!PlugFSTransfer(server, path.string() + "/dist"))
+		{
+			LogError("[mxplug] Failed to transfer files to remote host experiment.");
+			PlugFSDisconnectFromServer(server);
+			return false;
+		}
+
+		PlugFSDisconnectFromServer(server);
+	}
 	return true;
 }
 
@@ -137,6 +177,7 @@ int main(int argc, char* argv[])
 {
 	Mode mode = Mode::UNKNOWN;
 	bool hotswap = false;
+	std::string host;
 	auto path = std::filesystem::current_path();
 	std::string experiment;
 
@@ -168,6 +209,10 @@ int main(int argc, char* argv[])
 		hotswap = true;
 	}, "Enable hotswap. This builds and copies the plugin everytime a file is saved under cwd.");
 
+	SysAddArgument("remote", 0, true, [&](const std::string& addr) {
+		host = addr;
+	}, "Setup a remote session. This performs all of the build/copy on the specified host instead.");
+
 	if(!SysParseArguments(argc, argv))
 	{
 		LogError("[mxplug] Failed to parse arguments.");
@@ -187,7 +232,7 @@ int main(int argc, char* argv[])
 		
 		auto watcher = std::make_unique<SysFileWatcher>(
 			(path / "src").string(),
-			[experiment, path](const SysFileWatcher::FileOp op, const std::string& file, const std::int64_t timestamp) {
+			[experiment, path, host](const SysFileWatcher::FileOp op, const std::string& file, const std::int64_t timestamp) {
 				auto fpath = std::filesystem::path(file);
 
 				// Skip directories
@@ -213,7 +258,7 @@ int main(int argc, char* argv[])
 					}
 				}
 
-				if(!PlugBuildPlugin(experiment, path))
+				if(!PlugBuildPlugin(experiment, path, host))
 				{
 					LogError("[mxplug] Failed to build plugin.");
 				}
@@ -250,7 +295,7 @@ int main(int argc, char* argv[])
 		}
 		case Mode::BUILD:
 		{
-			if(!PlugBuildPlugin(experiment, path))
+			if(!PlugBuildPlugin(experiment, path, host))
 			{
 				LogError("[mxplug] Failed to build plugin.");
 				return 0;
