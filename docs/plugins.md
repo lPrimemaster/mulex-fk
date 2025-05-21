@@ -56,6 +56,10 @@ Building uses built in yarn. This is currently not changable so if you wish to u
 To use "dev" mode (i.e. build when a source file is modified) you can run `mxplug` in hotswap mode via `mxplug --build <expname> --hotswap`.
 This will make the plugin build binary run indefinitely and check for file changes under the specified working directory.
 
+To build and copy the files to a remote server you can now use the command with the remote argument: `mxplug --build <expname> --remote <host>`.
+This will copy the files to the remote host. The file transfer is not encrypted. Very usefull when the host computer is not were you are developing
+the plugins.
+
 ## API Elements
 
 All the API components are displayed in the demo `plugin.tsx` file and are pretty simple to use. Head there to check out how to use them.
