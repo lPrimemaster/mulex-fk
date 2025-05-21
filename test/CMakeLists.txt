@@ -137,3 +137,18 @@ target_include_directories(test_rex PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
 add_test(test_rex test_rex)
+
+add_executable(test_argpack argpack.cpp ../mxsystem.cpp)
+
+if(WIN32)
+	target_link_libraries(test_argpack wsock32 ws2_32 Shlwapi)
+endif()
+
+target_link_libraries(test_argpack mxrdb mxhttp mxrpc mxbck)
+
+target_include_directories(test_argpack PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
+
+add_test(test_argpack test_argpack)

@@ -95,7 +95,7 @@ namespace mulex
 	}
 
 	template<typename T, typename ...Args>
-	inline std::tuple<T, Args...> SysUnpackArguments(const std::uint8_t* data, std::int64_t size)
+	inline std::tuple<T, Args...> SysUnpackArguments(const std::uint8_t* data, std::uint64_t size)
 	{
 		if constexpr(sizeof...(Args) > 0)
 		{
@@ -119,7 +119,7 @@ namespace mulex
 	template<typename T, typename ...Args>
 	inline std::tuple<T, Args...> SysUnpackArguments(const std::vector<std::uint8_t>& buffer)
 	{
-		return SysUnpackArguments<T, Args...>(buffer.data());
+		return SysUnpackArguments<T, Args...>(const_cast<const std::uint8_t*>(buffer.data()), buffer.size());
 	}
 
 	template<typename T>

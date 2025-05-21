@@ -27,6 +27,7 @@
 #include <sys/sysinfo.h>
 #include <sys/file.h>
 #include <unistd.h>
+#include <limits.h>
 #endif
 
 #include <tracy/Tracy.hpp>
