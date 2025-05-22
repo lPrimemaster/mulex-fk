@@ -221,6 +221,32 @@ namespace mulex
 		);
 	}
 
+	static PlugFSFileMeta PlugFSMakeDirs(const PlugFSFileMeta& meta, const std::string& dir)
+	{
+		std::string filename = meta._filename.c_str();
+		
+		// In case the file came from Windows we might have backslashes instead
+		// Windows also recognizes paths with forward slashes so change it
+		// (at least from the Win32 API that I know)
+		std::replace(filename.begin(), filename.end(), '\\', '/');
+
+		auto pos = filename.find_last_of('/');
+		if(pos == std::string::npos)
+		{
+			return meta;
+		}
+
+		// Create nested subdirs if they don't exist
+		std::filesystem::create_directories(dir + "/" + filename.substr(0, pos));
+
+		// Update original metadata filename to write
+		return PlugFSFileMeta {
+			._filename = filename,
+			._size = meta._size,
+			._mod_time = meta._mod_time
+		};
+	}
+
 	static void PlugFSWriteFiles(const std::vector<PlugFSFileData>& files, const std::vector<PlugFSFileMeta>& meta, const std::string& expname)
 	{
 		const std::string plug_dir = PlugFSGetExperimentPluginsDir(expname);
@@ -228,7 +254,8 @@ namespace mulex
 		// Ranges views zip is only C++23 =[
 		for(std::uint64_t i = 0; i < files.size(); i++)
 		{
-			PlugFSWriteFileWithMetadata(files[i], meta[i], plug_dir);
+			PlugFSFileMeta nmeta = PlugFSMakeDirs(meta[i], plug_dir);
+			PlugFSWriteFileWithMetadata(files[i], nmeta, plug_dir);
 		}
 	}
 
