@@ -224,7 +224,7 @@ namespace mulex
 	static PlugFSFileMeta PlugFSMakeDirs(const PlugFSFileMeta& meta, const std::string& dir)
 	{
 		std::string filename = meta._filename.c_str();
-		
+
 		// In case the file came from Windows we might have backslashes instead
 		// Windows also recognizes paths with forward slashes so change it
 		// (at least from the Win32 API that I know)
