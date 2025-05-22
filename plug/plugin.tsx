@@ -47,6 +47,14 @@ const MyPlugin : Component<{ cleanup: (cb: () => void) => void }> = (props) => {
 			clearInterval(id);
 			clearInterval(id2);
 			clearInterval(id3);
+
+			// This is usually recommended
+			// Otherwise any connection to the server will keep alive
+			// This is typically not what is wanted. However, if you
+			// wish to keep some behaviour running in the background
+			// even after the plugin page is closed,
+			// comment the following line
+			MxWebsocket.instance.close();
 		});
 	});
 

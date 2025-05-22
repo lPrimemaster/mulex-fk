@@ -11,6 +11,25 @@ export class MxWebsocket {
 	private on_change: Array<Function>;
 	private event_subscriptions: Map<string, Function | undefined>;
 
+	private setupOnClose(reconnect: boolean) {
+		this.socket.onclose = async () => {
+			// Reset fields
+			this.on_change.forEach(x => x(false));
+			this.messageid = 0;
+			this.deferred_p = new Map<number, [Function, string]>();
+			this.isready = false;
+			this.waiting_p = new Array<Function>();
+
+			if(reconnect) {
+				// Attempt reconnect
+				setTimeout(() => {
+					this.socket = new WebSocket(`${this.address}`);
+					this.setupCallbacks();
+				}, 5000);
+			}
+		};
+	}
+
 	private setupCallbacks() {
 		this.socket.onopen = async () => {
 			this.isready = true;
@@ -45,21 +64,9 @@ export class MxWebsocket {
 				}
 			}
 		};
-
-		this.socket.onclose = async () => {
-			// Reset fields
-			this.on_change.forEach(x => x(false));
-			this.messageid = 0;
-			this.deferred_p = new Map<number, [Function, string]>();
-			this.isready = false;
-			this.waiting_p = new Array<Function>();
-
-			// Attempt reconnect
-			setTimeout(() => {
-				this.socket = new WebSocket(`${this.address}`);
-				this.setupCallbacks();
-			}, 5000);
-		};
+		
+		// Setup on close with reconnect behaviour enabled
+		this.setupOnClose(true);
 	}
 
 	private constructor(endpoint: string, port: number, https: boolean) {
@@ -162,6 +169,8 @@ export class MxWebsocket {
 	// Close the connection if the ws is alive
 	public close() {
 		if(this.socket.readyState === WebSocket.OPEN) {
+			// Manual on close does not want a reconnect behaviour
+			this.setupOnClose(false);
 			this.socket.close();
 		}
 	}
