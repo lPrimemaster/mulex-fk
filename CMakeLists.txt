@@ -79,14 +79,16 @@ else()
 endif()
 
 # Tracy Profiler
-FetchContent_Declare(
-	tracy
-	GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-	GIT_TAG v0.11.1
-	GIT_SHALLOW TRUE
-	# EXCLUDE_FROM_ALL
-)
-FetchContent_MakeAvailable(tracy)
+if(PROFILE)
+	FetchContent_Declare(
+		tracy
+		GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+		GIT_TAG v0.11.1
+		GIT_SHALLOW TRUE
+		# EXCLUDE_FROM_ALL
+	)
+	FetchContent_MakeAvailable(tracy)
+endif()
 
 # RPC related configuration
 set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
@@ -122,7 +124,11 @@ add_compile_options(
 # endif()
 
 # Make sure tracy profiler is installed/linked system wide
-link_libraries(TracyClient)
+if(PROFILE)
+	link_libraries(TracyClient)
+endif()
+
+# Always include tracy headers for noop definitions
 include_directories(${tracy_SOURCE_DIR}/public)
 
 add_executable(mxmain

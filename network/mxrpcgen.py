@@ -230,7 +230,11 @@ class RPCGenerator:
         anylen = False
         self.buffer.write('#include <cstdint>\n')
         self.buffer.write('#include <vector>\n')
+        self.buffer.write('#ifdef TRACY_ENABLE\n')
         self.buffer.write('#include <tracy/Tracy.hpp>\n')
+        self.buffer.write('#else\n')
+        self.buffer.write('#define ZoneScoped\n')
+        self.buffer.write('#endif\n')
         self._write_newline()
         for file, methods in self.methods.items():
             if len(methods):
@@ -451,11 +455,20 @@ class RPCGenerator:
         self._write_indented(1, '}\n')
         self.buffer.write('}\n')
 
+    def _generate_message(self):
+        self._write_indented(0, '// ####################\n')
+        self._write_indented(0, '// #  File generated  #\n')
+        self._write_indented(0, '// #  by mxrpcgen.py  #\n')
+        self._write_indented(0, '// #  DO NOT MODIFY!  #\n')
+        self._write_indented(0, '// ####################\n')
+        self._write_newline()
+
     def _write_file(self, filename: str) -> None:
         with open(filename, 'w') as f:
             f.write(self.buffer.getvalue())
 
     def generate_rpc_header(self, filename: str):
+        self._generate_message()
         self._generate_includes()
         ids = self._generate_ids()
         self._generate_name_lookup(ids)

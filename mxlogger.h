@@ -6,7 +6,10 @@
 #include <sstream>
 #include <fstream>
 #include <chrono>
+
+#ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
+#endif
 
 namespace mulex
 {
@@ -64,7 +67,9 @@ namespace mulex
 #else
 		constexpr bool kLogToFile = false;
 #endif
+#ifdef TRACY_ENABLE
 		constexpr bool kLogToTracy = true;
+#endif
 
 		va_list vargs, vargscpy;
 		va_start(vargs, fmt);
@@ -95,10 +100,12 @@ namespace mulex
 			file << output;
 		}
 
+#ifdef TRACY_ENABLE
 		if constexpr(kLogToTracy)
 		{
 			TracyMessageC(output.c_str(), output.size(), Policy::Color());
 		}
+#endif
 	}
 
 	constexpr void(*LogError)(const char*, ...)   = &Log<detail::LogErrorPolicy>;
