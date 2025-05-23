@@ -237,7 +237,8 @@ else()
 	# Generate NSIS package using CPack
 	include(InstallRequiredSystemLibraries)
 
-	set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
+	set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME} (${PROJECT_VNAME})")
+	set(CPACK_NSIS_DISPLAY_NAME "${CMAKE_PROJECT_NAME} (${PROJECT_VNAME})")
 	set(CPACK_PACKAGE_VENDOR "César Godinho")
 	set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Mulex-fk Windows (x64) installer.")
 	set(CPACK_PACKAGE_VERSION_MAJOR "${CMAKE_PROJECT_VERSION_MAJOR}")
@@ -249,7 +250,22 @@ else()
 	set(CPACK_NSIS_LICENSE_FILE "${CMAKE_SOURCE_DIR}/LICENSE")
 
 	set(CPACK_PACKAGE_INSTALL_DIRECTORY "mulex-fk")
+	set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
 	set(CPACK_NSIS_MODIFY_PATH ON)
+
+	include(CPackComponent)
+	cpack_add_component(Runtime
+		DISPLAY_NAME "Runtime"
+		DESCRIPTION "Runtime elements of mulex: server, plugin builder and remote execution service."
+	)
+	cpack_add_component(Lib
+		DISPLAY_NAME "Libraries"
+		DESCRIPTION "Backend libraries and C++ header files for development."
+	)
+	cpack_add_component(Modules
+		DISPLAY_NAME "CMake Modules"
+		DESCRIPTION "Modules for easy integration with CMake."
+	)
 
 	set(CPACK_GENERATOR "NSIS")
 	set(CPACK_SOURCE_GENERATOR "NSIS")
