@@ -22,7 +22,7 @@ if(CROSS_COMP_WINDOWS)
 endif()
 
 # Version configuration
-project(mulex-fk VERSION 0.9.6)
+project(mulex-fk VERSION 0.9.7)
 set(PROJECT_VNAME Ross)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -79,6 +79,7 @@ else()
 endif()
 
 # Tracy Profiler
+# NOTE: (Cesar) Always declare due to <tracy/TracyClient.hpp> dependencies
 if(PROFILE)
 	FetchContent_Declare(
 		tracy
@@ -87,8 +88,16 @@ if(PROFILE)
 		GIT_SHALLOW TRUE
 		# EXCLUDE_FROM_ALL
 	)
-	FetchContent_MakeAvailable(tracy)
+else()
+	FetchContent_Declare(
+		tracy
+		GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+		GIT_TAG v0.11.1
+		GIT_SHALLOW TRUE
+		EXCLUDE_FROM_ALL
+	)
 endif()
+FetchContent_MakeAvailable(tracy)
 
 # RPC related configuration
 set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
@@ -243,8 +252,8 @@ else()
 	# Generate NSIS package using CPack
 	include(InstallRequiredSystemLibraries)
 
-	set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME} (${PROJECT_VNAME})")
-	set(CPACK_NSIS_DISPLAY_NAME "${CMAKE_PROJECT_NAME} (${PROJECT_VNAME})")
+	set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}-${PROJECT_VNAME}")
+	set(CPACK_NSIS_DISPLAY_NAME "${CMAKE_PROJECT_NAME}-${PROJECT_VNAME}")
 	set(CPACK_PACKAGE_VENDOR "César Godinho")
 	set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Mulex-fk Windows (x64) installer.")
 	set(CPACK_PACKAGE_VERSION_MAJOR "${CMAKE_PROJECT_VERSION_MAJOR}")
