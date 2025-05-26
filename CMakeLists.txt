@@ -240,7 +240,7 @@ if(NOT WIN32)
 	set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 	set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 
-	set(CPACK_DEBIAN_PACKAGE_DEPENDS "libuv1-dev, zlib1g-dev")
+	set(CPACK_DEBIAN_PACKAGE_DEPENDS "libuv1-dev, zlib1g-dev, libssl-dev")
 
 	# TODO: (Cesar) This is dangerous and should be fixed
 	#				For now assuming that when we generate a cpack .deb package

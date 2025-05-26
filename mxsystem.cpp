@@ -38,6 +38,7 @@ static mulex::Experiment _sys_experiment;
 static bool _sys_experiment_connected = false;
 static std::string _mxcachedir;
 static std::string _mxcachelockdir;
+static std::string _mxcacheprivdir;
 static std::string _sys_expname;
 static std::string _sys_binname;
 static std::string _sys_fullbinname;
@@ -953,6 +954,25 @@ namespace mulex
 
 		_mxcachelockdir = lock;
 		return _mxcachelockdir;	
+	}
+
+	std::string_view SysGetCachePrivateDir()
+	{
+		if(!_mxcacheprivdir.empty())
+		{
+			return _mxcacheprivdir;
+		}
+
+		std::string dir = std::string(SysGetCacheDir()) + "/." + _sys_expname.c_str();
+	
+		if(!std::filesystem::is_directory(dir) && !std::filesystem::create_directory(dir))
+		{
+			LogError("SysGetCachePrivateDir: Failed to create new directory for system private cache.");
+			return "";
+		}
+
+		_mxcacheprivdir = dir;
+		return _mxcacheprivdir;	
 	}
 
 	bool SysCreateNewExperiment(const std::string& expname)

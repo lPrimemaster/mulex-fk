@@ -5,7 +5,7 @@
   "scripts": {
     "start": "vite",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build --config vite.config.main.ts && vite build --config vite.config.login.ts",
     "serve": "vite preview"
   },
   "license": "MIT",

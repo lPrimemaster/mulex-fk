@@ -4,6 +4,7 @@
 #include "PerMessageDeflate.h"
 #include "WebSocket.h"
 #include "rpc.h"
+#include <openssl/evp.h>
 #include <rpcspec.inl>
 
 #include <rapidjson/document.h>
@@ -11,10 +12,15 @@
 #include <rapidjson/writer.h>
 
 #include <libbase64.h>
+#include <openssl/hmac.h>
+#include <openssl/rand.h>
+#include <openssl/sha.h>
 
 #include <App.h>
 #include <fstream>
 #include <filesystem>
+#include <cmath>
+#include <random>
 
 #include <mxres.h>
 
@@ -52,23 +58,6 @@ namespace mulex
 		Experiment _local_experiment;
 		std::string _ip;
 	};
-
-	static bool HttpGenerateViteConfigFile()
-	{
-		ZoneScoped;
-		std::string serveDir = SysGetExperimentHome();
-		if(!std::filesystem::exists(serveDir + "/vite.config.ts"))
-		{
-			LogDebug("[mxhttp] Plugin <vite.config.ts> does not exist. Creating file...");
-			SysWriteBinFile(serveDir + "/vite.config.ts", ResGetResource("vite.config.ts"));
-		}
-		else
-		{
-			LogTrace("[mxhttp] Plugin <vite.config.ts> found under experiment home.");
-		}
-
-		return true;
-	}
 
 	static bool HttpStartWatcherThread()
 	{
@@ -173,77 +162,23 @@ namespace mulex
 		return "text/plain";
 	}
 
-	template<bool SSL>
-	static bool HttpServeFile(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
-	{
-		ZoneScoped;
-		std::string urlPath = std::string(req->getUrl());
-
-		if(urlPath == "/")
-		{
-			// Serve root as main index
-			urlPath = "/index.html";
-		}
-
-		// Get the public root path
-		static std::string serveDir = SysGetExperimentHome();
-		if(serveDir.empty())
-		{
-			LogError("[mxhttp] Failed to serve files. SysGetExperimentHome() failed.");
-			res->writeStatus("500 Internal Server Error")->end("<h1>System Experiment Not Running<h1>");
-			return false;
-		}
-
-		std::string respath = serveDir + urlPath;
-		if(!std::filesystem::is_regular_file(respath))
-		{
-			// If the file is not found then route back to index.html
-			// solidjs router will figure out the route from the full url
-			urlPath = "/index.html";
-			respath = serveDir + urlPath;
-		}
-
-		std::string data = HttpReadFileFromDisk(respath);
-		std::string_view contentType = HttpGetMimeType(respath);
-
-		res->writeHeader("Content-Type", contentType)
-		   // ->writeHeader("Content-Length", std::to_string(data.size()))
-		   ->end(data);
-
-		return true;
-	}
-
-	static std::vector<std::uint8_t> HttpByteVectorFromJsonB64(const char* args, std::uint64_t len)
-	{
-		ZoneScoped;
-		std::vector<std::uint8_t> output;
-		output.resize(len * 5); // 5 times the encoded string
-		std::uint64_t wlen;
-		
-		if(base64_decode(args, len, reinterpret_cast<char*>(&output.front()), &wlen, 0) < 1)
-		{
-			LogError("[mxhttp] HttpByteVectorFromJsonB64: Failed to decode input.");
-			return std::vector<std::uint8_t>();
-		}
-
-		// Dial the size back down
-		output.resize(wlen);
-		return output;
-	}
-
-	static rapidjson::Document HttpJsonFromByteVector(const std::vector<std::uint8_t>& arr)
+	static rapidjson::Document HttpParseJSON(std::string_view message, bool* error)
 	{
 		ZoneScoped;
 		rapidjson::Document d;
-		d.SetObject();
-		rapidjson::Value output(rapidjson::kArrayType);
+		// HACK: (Cesar) This is not ideal
+		//				 However, We need to recheck how uWS handles the string_view output to, *maybe*, avoid copying
+		d.Parse(std::string(message).c_str());
 
-		rapidjson::Document::AllocatorType& allocator = d.GetAllocator();
-		for(const auto& byte : arr)
+		if(error) *error = false;
+
+		if(d.HasParseError())
 		{
-			output.PushBack(rapidjson::Value().SetInt(byte), allocator);
+			LogError("[mxhttp] HttpParseJSON: Failed to parse JSON.");
+			if(error) *error = true;
+			return d;
 		}
-		d.AddMember("response", output, allocator);
+
 		return d;
 	}
 
@@ -284,6 +219,16 @@ namespace mulex
 				}
 				return d[key.c_str()].GetUint64();
 			}
+			else if constexpr(std::is_same_v<T, std::int64_t>)
+			{
+				if(d[key.c_str()].GetType() != rapidjson::Type::kNumberType)
+				{
+					LogError("[mxhttp] HttpTryGetEntry: Found key <%s>. But is of incorrect type. Expected Number.", key.c_str());
+					if(error) *error = true;
+					return T();
+				}
+				return d[key.c_str()].GetInt64();
+			}
 			else if constexpr(std::is_same_v<T, bool>)
 			{
 				if(d[key.c_str()].GetType() != rapidjson::Type::kTrueType && d[key.c_str()].GetType() != rapidjson::Type::kFalseType)
@@ -320,23 +265,211 @@ namespace mulex
 		}
 	}
 
-	static rapidjson::Document HttpParseWSMessage(std::string_view message, bool* error)
+	template<bool SSL>
+	static bool HttpCheckToken(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
+	{
+		std::string auth = std::string(req->getHeader("cookie"));
+
+		std::uint64_t start = auth.find("token=");
+		if(start == std::string::npos)
+		{
+			return false;
+		}
+
+		// NOTE: (Cesar) if count is npos then get the full string
+		std::uint64_t count = auth.substr(start).find(";");
+
+		std::string key = auth.substr(start, count);
+		std::string token = key.substr(key.find("=") + 1);
+		
+		auto [valid, username] = HttpJWSVerify(token);
+
+		// TODO: (Cesar) Do something with username later on (permissions etc...)
+		(void)username;
+		return valid;
+	}
+
+	// WARN: (Cesar) These files are public
+	//				 If someone changes them to hack something
+	//				 Well... They are public...
+	static bool HttpIsRoutePublic(const std::string& route)
+	{
+		return
+			route == "/login.html"  		 ||
+			route == "/login.js"    		 ||
+			route == "/favicon.ico" 		 ||
+			route == "/login.css"   		 ||
+			route == "/logo.png"			 ||
+			route == "/manifest.webmanifest" ||
+			route == "/registerSW.js"		 ||
+			route == "/sw.js"				 ||
+			route.starts_with("/workbox-");
+	}
+
+	template<bool SSL>
+	static bool HttpServeLoginPage(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
+	{
+		std::string urlPath = std::string(req->getUrl());
+
+		if(urlPath == "/")
+		{
+			// Serve root as main index
+			urlPath = "/login.html";
+		}
+
+		// Get the public root path
+		static std::string serveDir = SysGetExperimentHome();
+		if(serveDir.empty())
+		{
+			LogError("[mxhttp] Failed to serve files. SysGetExperimentHome() failed.");
+			res->writeStatus("500 Internal Server Error")->end("<h1>System Experiment Not Running<h1>");
+			return false;
+		}
+
+		// Only allowed files
+		if(!HttpIsRoutePublic(urlPath))
+		{
+			// Redirect wrong routes to login
+			urlPath = "/login.html";
+			// res->writeStatus("401 Unauthorized")->end("Invalid credentials");
+		}
+
+		std::string respath = serveDir + urlPath;
+		std::string data = HttpReadFileFromDisk(respath);
+		std::string_view contentType = HttpGetMimeType(respath);
+
+		res->writeHeader("Content-Type", contentType)
+		   // ->writeHeader("Content-Length", std::to_string(data.size()))
+		   ->end(data);
+
+		return true;
+	}
+
+	template<bool SSL>
+	static bool HttpServeFile(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
+	{
+		ZoneScoped;
+		std::string urlPath = std::string(req->getUrl());
+
+		if(urlPath == "/")
+		{
+			// Serve root as main index
+			urlPath = "/index.html";
+		}
+
+		// Get the public root path
+		static std::string serveDir = SysGetExperimentHome();
+		if(serveDir.empty())
+		{
+			LogError("[mxhttp] Failed to serve files. SysGetExperimentHome() failed.");
+			res->writeStatus("500 Internal Server Error")->end("<h1>System Experiment Not Running<h1>");
+			return false;
+		}
+
+		std::string respath = serveDir + urlPath;
+		if(!std::filesystem::is_regular_file(respath))
+		{
+			// If the file is not found then route back to index.html
+			// solidjs router will figure out the route from the full url
+			urlPath = "/index.html";
+			respath = serveDir + urlPath;
+		}
+
+		std::string data = HttpReadFileFromDisk(respath);
+		std::string_view contentType = HttpGetMimeType(respath);
+
+		res->writeHeader("Content-Type", contentType)
+		   // ->writeHeader("Content-Length", std::to_string(data.size()))
+		   ->end(data);
+
+		return true;
+	}
+
+	template<bool SSL>
+	static void HttpHandleLogin(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
+	{
+		res->onData([res, body = std::make_shared<std::string>("")](std::string_view data, bool last) {
+			body->append(data);
+
+			if(last)
+			{
+				bool error;
+				rapidjson::Document parsed = HttpParseJSON(*body, &error);
+				if(error)
+				{
+					res->writeStatus("400 Bad Request")->end();
+					return;
+				}
+
+				std::string username = HttpTryGetEntry<std::string>(parsed, "username", &error);
+				std::string password = HttpTryGetEntry<std::string>(parsed, "password", &error);
+
+				if(error)
+				{
+					res->writeStatus("400 Bad Request")->end();
+					return;
+				}
+
+				auto credentials = HttpGetUserCredentials(username);
+				if(!credentials.has_value())
+				{
+					res->writeStatus("401 Unauthorized")->end("Invalid credentials");
+					return;
+				}
+
+				// Found username check for credentials
+				auto [salt, pass_hash] = credentials.value();
+
+				if(!(HttpSha256Hex(salt + password) == pass_hash))
+				{
+					res->writeStatus("401 Unauthorized")->end("Invalid credentials");
+					return;
+				}
+
+				// Username and password are correct
+				// Issue JWS token (1 day expiration)
+				std::string token = HttpJWSIssue(username, "mx-auth-server", 86400);
+				res->writeHeader("Set-Cookie", "token=" + token + "; HttpOnly; Path=/; SameSite=Strict; Max-Age=86400;");
+				res->writeHeader("Content-Type", "application/json")->end("{\"token\":\"" + token + "\"}");
+			}
+		});
+
+		res->onAborted([]() {
+			LogError("[mxhttp] Login request aborted.");
+		});
+	}
+
+	static std::vector<std::uint8_t> HttpByteVectorFromJsonB64(const char* args, std::uint64_t len)
+	{
+		ZoneScoped;
+		std::vector<std::uint8_t> output;
+		output.resize(len * 5); // 5 times the encoded string
+		std::uint64_t wlen;
+		
+		if(base64_decode(args, len, reinterpret_cast<char*>(&output.front()), &wlen, 0) < 1)
+		{
+			LogError("[mxhttp] HttpByteVectorFromJsonB64: Failed to decode input.");
+			return std::vector<std::uint8_t>();
+		}
+
+		// Dial the size back down
+		output.resize(wlen);
+		return output;
+	}
+
+	static rapidjson::Document HttpJsonFromByteVector(const std::vector<std::uint8_t>& arr)
 	{
 		ZoneScoped;
 		rapidjson::Document d;
-		// HACK: (Cesar) This is not ideal
-		//				 However, We need to recheck how uWS handles the string_view output to, *maybe*, avoid copying
-		d.Parse(std::string(message).c_str());
+		d.SetObject();
+		rapidjson::Value output(rapidjson::kArrayType);
 
-		if(error) *error = false;
-
-		if(d.HasParseError())
+		rapidjson::Document::AllocatorType& allocator = d.GetAllocator();
+		for(const auto& byte : arr)
 		{
-			LogError("[mxhttp] HttpParseWSMessage: Failed to parse RPC call.");
-			if(error) *error = true;
-			return d;
+			output.PushBack(rapidjson::Value().SetInt(byte), allocator);
 		}
-
+		d.AddMember("response", output, allocator);
 		return d;
 	}
 
@@ -557,11 +690,18 @@ namespace mulex
 		// in case some of the files were accidentaly modified by the user (e.g. during plugins creation/copy)
 		std::string serveDir = SysGetExperimentHome();
 
-		SysWriteBinFile(serveDir + "/index.html", ResGetResource("index.html"));
+		ResGetAll();
+		for(const auto& [name, data] : ResGetAll())
+		{
+			LogDebug("[mxhttp] Writing <%s>...", name.c_str());
+			SysWriteBinFile(serveDir + "/" + name, data);
+		}
 
-		SysWriteBinFile(serveDir + "/index.js", ResGetResource("index.js"));
-		SysWriteBinFile(serveDir + "/index.css", ResGetResource("index.css"));
-		SysWriteBinFile(serveDir + "/favicon.ico", ResGetResource("favicon.ico"));
+		// SysWriteBinFile(serveDir + "/index.html", ResGetResource("index.html"));
+		//
+		// SysWriteBinFile(serveDir + "/index.js", ResGetResource("index.js"));
+		// SysWriteBinFile(serveDir + "/index.css", ResGetResource("index.css"));
+		// SysWriteBinFile(serveDir + "/favicon.ico", ResGetResource("favicon.ico"));
 
 		return true;
 	}
@@ -572,8 +712,17 @@ namespace mulex
 		ZoneScoped;
 		// using TAWSB = uWS::TemplatedApp<SSL>::template WebSocketBehavior<WsRpcBridge>;
 
-		app.get("/*", [](auto* res, auto* req) {
-			HttpServeFile(res, req);
+		app.post("/api/login", [](auto* res, auto* req) {
+			HttpHandleLogin(res, req);
+		}).get("/*", [](auto* res, auto* req) {
+			if(HttpCheckToken(res, req))
+			{
+				HttpServeFile(res, req);
+			}
+			else
+			{
+				HttpServeLoginPage(res, req);
+			}
 		}).template ws<WsRpcBridge>("/*", {
 			.compression = uWS::CompressOptions(uWS::DEDICATED_COMPRESSOR_4KB | uWS::DEDICATED_COMPRESSOR),
 			// .compression = uWS::DISABLED,
@@ -588,6 +737,13 @@ namespace mulex
 				// This gets triggered if we going through a proxy
 				b._ip = std::string(req->getHeader("x-real-ip"));
 
+				if(!HttpCheckToken(res, req))
+				{
+					res->writeStatus("401 Unauthorized")->end("Invalid token");
+					return;
+				}
+
+				// Token is valid -> upgrade the connection
 				res->template upgrade<WsRpcBridge>(
 					std::move(b),
 					req->getHeader("sec-websocket-key"),
@@ -643,7 +799,7 @@ namespace mulex
 
 				// Parse the received data
 				bool parse_error;
-				rapidjson::Document doc = HttpParseWSMessage(message, &parse_error);
+				rapidjson::Document doc = HttpParseJSON(message, &parse_error);
 
 
 				std::uint16_t type = HttpTryGetEntry<std::uint16_t>(doc, "type", &parse_error);
@@ -798,6 +954,8 @@ namespace mulex
 			return;
 		}
 
+		HttpInitUsersPdb();
+
 		_http_thread = new std::thread([port, islocal](){
 			_ws_loop_thread = uWS::Loop::get(); // Only read is ok
 
@@ -841,5 +999,305 @@ namespace mulex
 		}
 
 		return output;
+	}
+
+	static std::string HttpBase64URLEncode(const std::string& data)
+	{
+		std::string buffer;
+
+		// ROUND to ceil multiple of 4 and add 4 for safety
+		std::uint64_t size = ((static_cast<std::uint64_t>(std::ceil((4.0/3.0) * data.size()) + 3)) & ~3) + 4;
+		buffer.resize(size);
+		base64_encode(data.c_str(), data.size(), buffer.data(), &size, 0);
+		buffer.resize(size);
+
+		std::replace(buffer.begin(), buffer.end(), '+', '-');
+		std::replace(buffer.begin(), buffer.end(), '/', '_');
+
+		while(!buffer.empty() && buffer.back() == '=')
+		{
+			buffer.pop_back();
+		}
+
+		return buffer;
+	}
+
+	static std::string HttpBase64URLDecode(const std::string& data)
+	{
+		std::string buffer = data;
+		std::replace(buffer.begin(), buffer.end(), '-', '+');
+		std::replace(buffer.begin(), buffer.end(), '_', '/');
+
+		while(buffer.length() % 4 != 0)
+		{
+			buffer.push_back('=');
+		}
+
+		std::string output;
+		std::uint64_t size = 5 * buffer.size();
+		output.resize(size);
+
+		if(base64_decode(buffer.data(), buffer.size(), output.data(), &size, 0) < 1)
+		{
+			LogError("[mxhttp] HttpBase64URLDecode: Failed to decode input.");
+			return "";
+		}
+
+		output.resize(size);
+
+		return output;
+	}
+
+	static std::string HttpHMS256(const std::string& data, const std::string& key)
+	{
+		std::uint8_t result[EVP_MAX_MD_SIZE];
+		std::uint32_t len;
+		if(HMAC(EVP_sha256(), key.c_str(), key.size(), reinterpret_cast<const std::uint8_t*>(data.c_str()), data.size(), result, &len) == nullptr)
+		{
+			LogError("[mxhttp] HttpHMS256: Signature generation failed.");
+			return "";
+		}
+		return std::string(reinterpret_cast<char*>(result), len);
+	}
+
+	static std::string HttpBufferToHex(const std::uint8_t* buffer, std::uint64_t size)
+	{
+		std::ostringstream ss;
+		for(std::uint64_t i = 0; i < size; i++)
+		{
+	  		ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buffer[i]);
+		}
+		return ss.str();
+	}
+
+	static std::string HttpGenerateSecureRandom256Hex()
+	{
+		std::uint8_t buffer[32];
+		if(RAND_bytes(buffer, 32) != 1)
+		{
+			LogError("[mxhttp] HttpGenerateSecureRandom256Hex: Failed to generate random string.");
+			return "";
+		}
+		
+		return HttpBufferToHex(buffer, 32);
+	}
+
+	static std::string HttpHandleSecretKey()
+	{
+		// Check if there is a key at the cache
+		const std::string pcache = std::string(SysGetCachePrivateDir());
+		if(pcache.empty())
+		{
+			LogError("[mxhttp] HttpHandleSecretKey: Failed to open private cache dir.");
+			return "";
+		}
+
+		const std::string path = pcache + "/jws.key";
+		if(std::filesystem::is_regular_file(path))
+		{
+			std::vector<std::uint8_t> key = SysReadBinFile(path);
+			LogDebug("[mxhttp] Found jws.key. Using as secret...");
+			return reinterpret_cast<char*>(key.data());
+		}
+
+		// Generate random key and write it to <jws.key> file
+		std::string secret = HttpGenerateSecureRandom256Hex();
+		if(secret.empty())
+		{
+			LogError("[mxhttp] HttpHandleSecretKey: Failed to generate JWS key.");
+			return "";
+		}
+
+		std::vector<std::uint8_t> data;
+		data.resize(secret.size() + 1);
+		std::memcpy(data.data(), secret.c_str(), secret.size() + 1);
+		SysWriteBinFile(path, data);
+
+		return secret;
+	}
+
+	std::string HttpJWSIssue(const std::string& sub, const std::string& iss, std::int64_t exp)
+	{
+		rapidjson::Document header;
+		rapidjson::Document::AllocatorType& allocator = header.GetAllocator();
+		header.SetObject();
+		header.AddMember("alg", "HS256", allocator);
+		header.AddMember("typ", "JWT", allocator);
+
+		rapidjson::Document payload;
+		payload.SetObject();
+		std::int64_t now = SysGetCurrentTime() / 1000;
+		payload.AddMember("sub", rapidjson::StringRef(sub.c_str(), sub.size()), allocator);
+		payload.AddMember("iss", rapidjson::StringRef(iss.c_str(), iss.size()), allocator);
+		payload.AddMember("exp", now + exp, allocator);
+
+		// Encode header and payload
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+		
+		header.Accept(writer);
+		std::string b64url_header = HttpBase64URLEncode(buffer.GetString());
+
+		buffer.Clear();
+		writer.Reset(buffer);
+
+		payload.Accept(writer);
+		std::string b64url_payload = HttpBase64URLEncode(buffer.GetString());
+
+		const std::string data = b64url_header + "." + b64url_payload;
+
+		// Sign
+		const std::string signature = HttpHMS256(data, HttpHandleSecretKey());
+		
+		// Encode the signature
+		const std::string b64url_signature = HttpBase64URLEncode(signature);
+
+		return data + "." + b64url_signature;
+	}
+
+	std::pair<bool, std::string> HttpJWSVerify(const std::string& token)
+	{
+		// Split token on '.'
+		std::vector<std::string> split;
+		split.reserve(3);
+		std::stringstream ss(token);
+		std::string tk;
+		while(std::getline(ss, tk, '.')) split.push_back(tk);
+		if(split.size() != 3)
+		{
+			LogError("[mxhttp] HttpJWSVerify: Invalid token.");
+			return { false, "" };
+		}
+
+		std::string header_str  = HttpBase64URLDecode(split[0]);
+		std::string payload_str = HttpBase64URLDecode(split[1]);
+		std::string signature   = HttpBase64URLDecode(split[2]);
+
+		bool error;
+		rapidjson::Document payload = HttpParseJSON(payload_str, &error);
+		if(error)
+		{
+			LogError("[mxhttp] HttpJWSVerify: Invalid token.");
+			return { false, "" };
+		}
+
+		std::string username = HttpTryGetEntry<std::string>(payload, "sub", &error);
+		if(error)
+		{
+			LogError("[mxhttp] HttpJWSVerify: Invalid token.");
+			return { false, "" };
+		}
+
+		std::int64_t expiration = HttpTryGetEntry<std::int64_t>(payload, "exp", &error);
+		if(error || SysGetCurrentTime() / 1000 > expiration)
+		{
+			LogError("[mxhttp] HttpJWSVerify: Invalid token.");
+			return { false, "" };
+		}
+
+		std::string issuer = HttpTryGetEntry<std::string>(payload, "iss", &error);
+		if(error || issuer != "mx-auth-server")
+		{
+			LogError("[mxhttp] HttpJWSVerify: Invalid token.");
+			return { false, "" };
+		}
+
+		const std::string signature_check = HttpHMS256(split[0] + "." + split[1], HttpHandleSecretKey());
+
+		if(signature_check != signature)
+		{
+			LogError("[mxhttp] HttpJWSVerify: Invalid token.");
+			return { false, "" };
+		}
+
+		return { true, username };
+	}
+
+	// NOTE: (Cesar) This is not meant to generate safe passwords
+	static std::string HttpGenerateRandomPassword()
+	{
+		static constexpr std::uint64_t PASS_LEN = 16;
+		static constexpr std::string_view ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+		std::string output;
+		output.reserve(PASS_LEN);
+
+		std::random_device dev;
+		std::mt19937 rng(dev());
+		std::uniform_int_distribution<std::mt19937::result_type> dist(0, ALPHANUM.size());
+
+		for(int i = 0; i < PASS_LEN; i++)
+		{
+			output.push_back(ALPHANUM[dist(rng)]);
+		}
+		
+		return output;
+	}
+
+	void HttpInitUsersPdb()
+	{
+		if(!PdbTableExists("users"))
+		{
+			LogDebug("[mxhttp] Creating users database...");
+			const std::string query = 
+			"CREATE TABLE IF NOT EXISTS users ("
+				"id INTEGER PRIMARY KEY AUTOINCREMENT,"
+				"username TEXT UNIQUE NOT NULL,"
+				"salt TEXT NOT NULL,"
+				"passhash TEXT NOT NULL"
+			");";
+			PdbExecuteQuery(query);
+
+			const static std::vector<PdbValueType> types = {
+				PdbValueType::NIL,
+				PdbValueType::STRING,
+				PdbValueType::STRING,
+				PdbValueType::STRING
+			};
+
+			std::string random_salt = HttpGenerateSecureRandom256Hex();
+			std::string random_pass = HttpGenerateRandomPassword();
+			std::string hash = HttpSha256Hex(random_salt + random_pass);
+
+			std::vector<std::uint8_t> data = SysPackArguments(
+				PdbString("admin"),
+				PdbString(random_salt),
+				PdbString(hash)
+			);
+			PdbWriteTable("INSERT INTO users (id, username, salt, passhash) VALUES (?, ?, ?, ?);", types, data);
+
+			LogMessage("[mxhttp] Default admin created:");
+			LogMessage("[mxhttp] username: admin");
+			LogMessage("[mxhttp] password: %s", random_pass.c_str());
+		}
+	}
+
+	std::optional<std::pair<std::string, std::string>> HttpGetUserCredentials(const std::string& username)
+	{
+		const static std::vector<PdbValueType> types = {
+			PdbValueType::STRING,
+			PdbValueType::STRING
+		};
+
+		PdbAccessLocal pdb;
+
+		auto reader = pdb.getReader<PdbString, PdbString>("users", {"salt", "passhash"});
+		auto credentials = reader("WHERE username = \"" + username + "\"");
+
+		if(credentials.empty())
+		{
+			LogMessage("[mxhttp] Login attempt with username <%s> failed. Not registered.", username.c_str());
+			return std::nullopt;
+		}
+
+		auto [salt, passhash] = credentials[0];
+		return std::make_pair(salt.c_str(), passhash.c_str());
+	}
+
+	std::string HttpSha256Hex(const std::string& data)
+	{
+		std::uint8_t hash[SHA256_DIGEST_LENGTH];
+		SHA256(reinterpret_cast<const std::uint8_t*>(data.data()), data.size(), hash);
+		return HttpBufferToHex(hash, SHA256_DIGEST_LENGTH);
 	}
 } // namespace mulex

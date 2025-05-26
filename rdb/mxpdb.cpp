@@ -317,7 +317,32 @@ namespace mulex
 			data.clear();
 		}
 
+		sqlite3_finalize(stmt);
+
 		return PdbFlattenList(list);
+	}
+
+	bool PdbTableExists(const std::string& table)
+	{
+		ZoneScoped;
+		sqlite3_stmt* stmt;
+		bool exists = false;
+		const std::string query = "SELECT count(TYPE) FROM sqlite_master WHERE TYPE='table' and name='" + table + "';";
+		if(sqlite3_prepare_v2(_pdb_handle, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+		{
+			LogError("[pdb] Error creating query.");
+			LogError("[pdb] %s.", sqlite3_errmsg(_pdb_handle));
+			sqlite3_finalize(stmt);
+			return false;
+		}
+
+		if(sqlite3_step(stmt) == SQLITE_ROW)
+		{
+			exists = (sqlite3_column_int(stmt, 0) == 1);
+		}
+
+		sqlite3_finalize(stmt);
+		return exists;
 	}
 
 	static std::string PdbTypeName(const PdbValueType& type)

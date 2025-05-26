@@ -287,6 +287,7 @@ namespace mulex
 	std::int64_t SysGetCurrentTime();
 	std::string_view SysGetCacheDir();
 	std::string_view SysGetCacheLockDir();
+	std::string_view SysGetCachePrivateDir();
 	bool SysCreateNewExperiment(const std::string& expname);
 	std::string SysGetExperimentHome();
 	MX_RPC_METHOD mulex::mxstring<512> SysGetExperimentName();

@@ -61,4 +61,7 @@ macro(build_frontend_yarn)
 
 	# Add the favicon
 	mx_resource_append("${CMAKE_SOURCE_DIR}/frontend/src/assets/favicon.ico")
+
+	# Add the mx logo
+	mx_resource_append("${CMAKE_SOURCE_DIR}/frontend/src/assets/logo.png")
 endmacro()
