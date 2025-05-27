@@ -1,7 +1,7 @@
 /* @refresh reload */
 import { render } from 'solid-js/web';
 import './index.css';
-import { Component, createSignal } from 'solid-js';
+import { Component, createSignal, onMount } from 'solid-js';
 
 const root = document.getElementById('root');
 
@@ -14,6 +14,17 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 const App : Component = () => {
 	const [username, setUsername] = createSignal<string>("");
 	const [password, setPassword] = createSignal<string>("");
+	const [expname, setExpname]   = createSignal<string>("");
+
+	onMount(async () => {
+		const prpc = await fetch('/api/public_rpc', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ info: 'expname' })
+		});
+		const ret = await prpc.json();
+		setExpname(ret['return']);
+	});
 
 	async function loginRequest(e: Event) {
 		e.preventDefault();
@@ -39,6 +50,14 @@ const App : Component = () => {
 		// 				 Due to sending plain text password / usernames
 		// 				 This is not critical if you don't care and
 		// 				 are behind a VPN / proxy and trust other users
+
+		// TODO: (Cesar) Add vname and version number on this page
+
+		// TODO: (Cesar) JWTs are stateless - A deleted user has access
+		// 				 until token expiration date
+
+		// TODO: (Cesar) Allow some calls to be POST requestable on public interface
+		// 				 E.g. get experiment name
 	}
 
 	return (
@@ -47,7 +66,7 @@ const App : Component = () => {
 				<div class="flex justify-center mb-6">
 					<img src="/logo.png" class="w-full h-auto"/>
 				</div>
-				<h2 class="text-2xl font-semibold text-center mb-6">Login</h2>
+				<h2 class="text-2xl font-semibold text-center mb-6">Login to {expname()}</h2>
 				<form onSubmit={loginRequest} class="space-y-4">
 					<div>
 						<label class="block text-gray-700 text-sm font-medium mb-1">Username</label>

@@ -29,6 +29,7 @@
 static us_listen_socket_t* _http_listen_socket = nullptr;
 static std::thread* _http_thread;
 static uWS::Loop* _ws_loop_thread;
+static std::string _hms_secret;
 
 namespace mulex
 {
@@ -351,9 +352,10 @@ namespace mulex
 		ZoneScoped;
 		std::string urlPath = std::string(req->getUrl());
 
-		if(urlPath == "/")
+		if(urlPath == "/" || urlPath == "/login.html")
 		{
 			// Serve root as main index
+			// Serve login.html as main index
 			urlPath = "/index.html";
 		}
 
@@ -431,6 +433,40 @@ namespace mulex
 				std::string token = HttpJWSIssue(username, "mx-auth-server", 86400);
 				res->writeHeader("Set-Cookie", "token=" + token + "; HttpOnly; Path=/; SameSite=Strict; Max-Age=86400;");
 				res->writeHeader("Content-Type", "application/json")->end("{\"token\":\"" + token + "\"}");
+			}
+		});
+
+		res->onAborted([]() {
+			LogError("[mxhttp] Login request aborted.");
+		});
+	}
+
+	template<bool SSL>
+	static void HttpHandlePublicRPC(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
+	{
+		res->onData([res, body = std::make_shared<std::string>("")](std::string_view data, bool last) {
+			body->append(data);
+
+			if(last)
+			{
+				bool error;
+				rapidjson::Document parsed = HttpParseJSON(*body, &error);
+				if(error)
+				{
+					res->writeStatus("400 Bad Request")->end();
+					return;
+				}
+
+				std::string info = HttpTryGetEntry<std::string>(parsed, "info", &error);
+				if(error || info != "expname")
+				{
+					res->writeStatus("400 Bad Request")->end();
+					return;
+				}
+
+				std::string expname = SysGetExperimentName().c_str();
+
+				res->writeHeader("Content-Type", "application/json")->end("{\"return\":\"" + expname + "\"}");
 			}
 		});
 
@@ -714,6 +750,8 @@ namespace mulex
 
 		app.post("/api/login", [](auto* res, auto* req) {
 			HttpHandleLogin(res, req);
+		}).post("/api/public_rpc", [](auto* res, auto* req) {
+			HttpHandlePublicRPC(res, req);
 		}).get("/*", [](auto* res, auto* req) {
 			if(HttpCheckToken(res, req))
 			{
@@ -1085,6 +1123,11 @@ namespace mulex
 	static std::string HttpHandleSecretKey()
 	{
 		// Check if there is a key at the cache
+		if(!_hms_secret.empty())
+		{
+			return _hms_secret;
+		}
+
 		const std::string pcache = std::string(SysGetCachePrivateDir());
 		if(pcache.empty())
 		{
@@ -1097,7 +1140,8 @@ namespace mulex
 		{
 			std::vector<std::uint8_t> key = SysReadBinFile(path);
 			LogDebug("[mxhttp] Found jws.key. Using as secret...");
-			return reinterpret_cast<char*>(key.data());
+			_hms_secret = reinterpret_cast<char*>(key.data());
+			return _hms_secret;
 		}
 
 		// Generate random key and write it to <jws.key> file
@@ -1112,6 +1156,8 @@ namespace mulex
 		data.resize(secret.size() + 1);
 		std::memcpy(data.data(), secret.c_str(), secret.size() + 1);
 		SysWriteBinFile(path, data);
+
+		_hms_secret = secret;
 
 		return secret;
 	}
@@ -1266,9 +1312,15 @@ namespace mulex
 			);
 			PdbWriteTable("INSERT INTO users (id, username, salt, passhash) VALUES (?, ?, ?, ?);", types, data);
 
-			LogMessage("[mxhttp] Default admin created:");
+			LogMessage("==============================================");
+			LogMessage("==============================================");
+			LogMessage("[mxhttp] Default admin created.");
 			LogMessage("[mxhttp] username: admin");
 			LogMessage("[mxhttp] password: %s", random_pass.c_str());
+			LogWarning("[mxhttp] Save these credentials!");
+			LogWarning("[mxhttp] They are required for first access.");
+			LogMessage("==============================================");
+			LogMessage("==============================================");
 		}
 	}
 
