@@ -3,6 +3,7 @@
 #include <rpcspec.inl>
 #include <sqlite3.h>
 #include "../mxrdb.h"
+#include "mxres.h"
 
 #include <tracy/Tracy.hpp>
 
@@ -345,95 +346,23 @@ namespace mulex
 		return exists;
 	}
 
-	static void PdbSetupRolesAndPermissions()
-	{
-		PdbExecuteQueryUnrestricted(
-			"INSERT INTO permissions (name, description) VALUES"
-
-			// Super
-			"('super', 'Allows full control of the entire system.'),"
-			
-			// // RDB
-			// "('read_rdb', 'Allows user to read from the RDB.'),"
-			// "('write_rdb', 'Allows user to write to the RDB.'),"
-
-			// User management
-			"('create_user', 'Allows user to create new users.'),"
-			"('modify_user', 'Allows user to modify users.'),"
-			"('delete_user', 'Allows user to delete users.'),"
-
-			// // Experiment
-			// "('start_run', 'User can start run.'),"
-			// "('stop_run', 'User can stop run.'),"
-			// "('reset_run', 'User can reset run number.'),"
-
-			// Logbook
-			"('read_entry', 'User can read an entry on the logbook.'),"
-			"('write_entry', 'User can write an entry on the logbook.'),"
-			"('modify_entry', 'User can modify an entry on the logbook.'),"
-			"('delete_entry', 'User can delete an entry on the logbook.');"
-		);
-
-		PdbExecuteQueryUnrestricted(
-			"INSERT INTO roles (name, description) VALUES"
-
-			"('sysadmin', 'Full control of the system.');"
-		);
-
-		PdbExecuteQueryUnrestricted(
-			"INSERT INTO rolepermissions (role_id, permission_id) VALUES"
-
-			// sysadmin -> super
-			"(1, 1);"
-		);
-	}
-
 	void PdbSetupUserDatabase()
 	{
-		// Enable foreign key support
-		PdbExecuteQuery("PRAGMA foreign_keys = ON;");
+		const std::vector<std::uint8_t> data = ResGetResource("user_database.sql");
+		const std::string query = std::string(reinterpret_cast<const char*>(data.data()), data.size());
+		PdbExecuteQueryUnrestricted(query);
+	}
 
-		// Role table
-		const std::string rquery =
-		"CREATE TABLE IF NOT EXISTS roles ("
-			"id INTEGER PRIMARY KEY AUTOINCREMENT,"
-			"name TEXT UNIQUE NOT NULL,"
-			"description TEXT"
-		");";
-		PdbExecuteQuery(rquery);
-
-		// Permissions table
-		const std::string pquery = 
-		"CREATE TABLE IF NOT EXISTS permissions ("
-			"id INTEGER PRIMARY KEY AUTOINCREMENT,"
-			"name TEXT UNIQUE NOT NULL,"
-			"description TEXT"
-		");";
-		PdbExecuteQuery(pquery);
-
-		// Role-Permissions join
-		const std::string rpquery = 
-		"CREATE TABLE IF NOT EXISTS rolepermissions ("
-			"role_id INTEGER,"
-			"permission_id INTEGER,"
-			"PRIMARY KEY (role_id, permission_id),"
-			"FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,"
-			"FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE"
-		");";
-		PdbExecuteQuery(rpquery);
-
-		// User table
-		const std::string uquery = 
-		"CREATE TABLE IF NOT EXISTS users ("
-			"id INTEGER PRIMARY KEY AUTOINCREMENT,"
-			"username TEXT UNIQUE NOT NULL,"
-			"salt TEXT NOT NULL,"
-			"passhash TEXT NOT NULL,"
-			"role_id INTEGER,"
-			"created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
-			"FOREIGN KEY (role_id) REFERENCES roles(id)"
-		");";
-		PdbExecuteQuery(uquery);
+	std::string PdbGetUserRole(const std::string& username)
+	{
+		const static std::vector<PdbValueType> types = { PdbValueType::STRING };
+		PdbString data = PdbReadTable(
+			"SELECT r.name AS role "
+			"FROM users u "
+			"JOIN roles r ON u.role_id = r.id "
+			"WHERE u.username = '" + username + "';", types
+		);
+		return data.c_str();
 	}
 
 	static std::string PdbTypeName(const PdbValueType& type)
@@ -471,6 +400,7 @@ namespace mulex
 		if(sqlite3_exec(_pdb_handle, query.c_str(), nullptr, nullptr, &err) != SQLITE_OK)
 		{
 			LogError("[pdb] Failed to execute query <%s>.", query.c_str());
+			LogError("[pdb] %s.", err);
 			sqlite3_free(err);
 			return false;
 		}
@@ -484,6 +414,7 @@ namespace mulex
 		if(sqlite3_exec(_pdb_handle, query.c_str(), nullptr, nullptr, &err) != SQLITE_OK)
 		{
 			LogError("[pdb] Failed to execute query <%s>.", query.c_str());
+			LogError("[pdb] %s.", err);
 			sqlite3_free(err);
 			return false;
 		}

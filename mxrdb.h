@@ -165,11 +165,44 @@ namespace mulex
 
 	bool PdbTableExists(const std::string& table);
 	void PdbSetupUserDatabase();
+	std::string PdbGetUserRole(const std::string& username);
 	bool PdbExecuteQueryUnrestricted(const std::string& query); // For very large local queries
 
 	MX_RPC_METHOD bool PdbExecuteQuery(mulex::PdbQuery query);
 	MX_RPC_METHOD bool PdbWriteTable(mulex::PdbString table, mulex::RPCGenericType types, mulex::RPCGenericType data);
 	MX_RPC_METHOD mulex::RPCGenericType PdbReadTable(mulex::PdbQuery query, mulex::RPCGenericType types);
+
+	// NOTE: (Cesar) Limited to 128 permissions
+	//				 Enlarge if required
+	//				 Benchmarked and is faster than std::bitset<128>
+	//				 with random access
+	//				 At least on "my system" eh
+	class PdbPermissions
+	{
+	public:
+		constexpr PdbPermissions(std::uint64_t hi, std::uint64_t lo) : lo(lo), hi(hi) {  }
+		PdbPermissions() = default;
+
+		constexpr inline bool test(std::uint64_t hi, std::uint64_t lo) const
+		{
+			return (hi & this->hi) == hi && (lo & this->lo) == lo;
+		}
+
+		inline void set(int i)
+		{
+			if(i < 64) lo |= (1ULL << i);
+			else hi |= (1ULL << (i - 64));
+		}
+
+		inline bool test(int i) const
+		{
+			return i < 64 ? (lo & (1ULL << i)) : (hi & (1ULL << (i - 64)));
+		}
+
+	private:
+		std::uint64_t lo = 0;
+		std::uint64_t hi = 0;
+	};
 
 	class RdbProxyValue
 	{

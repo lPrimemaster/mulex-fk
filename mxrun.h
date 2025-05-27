@@ -1,6 +1,5 @@
 #pragma once
-#include "mxtypes.h"
-#include "mxlogger.h"
+#include <cstdint>
 
 namespace mulex
 {
@@ -13,7 +12,7 @@ namespace mulex
 	};
 
 	void RunInitVariables();
-	MX_RPC_METHOD bool RunStart();
-	MX_RPC_METHOD void RunStop();
-	MX_RPC_METHOD void RunReset();
+	MX_RPC_METHOD MX_PERMISSION("run_control") bool RunStart();
+	MX_RPC_METHOD MX_PERMISSION("run_control") void RunStop();
+	MX_RPC_METHOD MX_PERMISSION("run_control") void RunReset();
 } // namespace mulex

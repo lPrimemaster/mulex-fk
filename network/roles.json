@@ -4,6 +4,23 @@
 			"name": "sysadmin",
 			"description": "Full control of the system.",
 			"permissions": [ "super" ]
+		},
+		{
+			"name": "sysop",
+			"description": "Can create new users and do almost anything else.",
+			"permissions": [
+				"create_user", "modify_user", "delete_user",
+				"read_entry", "write_entry", "modify_entry", "delete_entry",
+				"run_control"
+			]
+		},
+		{
+			"name": "user",
+			"description": "A normal user.",
+			"permissions": [
+				"read_entry", "write_entry", "modify_entry",
+				"run_control"
+			]
 		}
 	],
 
@@ -17,6 +34,8 @@
 		{ "name": "read_entry", "description": "User can read an entry on the logbook." },
 		{ "name": "write_entry", "description": "User can write an entry on the logbook." },
 		{ "name": "modify_entry", "description": "User can modify an entry on the logbook." },
-		{ "name": "delete_entry", "description": "User can delete an entry on the logbook." }
+		{ "name": "delete_entry", "description": "User can delete an entry on the logbook." },
+
+		{ "name": "run_control", "description": "User can start/stop/reset a run."}
 	]
 }

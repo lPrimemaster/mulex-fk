@@ -40,7 +40,14 @@ export class MxWebsocket {
 
 		this.socket.onmessage = async (message: MessageEvent) => {
 			const data = JSON.parse(await message.data.text());
+
 			if(data.type === "rpc")	{
+				if(data.status != "OK") {
+					console.log(`MxWebsocket did not execute call.`);
+					console.log('Reason: ', data.status);
+					return;
+				}
+
 				// Push to rpc return value queue
 				if(!this.deferred_p.has(data.messageid)) {
 					// Error

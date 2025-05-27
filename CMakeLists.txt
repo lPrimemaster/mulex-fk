@@ -106,6 +106,7 @@ add_definitions(-D${RPC_CALL_KEYWORD}=)
 add_definitions(-include ${CMAKE_SOURCE_DIR}/network/rpc_macros.h)
 set(RPC_SPEC_FILE rpcspec.inl)
 set(USER_DB_SETUP user_database.sql)
+set(PERM_SPEC_FILE dbperms.inl)
 
 # Set global warnings all
 add_compile_options(
@@ -220,10 +221,7 @@ if(BUILD_TESTS)
 endif()
 
 # Generate binary resources (last configure step)
-
-set(vite_config_ts ${CMAKE_SOURCE_DIR}/network/vite.config.ts)
-mx_resource_append(${vite_config_ts})
-
+mx_resource_append(${CMAKE_BINARY_DIR}/${USER_DB_SETUP})
 mx_resource_gen()
 
 # Finally install everything for the user

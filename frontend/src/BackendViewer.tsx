@@ -28,7 +28,7 @@ const BackendLogViewer: Component<{cid: string}> = (props) => {
 	let ref!: HTMLDivElement;
 
 	createEffect(() => {
-		if(blogs[props.cid].length > 0) {
+		if(blogs[props.cid] && blogs[props.cid].length > 0) {
 			ref.scrollTo({ top: ref.scrollHeight });
 		}
 	});

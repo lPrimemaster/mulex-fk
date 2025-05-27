@@ -4,14 +4,15 @@
 #include "PerMessageDeflate.h"
 #include "WebSocket.h"
 #include "rpc.h"
-#include <openssl/evp.h>
 #include <rpcspec.inl>
+#include <dbperms.inl>
 
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
 #include <libbase64.h>
+#include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
@@ -58,6 +59,7 @@ namespace mulex
 	{
 		Experiment _local_experiment;
 		std::string _ip;
+		mulex::PdbPermissions _user_permissions;
 	};
 
 	static bool HttpStartWatcherThread()
@@ -267,14 +269,14 @@ namespace mulex
 	}
 
 	template<bool SSL>
-	static bool HttpCheckToken(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
+	static std::pair<bool, std::string> HttpCheckToken(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
 	{
 		std::string auth = std::string(req->getHeader("cookie"));
 
 		std::uint64_t start = auth.find("token=");
 		if(start == std::string::npos)
 		{
-			return false;
+			return { false, "" };
 		}
 
 		// NOTE: (Cesar) if count is npos then get the full string
@@ -283,11 +285,7 @@ namespace mulex
 		std::string key = auth.substr(start, count);
 		std::string token = key.substr(key.find("=") + 1);
 		
-		auto [valid, username] = HttpJWSVerify(token);
-
-		// TODO: (Cesar) Do something with username later on (permissions etc...)
-		(void)username;
-		return valid;
+		return HttpJWSVerify(token);
 	}
 
 	// WARN: (Cesar) These files are public
@@ -753,7 +751,8 @@ namespace mulex
 		}).post("/api/public_rpc", [](auto* res, auto* req) {
 			HttpHandlePublicRPC(res, req);
 		}).get("/*", [](auto* res, auto* req) {
-			if(HttpCheckToken(res, req))
+			auto [valid, _] = HttpCheckToken(res, req);
+			if(valid)
 			{
 				HttpServeFile(res, req);
 			}
@@ -775,11 +774,17 @@ namespace mulex
 				// This gets triggered if we going through a proxy
 				b._ip = std::string(req->getHeader("x-real-ip"));
 
-				if(!HttpCheckToken(res, req))
+				auto [valid, username] = HttpCheckToken(res, req);
+
+				if(!valid)
 				{
 					res->writeStatus("401 Unauthorized")->end("Invalid token");
 					return;
 				}
+
+				// Get the user role and therefore permissions
+				std::string user_role = PdbGetUserRole(username);
+				b._user_permissions = PdbGetUserPermissions(user_role);
 
 				// Token is valid -> upgrade the connection
 				res->template upgrade<WsRpcBridge>(
@@ -852,6 +857,14 @@ namespace mulex
 					if(parse_error)
 					{
 						// Parse error, ignore this message
+						return;
+					}
+
+					// TODO: (Cesar) What if we update the user permissions mid session?
+					if(!PdbCheckMethodPermissions(procedureid, bridge->_user_permissions))
+					{
+						const std::string retmessage = HttpMakeWSRPCMessage(std::vector<std::uint8_t>(), "NO_PERM", messageidws);
+						ws->send(retmessage);
 						return;
 					}
 
@@ -1266,15 +1279,13 @@ namespace mulex
 		static constexpr std::string_view ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 		std::string output;
-		output.reserve(PASS_LEN);
-
 		std::random_device dev;
 		std::mt19937 rng(dev());
-		std::uniform_int_distribution<std::mt19937::result_type> dist(0, ALPHANUM.size());
+		std::uniform_int_distribution<std::mt19937::result_type> dist(0, ALPHANUM.size() - 1);
 
 		for(int i = 0; i < PASS_LEN; i++)
 		{
-			output.push_back(ALPHANUM[dist(rng)]);
+			output += ALPHANUM[dist(rng)];
 		}
 		
 		return output;

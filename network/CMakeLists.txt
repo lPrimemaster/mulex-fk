@@ -14,6 +14,7 @@ execute_process(
 		--output-file ${RPC_SPEC_FILE}
 		--sql-output ${USER_DB_SETUP}
 		--permissions-input ${CMAKE_CURRENT_SOURCE_DIR}/roles.json
+		--permissions-check-output ${PERM_SPEC_FILE}
 	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 	RESULT_VARIABLE mxrpcret
 )

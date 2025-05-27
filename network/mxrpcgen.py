@@ -84,7 +84,7 @@ class RPCMethodDetails:
 
         print_lines.append('Permissions:')
         for perm in self.perms:
-            print_lines.append(f'\t{perm}')
+            print_lines.append(f'\t{perm.name}')
         if not self.perms:
             print_lines.append('\tNone')
 
@@ -104,7 +104,7 @@ class RPCRoleGenerator:
                 self.roles.append(RPCMethodRole(
                     role['name'],
                     role['description'],
-                    role['permissions']
+                    [RPCMethodPermission(p) for p in role['permissions']]
                 ))
 
             self.permissions = []
@@ -138,7 +138,7 @@ class RPCRoleGenerator:
         for v in values[:-1]:
             self._write_indented(1, f"({', '.join(v)}),\n")
 
-        self._write_indented(1, f"({', '.join(values[-1])});\n\n")
+        self._write_indented(1, f"({', '.join(values[-1])});\n")
 
     def _stringify(self, value: str) -> str:
         return f'"{value}"'
@@ -160,7 +160,7 @@ class RPCRoleGenerator:
             [
                 [
                     f'{p[0] + 1}',
-                    f'{self._get_cross_idx(pv) + 1}'
+                    f'{self._get_cross_idx(pv.name) + 1}'
                 ]
                 for pv in p[1]
             ]
@@ -171,6 +171,8 @@ class RPCRoleGenerator:
     def generate_sql(self, filename: str) -> None:
         print('[mxpdbgen] Generating SQL init script.')
 
+        self._write_indented(0, "PRAGMA foreign_keys = ON;\n")
+
         print('[mxpdbgen] Generating table: roles.')
         self._write_indented(
             0,
@@ -178,7 +180,7 @@ class RPCRoleGenerator:
                 "\tid INTEGER PRIMARY KEY AUTOINCREMENT,\n"
                 "\tname TEXT UNIQUE NOT NULL,\n"
                 "\tdescription TEXT\n"
-            ");\n\n"
+            ");\n"
         )
 
         print('[mxpdbgen] Generating table: permissions.')
@@ -188,7 +190,7 @@ class RPCRoleGenerator:
                 "\tid INTEGER PRIMARY KEY AUTOINCREMENT,\n"
                 "\tname TEXT UNIQUE NOT NULL,\n"
                 "\tdescription TEXT\n"
-            ");\n\n"
+            ");\n"
         )
 
         print('[mxpdbgen] Generating table: rolepermissions.')
@@ -200,7 +202,7 @@ class RPCRoleGenerator:
                 "\tPRIMARY KEY (role_id, permission_id),\n"
                 "\tFOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,\n"
                 "\tFOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE\n"
-            ");\n\n"
+            ");\n"
         )
 
         print('[mxpdbgen] Generating table: users.')
@@ -214,7 +216,7 @@ class RPCRoleGenerator:
                 "\trole_id INTEGER,\n"
                 "\tcreated_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n"
                 "\tFOREIGN KEY (role_id) REFERENCES roles(id)\n"
-            ");\n\n"
+            ");\n"
         )
 
         print('[mxpdbgen] Generating table inserts.')
@@ -254,6 +256,9 @@ class RPCRoleGenerator:
 
         self._write_file(filename)
 
+    def get_permissions(self) -> List[RPCMethodPermission]:
+        return self.permissions
+
     def get_roles(self) -> List[RPCMethodRole]:
         return self.roles
 
@@ -266,9 +271,9 @@ class RPCFileParser:
         self.rpc_methods = {}
 
         if role_gen:
-            self.rpc_roles = role_gen.get_roles()
+            self.rpc_permissions = role_gen.get_permissions()
         else:
-            self.rpc_roles = []
+            self.rpc_permissions = []
 
     def parse(self) -> Dict[str, List[RPCMethodDetails]]:
         total_calls = 0
@@ -397,13 +402,14 @@ class RPCFileParser:
 
     def _parse_permissions(self, permissions: str) -> List[RPCMethodPermission]:
         perm_parsed = []
+        permission_names = [p.name for p in self.rpc_permissions]
         if permissions:
             for perm in permissions.split(','):
-                role = perm.strip().replace('"', '')
-                perm_parsed.append(RPCMethodPermission(role))
-                if role not in self.rpc_roles:
-                    raise Exception('[mxrpcgen] Error, rpc role '
-                                    f'"{role}" is invalid.')
+                pfmt = perm.strip().replace('"', '')
+                perm_parsed.append(RPCMethodPermission(pfmt))
+                if pfmt not in permission_names:
+                    raise Exception('[mxrpcgen] Error, rpc permission '
+                                    f'"{pfmt}" is invalid.')
         return perm_parsed
 
     def _parse_arguments(self, arguments: str) -> List[RPCMethodArg]:
@@ -434,6 +440,9 @@ class RPCGenerator:
     def _write_indented(self, indent: int, value: str) -> None:
         self.buffer.write('\t'*indent)
         self.buffer.write(value)
+
+    def _reset_buffer(self) -> None:
+        self.buffer = io.StringIO()
 
     def _generate_method_id_name(self, fullname: str) -> str:
         return 'RPC_CALL_' + fullname.replace('::', '_').upper()
@@ -667,7 +676,7 @@ class RPCGenerator:
         self._write_indented(1, '}\n')
         self.buffer.write('}\n')
 
-    def _generate_message(self):
+    def _generate_message(self) -> None:
         self._write_indented(0, '// ####################\n')
         self._write_indented(0, '// #  File generated  #\n')
         self._write_indented(0, '// #  by mxrpcgen.py  #\n')
@@ -675,17 +684,102 @@ class RPCGenerator:
         self._write_indented(0, '// ####################\n')
         self._write_newline()
 
+    def _generate_perm_definitions(self, permissions: List[RPCMethodPermission]) -> Dict[str, int]:
+        output = {}
+        for i, perm in enumerate(permissions):
+            output[perm.name] = i
+            self._write_indented(0, f'#define {perm.name.upper()} {i}\n')
+        self._write_newline()
+        return output
+
+    def _calculate_permission(self, permap: Dict[str, int], permissions: List[RPCMethodPermission]):
+        # Calculate PdbPermissions
+        lo = 0
+        hi = 0
+        for p in permissions:
+            i = permap[p.name]
+            if i < 64:
+                # Set to lo
+                lo |= 1 << i
+            else:
+                # Set to hi
+                hi |= 1 << (i - 64)
+        return hi, lo
+
+    def _generate_perm_lookup(self,
+                              roles: List[RPCMethodRole],
+                              permap: Dict[str, int],
+                              idt: List[Tuple[RPCMethodDetails, int, int]]) -> None:
+        self._write_indented(0, 'inline static const std::unordered_map<std::string, mulex::PdbPermissions> _role_lookup = {\n')
+
+        lines = []
+        for role in roles:
+            hi, lo = self._calculate_permission(permap, role.permissions)
+            constructor = f'mulex::PdbPermissions({hi}, {lo})'
+            lines.append(f'\t{{ "{role.name}",  {constructor} }}')
+
+        self._write_indented(0, ',\n'.join(lines))
+        self._write_indented(0, '\n};\n')
+        self._write_newline()
+
+        self._write_indented(0, 'inline mulex::PdbPermissions PdbGetUserPermissions(const std::string& username)\n')
+        self._write_indented(0, '{\n')
+        self._write_indented(1, 'auto user = _role_lookup.find(username);\n')
+        self._write_indented(1, 'if(user != _role_lookup.end())\n')
+        self._write_indented(1, '{\n')
+        self._write_indented(2, 'return user->second;\n')
+        self._write_indented(1, '}\n')
+        self._write_indented(1, 'return mulex::PdbPermissions(0, 0);\n')
+        self._write_indented(0, '}\n')
+        self._write_newline()
+        
+        self._write_indented(0, 'inline bool PdbCheckMethodPermissions(std::uint16_t pid, const mulex::PdbPermissions& perm)\n')
+        self._write_indented(0, '{\n')
+        self._write_indented(1, 'if(perm.test(1)) return true; // SUPER always has permissions\n\n')
+        self._write_indented(1, 'switch(pid)')
+        self._write_indented(1, '{\n')
+
+        for method, mid, _ in idt:
+            hi, lo = self._calculate_permission(permap, method.perms)
+            if hi == 0 and lo == 0:
+                # No permissions return true
+                self._write_indented(2, f'case {mid}: return true;\n')
+            else:
+                self._write_indented(2, f'case {mid}: return perm.test({hi}, {lo});\n')
+        self._write_indented(1, '}\n')
+        self._write_indented(0, '}\n')
+
+    def _generate_perm_includes(self) -> None:
+        self.buffer.write('#include <cstdint>\n')
+        self.buffer.write('#include <vector>\n')
+        self.buffer.write('#include "${CMAKE_SOURCE_DIR}/mxrdb.h"\n')
+        self.buffer.write('#ifdef TRACY_ENABLE\n')
+        self.buffer.write('#include <tracy/Tracy.hpp>\n')
+        self.buffer.write('#else\n')
+        self.buffer.write('#define ZoneScoped\n')
+        self.buffer.write('#endif\n')
+        self._write_newline()
+
     def _write_file(self, filename: str) -> None:
         with open(filename, 'w') as f:
             f.write(self.buffer.getvalue())
 
-    def generate_rpc_header(self, filename: str):
+    def generate_rpc_header(self, filename: str) -> None:
+        self._reset_buffer()
         self._generate_message()
         self._generate_includes()
-        ids = self._generate_ids()
-        self._generate_name_lookup(ids)
-        self._generate_name_list(ids)
-        self._generate_call_lookup(ids)
+        self.ids = self._generate_ids()
+        self._generate_name_lookup(self.ids)
+        self._generate_name_list(self.ids)
+        self._generate_call_lookup(self.ids)
+        self._write_file(filename)
+
+    def generate_perm_header(self, filename: str, role_generator: RPCRoleGenerator) -> None:
+        self._reset_buffer()
+        self._generate_message()
+        self._generate_perm_includes()
+        permap = self._generate_perm_definitions(role_generator.get_permissions())
+        self._generate_perm_lookup(role_generator.get_roles(), permap, self.ids)
         self._write_file(filename)
 
 def get_files(args: argparse.Namespace) -> List[str]:
@@ -740,6 +834,11 @@ if __name__ == '__main__':
                            help='Specifies the json input file to '
                            'generate the SQL database from.'
                            )
+    arg_parser.add_argument('--permissions-check-output', required=False,
+                           help='Specifies the output file to '
+                           'generate the C++ permission check '
+                           'header to.'
+                           )
 
     args = arg_parser.parse_args()
     files_to_parse = get_files(args)
@@ -757,3 +856,6 @@ if __name__ == '__main__':
     rpc_methods = file_parser.parse()
     generator = RPCGenerator(rpc_methods)
     generator.generate_rpc_header(args.output_file)
+
+    if args.permissions_check_output and role_generator:
+        generator.generate_perm_header(args.permissions_check_output, role_generator)
