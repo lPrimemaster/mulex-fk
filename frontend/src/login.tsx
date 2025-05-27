@@ -1,7 +1,8 @@
 /* @refresh reload */
 import { render } from 'solid-js/web';
 import './index.css';
-import { Component, createSignal, onMount } from 'solid-js';
+import { Component, createSignal, onMount, Show } from 'solid-js';
+import { MetaProvider, Title } from '@solidjs/meta';
 
 const root = document.getElementById('root');
 
@@ -11,10 +12,21 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 	);
 }
 
+const WarnBanner : Component<{ show: boolean, message: string }> = (props) => {
+	return (
+		<Show when={props.show}>
+			<div class="fixed top-0 left-0 right-0 bg-red-300 text-red-900 text-sm font-semibold text-center p-3 z-50 shadow">
+				{props.message}
+			</div>
+		</Show>
+	);
+};
+
 const App : Component = () => {
 	const [username, setUsername] = createSignal<string>("");
 	const [password, setPassword] = createSignal<string>("");
 	const [expname, setExpname]   = createSignal<string>("");
+	const [showWarn, setShowWarn] = createSignal<boolean>(false);
 
 	onMount(async () => {
 		const prpc = await fetch('/api/public_rpc', {
@@ -24,6 +36,8 @@ const App : Component = () => {
 		});
 		const ret = await prpc.json();
 		setExpname(ret['return']);
+
+		setShowWarn(window.location.protocol != 'https:');
 	});
 
 	async function loginRequest(e: Event) {
@@ -62,6 +76,16 @@ const App : Component = () => {
 
 	return (
 		<div class="min-h-screen flex items-center justify-center bg-gray-100">
+			<MetaProvider>
+				<Title>Login • {expname()}</Title>
+			</MetaProvider>
+			<WarnBanner
+				show={showWarn()}
+				message={
+					"HTTPS is disabled. User authentication and data are not TLS protected. Use with care! " +
+					"You should not use this unless behind a VPN/Firewall! Refer to the docs on how to setup a reverse proxy."
+				}
+			/>
 			<div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
 				<div class="flex justify-center mb-6">
 					<img src="/logo.png" class="w-full h-auto"/>
@@ -72,6 +96,7 @@ const App : Component = () => {
 						<label class="block text-gray-700 text-sm font-medium mb-1">Username</label>
 						<input
 							type="text"
+							autocomplete="username"
 							value={username()}
 							onInput={(e) => setUsername(e.currentTarget.value)}
 							class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -82,6 +107,7 @@ const App : Component = () => {
 						<label class="block text-gray-700 text-sm font-medium mb-1">Password</label>
 						<input
 							type="password"
+							autocomplete="current-password"
 							value={password()}
 							onInput={(e) => setPassword(e.currentTarget.value)}
 							class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
