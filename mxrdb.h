@@ -164,6 +164,8 @@ namespace mulex
 	std::string PdbGenerateSQLQuerySelect(const std::string& table, const std::initializer_list<std::string>& names);
 
 	bool PdbTableExists(const std::string& table);
+	void PdbSetupUserDatabase();
+	bool PdbExecuteQueryUnrestricted(const std::string& query); // For very large local queries
 
 	MX_RPC_METHOD bool PdbExecuteQuery(mulex::PdbQuery query);
 	MX_RPC_METHOD bool PdbWriteTable(mulex::PdbString table, mulex::RPCGenericType types, mulex::RPCGenericType data);

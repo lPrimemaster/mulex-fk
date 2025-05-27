@@ -12,6 +12,7 @@ import os
 import argparse
 import io
 import sys
+import json
 
 
 class RPCMethodType:
@@ -36,6 +37,16 @@ class RPCMethodArg:
         self.name = name
         self.typename = typename
 
+class RPCMethodPermission:
+    def __init__(self, name: str, description: str = ''):
+        self.name = name
+        self.description = description
+
+class RPCMethodRole:
+    def __init__(self, name: str, description: str, permissions: List[RPCMethodPermission]):
+        self.name = name
+        self.description = description
+        self.permissions = permissions
 
 # BUG: This does not support arguments that use
 #      `using namespace x;` on their scope
@@ -46,11 +57,13 @@ class RPCMethodDetails:
                  name: str,
                  fullname: str,
                  rettype: RPCMethodType,
-                 args: List[RPCMethodArg]):
+                 args: List[RPCMethodArg],
+                 perms: List[RPCMethodPermission]):
         self.name = name
         self.fullname = fullname
         self.rettype = rettype
         self.args = args
+        self.perms = perms
 
     def __str__(self):
         print_lines = [
@@ -68,15 +81,194 @@ class RPCMethodDetails:
             print_lines.append(f'\t     Typename: {arg.typename.typename}\n')
         if not self.args:
             print_lines.append('\tNone')
+
+        print_lines.append('Permissions:')
+        for perm in self.perms:
+            print_lines.append(f'\t{perm}')
+        if not self.perms:
+            print_lines.append('\tNone')
+
         return '\n'.join(print_lines)
 
+class RPCRoleGenerator:
+    def __init__(self, config_file: str):
+        self._parse_file(config_file)
+        self.buffer = io.StringIO()
+
+    def _parse_file(self, file: str) -> None:
+        with open(file, 'r') as f:
+            data = json.load(f)
+
+            self.roles = []
+            for role in data['roles']:
+                self.roles.append(RPCMethodRole(
+                    role['name'],
+                    role['description'],
+                    role['permissions']
+                ))
+
+            self.permissions = []
+            for role in data['permissions']:
+                self.permissions.append(RPCMethodPermission(
+                    role['name'],
+                    role['description']
+                ))
+
+    def _write_indented(self, indent: int, value: str) -> None:
+        self.buffer.write('\t'*indent)
+        self.buffer.write(value)
+
+    def _write_file(self, filename: str) -> None:
+        with open(filename, 'w') as f:
+            f.write(self.buffer.getvalue())
+
+    def _generate_table_insert(self,
+                               name: str,
+                               descriptors: List[str],
+                               values: List[List[str]]):
+
+        if not values:
+            raise Exception('[mxrpcgen] Invalid table generation.')
+
+        self._write_indented(
+            0,
+            f"INSERT INTO {name} ({', '.join(descriptors)}) VALUES\n"
+        )
+
+        for v in values[:-1]:
+            self._write_indented(1, f"({', '.join(v)}),\n")
+
+        self._write_indented(1, f"({', '.join(values[-1])});\n\n")
+
+    def _stringify(self, value: str) -> str:
+        return f'"{value}"'
+
+    def _get_cross_idx(self, value: str):
+        return next(
+            (
+                i for i, d in enumerate(self.permissions) 
+                if d.name == value
+            ), 
+            -1
+        )
+
+    def _flatten_rjl(self, rjl: List) -> List[List[str]]:
+        return sum([i for i in [j for j in [k for k in rjl]]], [])
+
+    def _get_permission_role_join_list(self) -> List[List[str]]:
+        rjl = [
+            [
+                [
+                    f'{p[0] + 1}',
+                    f'{self._get_cross_idx(pv) + 1}'
+                ]
+                for pv in p[1]
+            ]
+            for p in [(i, r.permissions) for i, r in enumerate(self.roles)]
+        ]
+        return self._flatten_rjl(rjl)
+
+    def generate_sql(self, filename: str) -> None:
+        print('[mxpdbgen] Generating SQL init script.')
+
+        print('[mxpdbgen] Generating table: roles.')
+        self._write_indented(
+            0,
+            "CREATE TABLE IF NOT EXISTS roles (\n"
+                "\tid INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+                "\tname TEXT UNIQUE NOT NULL,\n"
+                "\tdescription TEXT\n"
+            ");\n\n"
+        )
+
+        print('[mxpdbgen] Generating table: permissions.')
+        self._write_indented(
+            0,
+            "CREATE TABLE IF NOT EXISTS permissions (\n"
+                "\tid INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+                "\tname TEXT UNIQUE NOT NULL,\n"
+                "\tdescription TEXT\n"
+            ");\n\n"
+        )
+
+        print('[mxpdbgen] Generating table: rolepermissions.')
+        self._write_indented(
+            0,
+            "CREATE TABLE IF NOT EXISTS rolepermissions (\n"
+                "\trole_id INTEGER,\n"
+                "\tpermission_id INTEGER,\n"
+                "\tPRIMARY KEY (role_id, permission_id),\n"
+                "\tFOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,\n"
+                "\tFOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE\n"
+            ");\n\n"
+        )
+
+        print('[mxpdbgen] Generating table: users.')
+        self._write_indented(
+            0,
+            "CREATE TABLE IF NOT EXISTS users (\n"
+                "\tid INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+                "\tusername TEXT UNIQUE NOT NULL,\n"
+                "\tsalt TEXT NOT NULL,\n"
+                "\tpasshash TEXT NOT NULL,\n"
+                "\trole_id INTEGER,\n"
+                "\tcreated_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n"
+                "\tFOREIGN KEY (role_id) REFERENCES roles(id)\n"
+            ");\n\n"
+        )
+
+        print('[mxpdbgen] Generating table inserts.')
+        try:
+            self._generate_table_insert(
+                'permissions',
+                ['name', 'description'],
+                [
+                    [
+                        self._stringify(p.name),
+                        self._stringify(p.description)
+                    ]
+                    for p in self.permissions
+                ]
+            )
+
+            self._generate_table_insert(
+                'roles',
+                ['name', 'description'],
+                [
+                    [
+                        self._stringify(r.name),
+                        self._stringify(r.description)
+                    ]
+                    for r in self.roles
+                ]
+            )
+
+            self._generate_table_insert(
+                'rolepermissions',
+                ['role_id', 'permission_id'],
+                self._get_permission_role_join_list()
+            )
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
+        self._write_file(filename)
+
+    def get_roles(self) -> List[RPCMethodRole]:
+        return self.roles
 
 class RPCFileParser:
-    def __init__(self, filenames: List[str]):
+    def __init__(self, filenames: List[str], role_gen: RPCRoleGenerator | None = None):
         # Define all the variables to parse the file
         self.rpc_call_keyword = '${RPC_CALL_KEYWORD}'
+        self.rpc_perm_keyword = '${RPC_PERM_KEYWORD}'
         self.filenames = filenames
         self.rpc_methods = {}
+
+        if role_gen:
+            self.rpc_roles = role_gen.get_roles()
+        else:
+            self.rpc_roles = []
 
     def parse(self) -> Dict[str, List[RPCMethodDetails]]:
         total_calls = 0
@@ -147,21 +339,28 @@ class RPCFileParser:
 
     def _find_rpc_declaration(self, line: str, scope: str) -> RPCMethodDetails:
         declaration = re.findall(
-            fr'^[ \t]*{self.rpc_call_keyword} +(.+) +(.+)\((.*)\)',
+            fr'^[ \t]*{self.rpc_call_keyword} +(?:{self.rpc_perm_keyword}\((.*)\) +)?(.+) +(.+)\((.*)\)',
             line
         )
 
         try:
-            return_type = self._parse_return_type(declaration[0][0])
+            permissions = self._parse_permissions(declaration[0][0])
         except Exception as e:
             print(e)
             print(f'[mxrpcgen]\tat: {line.strip()}')
             sys.exit(1)
 
-        method_name = declaration[0][1].strip()
+        try:
+            return_type = self._parse_return_type(declaration[0][1])
+        except Exception as e:
+            print(e)
+            print(f'[mxrpcgen]\tat: {line.strip()}')
+            sys.exit(1)
+
+        method_name = declaration[0][2].strip()
 
         try:
-            arguments = self._parse_arguments(declaration[0][2])
+            arguments = self._parse_arguments(declaration[0][3])
         except Exception as e:
             print(e)
             print(f'[mxrpcgen]\tat: {line.strip()}')
@@ -172,14 +371,16 @@ class RPCFileParser:
                 method_name,
                 f'{scope}::{method_name}',
                 return_type,
-                arguments
+                arguments,
+                permissions
             )
 
         return RPCMethodDetails(
             method_name,
             method_name,
             return_type,
-            arguments
+            arguments,
+            permissions
         )
 
     def _parse_return_type(self, return_type: str) -> RPCMethodType:
@@ -193,6 +394,17 @@ class RPCFileParser:
             raise Exception('[mxrpcgen] Error, return types '
                             'can not be references.')
         return rtype
+
+    def _parse_permissions(self, permissions: str) -> List[RPCMethodPermission]:
+        perm_parsed = []
+        if permissions:
+            for perm in permissions.split(','):
+                role = perm.strip().replace('"', '')
+                perm_parsed.append(RPCMethodPermission(role))
+                if role not in self.rpc_roles:
+                    raise Exception('[mxrpcgen] Error, rpc role '
+                                    f'"{role}" is invalid.')
+        return perm_parsed
 
     def _parse_arguments(self, arguments: str) -> List[RPCMethodArg]:
         args_parsed = []
@@ -476,7 +688,6 @@ class RPCGenerator:
         self._generate_call_lookup(ids)
         self._write_file(filename)
 
-
 def get_files(args: argparse.Namespace) -> List[str]:
     files_to_parse = []
     for dir in args.dirs:
@@ -520,7 +731,15 @@ if __name__ == '__main__':
                             'ignore. Similar to .gitignore.')
 
     arg_parser.add_argument('--output-file', required=True,
-                            help='Specifiese the output filename.')
+                            help='Specifies the output filename.')
+
+    arg_parser.add_argument('--sql-output', required=False,
+                           help='Specifies the sql output file to '
+                           'populate the user database.')
+    arg_parser.add_argument('--permissions-input', required=False,
+                           help='Specifies the json input file to '
+                           'generate the SQL database from.'
+                           )
 
     args = arg_parser.parse_args()
     files_to_parse = get_files(args)
@@ -528,7 +747,13 @@ if __name__ == '__main__':
     for pfile in files_to_parse:
         print(f'[mxrpcgen] \t{pfile}')
 
-    file_parser = RPCFileParser(files_to_parse)
+    if args.permissions_input and args.sql_output:
+        role_generator = RPCRoleGenerator(args.permissions_input)
+        role_generator.generate_sql(args.sql_output)
+    else:
+        role_generator = None
+
+    file_parser = RPCFileParser(files_to_parse, role_generator)
     rpc_methods = file_parser.parse()
     generator = RPCGenerator(rpc_methods)
     generator.generate_rpc_header(args.output_file)

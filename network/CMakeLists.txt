@@ -12,6 +12,8 @@ execute_process(
 		--ignore ${CMAKE_BINARY_DIR} test .cache .git build build_win # Specify build and build_win commonly used to dev
 		--recursive
 		--output-file ${RPC_SPEC_FILE}
+		--sql-output ${USER_DB_SETUP}
+		--permissions-input ${CMAKE_CURRENT_SOURCE_DIR}/roles.json
 	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 	RESULT_VARIABLE mxrpcret
 )

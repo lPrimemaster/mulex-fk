@@ -1284,21 +1284,16 @@ namespace mulex
 	{
 		if(!PdbTableExists("users"))
 		{
+			// User table does not exist so probably the entire database does not either
 			LogDebug("[mxhttp] Creating users database...");
-			const std::string query = 
-			"CREATE TABLE IF NOT EXISTS users ("
-				"id INTEGER PRIMARY KEY AUTOINCREMENT,"
-				"username TEXT UNIQUE NOT NULL,"
-				"salt TEXT NOT NULL,"
-				"passhash TEXT NOT NULL"
-			");";
-			PdbExecuteQuery(query);
+			PdbSetupUserDatabase();
 
 			const static std::vector<PdbValueType> types = {
 				PdbValueType::NIL,
 				PdbValueType::STRING,
 				PdbValueType::STRING,
-				PdbValueType::STRING
+				PdbValueType::STRING,
+				PdbValueType::INT32
 			};
 
 			std::string random_salt = HttpGenerateSecureRandom256Hex();
@@ -1308,9 +1303,10 @@ namespace mulex
 			std::vector<std::uint8_t> data = SysPackArguments(
 				PdbString("admin"),
 				PdbString(random_salt),
-				PdbString(hash)
+				PdbString(hash),
+				std::int32_t(1) // sysadmin role
 			);
-			PdbWriteTable("INSERT INTO users (id, username, salt, passhash) VALUES (?, ?, ?, ?);", types, data);
+			PdbWriteTable("INSERT INTO users (id, username, salt, passhash, role_id) VALUES (?, ?, ?, ?, ?);", types, data);
 
 			LogMessage("==============================================");
 			LogMessage("==============================================");

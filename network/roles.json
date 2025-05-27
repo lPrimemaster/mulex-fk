@@ -1,0 +1,22 @@
+{
+	"roles": [
+		{
+			"name": "sysadmin",
+			"description": "Full control of the system.",
+			"permissions": [ "super" ]
+		}
+	],
+
+	"permissions": [
+		{ "name": "super", "description": "Allows full control of the entire system." },
+
+		{ "name": "create_user", "description": "Allows user to create new users." },
+		{ "name": "modify_user", "description": "Allows user to modify users." },
+		{ "name": "delete_user", "description": "Allows user to delete users." },
+
+		{ "name": "read_entry", "description": "User can read an entry on the logbook." },
+		{ "name": "write_entry", "description": "User can write an entry on the logbook." },
+		{ "name": "modify_entry", "description": "User can modify an entry on the logbook." },
+		{ "name": "delete_entry", "description": "User can delete an entry on the logbook." }
+	]
+}

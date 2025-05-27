@@ -101,8 +101,11 @@ FetchContent_MakeAvailable(tracy)
 
 # RPC related configuration
 set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
+set(RPC_PERM_KEYWORD "MX_PERMISSION")
 add_definitions(-D${RPC_CALL_KEYWORD}=)
+add_definitions(-include ${CMAKE_SOURCE_DIR}/network/rpc_macros.h)
 set(RPC_SPEC_FILE rpcspec.inl)
+set(USER_DB_SETUP user_database.sql)
 
 # Set global warnings all
 add_compile_options(
