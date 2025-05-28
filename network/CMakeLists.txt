@@ -98,6 +98,9 @@ add_library(MxHttp
 	mxhttp.cpp
 )
 
+# Create a dev user on debug builds
+target_compile_definitions(MxHttp PRIVATE $<$<CONFIG:Debug>:CREATE_DEV_USER>)
+
 find_package(ZLIB REQUIRED)
 
 if(WIN32)

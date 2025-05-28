@@ -90,6 +90,11 @@ const Sidebar: Component = () => {
 								<A href='/history'>History</A>
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
+						<NavigationMenuItem>
+							<NavigationMenuTrigger>
+								<A href='/dashboard'>Dashboard</A>
+							</NavigationMenuTrigger>
+						</NavigationMenuItem>
 						<Show when={devTools()}>
 							<NavigationMenuItem>
 								<NavigationMenuTrigger>

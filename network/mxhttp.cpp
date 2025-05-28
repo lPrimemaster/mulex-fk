@@ -1307,6 +1307,7 @@ namespace mulex
 				PdbValueType::INT32
 			};
 
+#ifndef CREATE_DEV_USER
 			std::string random_salt = HttpGenerateSecureRandom256Hex();
 			std::string random_pass = HttpGenerateRandomPassword();
 			std::string hash = HttpSha256Hex(random_salt + random_pass);
@@ -1328,6 +1329,27 @@ namespace mulex
 			LogWarning("[mxhttp] They are required for first access.");
 			LogMessage("==============================================");
 			LogMessage("==============================================");
+#else
+			std::string random_salt = HttpGenerateSecureRandom256Hex();
+			std::string hash = HttpSha256Hex(random_salt + "dev");
+
+			std::vector<std::uint8_t> data = SysPackArguments(
+				PdbString("dev"),
+				PdbString(random_salt),
+				PdbString(hash),
+				std::int32_t(1) // sysadmin role
+			);
+
+			PdbWriteTable("INSERT INTO users (id, username, salt, passhash, role_id) VALUES (?, ?, ?, ?, ?);", types, data);
+			LogMessage("==============================================");
+			LogMessage("==============================================");
+			LogMessage("[mxhttp] Default dev created.");
+			LogMessage("[mxhttp] username: dev");
+			LogMessage("[mxhttp] password: dev");
+			LogWarning("[mxhttp] Credentials for development only.");
+			LogMessage("==============================================");
+			LogMessage("==============================================");
+#endif
 		}
 	}
 
