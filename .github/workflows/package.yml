@@ -65,6 +65,7 @@ jobs:
       - name: Install vcpkg dependencies
         run: |
           C:\\vcpkg\\vcpkg install libuv zlib openssl --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic
+          C:\\vcpkg\\vcpkg install openssl --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic --x-install-root=./vcpkg_installed --clean-after-build
           C:\\vcpkg\\vcpkg integrate install
 
       - name: Configure
