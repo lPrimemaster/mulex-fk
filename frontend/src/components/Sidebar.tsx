@@ -10,10 +10,10 @@ import {
   NavigationMenuTrigger
 } from '~/components/ui/navigation-menu';
 
-import metadata from '../lib/metadata';
 import { DynamicRouterContext, MxDynamicRouterContext } from './DynamicRouter';
 import { DebugPanel } from '~/Debug';
 import { MxSpinner } from '~/api';
+import { gExpname } from '~/lib/globalstate';
 
 const [devTools, setDevTools] = createSignal(false);
 
@@ -46,11 +46,11 @@ const Sidebar: Component = () => {
 		<div class="top-0 m-0 border-r-2 hover:shadow-2xl shadow-lg border-solid border-black-200 min-h-full min-w-36 max-w-36" style="width:10%;position:fixed!important;z-index:1;overflow:auto;">
 			<div class="flex flex-col items-center p-5">
 				<span>
-					<Show when={!metadata.expname.loading} fallback={<h1><b>mxfk</b></h1>}>
-						<h1><b>{metadata.expname()}</b></h1>
+					<Show when={gExpname() != ''} fallback={<h1><b>mxfk</b></h1>}>
+						<h1><b>{gExpname()}</b></h1>
 					</Show>
 				</span>
-				<Show when={metadata.expname.loading}>
+				<Show when={gExpname() == ''}>
 					<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
 						<div class="bg-white rounded-md shadow-lg w-[90%] max-w-md p-5 flex flex-col items-center justify-center">
 							<p class="font-bold mb-2">Loading Experiment</p>

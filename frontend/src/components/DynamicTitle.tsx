@@ -1,9 +1,9 @@
 import { Title } from "@solidjs/meta";
 import { Component } from "solid-js"
-import metadata from "~/lib/metadata";
+import { gExpname } from "~/lib/globalstate";
 
 export const DynamicTitle : Component<{ title: string }> = (props) => {
 	return (
-		<Title>{props.title} • {metadata.expname()}</Title>
+		<Title>{props.title} • {gExpname()}</Title>
 	);
 };

@@ -34,6 +34,9 @@
 #include <tracy/Tracy.hpp>
 #include <mxconfig.h>
 
+#include <openssl/sha.h>
+#include <openssl/rand.h>
+
 static mulex::Experiment _sys_experiment;
 static bool _sys_experiment_connected = false;
 static std::string _mxcachedir;
@@ -1224,6 +1227,34 @@ namespace mulex
 		std::ifstream src(source, std::ios::binary);
 		std::ofstream dst(destination, std::ios::binary);
 		dst << src.rdbuf();
+	}
+
+	std::string SysSHA256Hex(const std::vector<std::uint8_t>& data)
+	{
+		std::uint8_t hash[SHA256_DIGEST_LENGTH];
+		SHA256(reinterpret_cast<const std::uint8_t*>(data.data()), data.size(), hash);
+		return SysBufferToHex(hash, SHA256_DIGEST_LENGTH);
+	}
+
+	std::string SysBufferToHex(const std::uint8_t* buffer, std::uint64_t size)
+	{
+		std::ostringstream ss;
+		for(std::uint64_t i = 0; i < size; i++)
+		{
+	  		ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buffer[i]);
+		}
+		return ss.str();
+	}
+
+	std::string SysGenerateSecureRandom256Hex()
+	{
+		std::uint8_t buffer[32];
+		if(RAND_bytes(buffer, 32) != 1)
+		{
+			LogError("SysGenerateSecureRandom256Hex: Failed to generate random string.");
+			return "";
+		}
+		return SysBufferToHex(buffer, 32);
 	}
 
 	bool EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len)

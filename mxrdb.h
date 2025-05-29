@@ -166,11 +166,18 @@ namespace mulex
 	bool PdbTableExists(const std::string& table);
 	void PdbSetupUserDatabase();
 	std::string PdbGetUserRole(const std::string& username);
+	std::int32_t PdbGetUserRoleId(const std::string& username);
+	std::int32_t PdbGetRoleId(const std::string& role);
 	bool PdbExecuteQueryUnrestricted(const std::string& query); // For very large local queries
 
 	MX_RPC_METHOD bool PdbExecuteQuery(mulex::PdbQuery query);
 	MX_RPC_METHOD bool PdbWriteTable(mulex::PdbString table, mulex::RPCGenericType types, mulex::RPCGenericType data);
 	MX_RPC_METHOD mulex::RPCGenericType PdbReadTable(mulex::PdbQuery query, mulex::RPCGenericType types);
+
+	// RPCs for user database
+	MX_RPC_METHOD MX_PERMISSION("create_user") bool PdbUserCreate(mulex::PdbString username, mulex::PdbString password, mulex::PdbString role);
+	MX_RPC_METHOD MX_PERMISSION("delete_user") bool PdbUserDelete(mulex::PdbString username);
+	MX_RPC_METHOD 							   bool PdbUserChangePassword(mulex::PdbString oldpass, mulex::PdbString newpass);
 
 	// NOTE: (Cesar) Limited to 128 permissions
 	//				 Enlarge if required

@@ -301,6 +301,10 @@ namespace mulex
 	void SysWriteBinFile(const std::string& file, const std::vector<std::uint8_t>& data);
 	void SysCopyFile(const std::string& source, const std::string& destination);
 
+	std::string SysSHA256Hex(const std::vector<std::uint8_t>& data);
+	std::string SysBufferToHex(const std::uint8_t* buffer, std::uint64_t size);
+	std::string SysGenerateSecureRandom256Hex();
+
 	std::uint64_t SysStringHash64(const std::string& key);
 	bool SysMatchPattern(const std::string& pattern, const std::string& target);
 

@@ -130,7 +130,7 @@ const Home: Component = () => {
 									MxWebsocket.instance.rpc_call('mulex::RunStart').then((res: MxGenericType) => {
 										const run_ok = res.astype('bool');
 										if(run_ok) {
-											// TODO: (Cesar)
+											// Nothing todo for now
 										}
 									});
 								}}

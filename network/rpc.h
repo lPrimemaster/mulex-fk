@@ -4,6 +4,7 @@
 #include <atomic>
 #include <mutex>
 #include <map>
+#include <optional>
 
 #include "socket.h"
 #include "../mxtypes.h"
@@ -185,11 +186,15 @@ namespace mulex
 
 	std::uint64_t GetNextMessageId();
 	std::uint64_t GetCurrentCallerId();
+	std::string GetCurrentCallerUser();
+	
+	void RpcAssignUserToClientId(const std::string& username, std::uint64_t cid);
+	void RpcPurgeUserFromCid(std::uint64_t cid);
 
 	class RPCClientThread
 	{
 	public:
-		RPCClientThread(const std::string& hostname, std::uint16_t rpcport = RPC_PORT, std::uint64_t customid = 0x0);
+		RPCClientThread(const std::string& hostname, std::uint16_t rpcport = RPC_PORT, std::uint64_t customid = 0x0, const std::string& username = "");
 		~RPCClientThread();
 
 		template<typename T, typename... Args>
@@ -212,6 +217,7 @@ namespace mulex
 		SysBufferStack _call_return_stack;
 		bool _rpc_has_custom_id = false;
 		std::uint64_t _rpc_custom_id;
+		std::string _rpc_username;
 	};
 
 	class RPCServerThread

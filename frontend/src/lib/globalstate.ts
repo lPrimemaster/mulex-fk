@@ -3,6 +3,7 @@ import { MxGenericType } from "./convert";
 import { MxWebsocket } from "./websocket";
 import { MxRdb } from "./rdb";
 import { extract_backend_name } from "./utils";
+import { createSignal } from "solid-js";
 
 class BackendStatus {
 	name: string;
@@ -32,10 +33,21 @@ interface BackendStatusList {
 
 // Global signals/stores
 const [backends, setBackends] = createStore<BackendStatusList>();
+const [loggedUser, setLoggedUser] = createSignal<string>('');
+const [expname, setExpname] = createSignal<string>('');
 
 export {
-	backends as gBackends,
-	init_global_state
+	// Global state variables
+	// This data is always persistent through the entire frontend
+	// Would be possible to move all this to a solidjs context
+	// and use it on the root file. However I decided to use this
+	// and I remember reasoning about it, but now I don't know why...
+	backends 	as gBackends,
+	loggedUser 	as gLoggedUser,
+	expname 	as gExpname,
+
+	// Global state init funtion
+	init_global_state as initGlobalState
 };
 
 async function create_client_status(clientid: string): Promise<BackendStatus> {
@@ -71,9 +83,22 @@ async function init_client_status() {
 		});
 }
 
-async function init_global_state() {
-	await init_client_status();
+async function fetch_client_name() {
+	// Set current logged username
+	const res = await fetch('/api/auth/username', {
+		method: 'POST'
+	});
 
+	const data = await res.json();
+	setLoggedUser(data.return);
+}
+
+async function fetch_experiment_name() {
+	const name = await MxWebsocket.instance.rpc_call('mulex::SysGetExperimentName');
+	setExpname(name.astype('string'));
+}
+
+async function init_backend_status() {
 	const rdb = new MxRdb();
 
 	// Connection status
@@ -133,4 +158,14 @@ async function init_global_state() {
 			setBackends(cid, () => prev);
 		});
 	});
+}
+
+async function init_global_state() {
+	await init_client_status();
+
+	await fetch_client_name();
+
+	await fetch_experiment_name();
+
+	await init_backend_status();
 }

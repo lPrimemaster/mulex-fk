@@ -20,12 +20,13 @@ static std::atomic<std::uint64_t> _client_msg_id = 0;
 // 				 RPC calls on a local context
 // static std::atomic<std::uint64_t> _client_current_caller = 0;
 static std::map<std::thread::id, std::uint64_t> _client_current_caller;
+static std::map<std::uint64_t, std::string> 	_client_current_user;
+static std::shared_mutex 						_client_current_user_lock;
 
 static std::map<mulex::RpcCallerStatDescriptor, std::uint64_t> _rpc_statistics;
 
 namespace mulex
 {
-
 	RPCGenericType RPCGenericType::FromData(const std::uint8_t* ptr, std::uint64_t size)
 	{
 		ZoneScoped;
@@ -50,10 +51,51 @@ namespace mulex
 
 	std::uint64_t GetCurrentCallerId()
 	{
-		return _client_current_caller.at(std::this_thread::get_id());
+		auto cid = _client_current_caller.find(std::this_thread::get_id());
+		if(cid == _client_current_caller.end())
+		{
+			// 0x00 Is Server
+			return 0x00;
+		}
+
+		return cid->second;
 	}
 
-	RPCClientThread::RPCClientThread(const std::string& hostname, std::uint16_t rpcport, std::uint64_t customid)
+	std::string GetCurrentCallerUser()
+	{
+		std::shared_lock lock(_client_current_user_lock);
+		std::uint64_t cid = GetCurrentCallerId();
+
+		// Local calls cannot have a user
+		if(cid == 0x00)
+		{
+			return "";
+		}
+
+		auto user = _client_current_user.find(cid);
+		if(user != _client_current_user.end())
+		{
+			return user->second;
+		}
+		
+		// This can also get triggered if
+		// we are using the public RPC API
+		return "";
+	}
+
+	void RpcAssignUserToClientId(const std::string& username, std::uint64_t cid)
+	{
+		std::unique_lock lock(_client_current_user_lock);
+		_client_current_user.insert_or_assign(cid, username);
+	}
+
+	void RpcPurgeUserFromCid(std::uint64_t cid)
+	{
+		std::unique_lock lock(_client_current_user_lock);
+		_client_current_user.erase(cid);
+	}
+
+	RPCClientThread::RPCClientThread(const std::string& hostname, std::uint16_t rpcport, std::uint64_t customid, const std::string& username)
 	{
 		ZoneScoped;
 		if(customid > 0)
@@ -61,6 +103,15 @@ namespace mulex
 			_rpc_has_custom_id = true;
 			_rpc_custom_id = customid;
 			LogDebug("[rpcclient] Client spawned with custom id.");
+
+			// NOTE: (Cesar) Sharing the same memory space as the server
+			if(!username.empty())
+			{
+				_rpc_username = username;
+
+				// Custom ids are real users
+				RpcAssignUserToClientId(_rpc_username, _rpc_custom_id);
+			}
 		}
 
 		_rpc_socket = SocketInit();
@@ -74,6 +125,12 @@ namespace mulex
 	RPCClientThread::~RPCClientThread()
 	{
 		ZoneScoped;
+
+		// NOTE: (Cesar) Sharing the same memory space as the server
+		if(_rpc_has_custom_id)
+		{
+			RpcPurgeUserFromCid(_rpc_custom_id);
+		}
 		_rpc_thread_running.store(false);
 		_rpc_stream->requestUnblock();
 		SocketClose(_rpc_socket);

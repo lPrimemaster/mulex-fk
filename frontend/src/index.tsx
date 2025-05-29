@@ -3,7 +3,7 @@ import { render, Show } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { Toaster } from '~/components/ui/toast';
 
-import { init_global_state } from '~/lib/globalstate';
+import { initGlobalState } from '~/lib/globalstate';
 
 import './index.css';
 import Home from './Home';
@@ -16,6 +16,7 @@ import { EventsViewer } from './EventsViewer';
 import { DynamicRouter, DynamicRouterProvider } from './components/DynamicRouter';
 import { MetaProvider, Link } from '@solidjs/meta';
 import { RouterCatcher } from './components/RouterCatcher';
+import { Dashboard } from './Dashboard';
 
 const root = document.getElementById('root');
 
@@ -25,7 +26,11 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 	);
 }
 
-await init_global_state();
+// This happens before any render takes place
+// If it gets too slow, it would be nice to
+// have a visual feedback queue. Maybe changing
+// to a context? Or a wrapper render popup?
+await initGlobalState();
 
 render(() => (
 		<MetaProvider>
@@ -39,6 +44,7 @@ render(() => (
 						<Route path='/history' component={HistoryViewer}/>
 						<Route path='/events' component={EventsViewer}/>
 						<Route path='/backends' component={BackendViewer}/>
+						<Route path='/dashboard' component={Dashboard}/>
 						<DynamicRouter/>
 						<RouterCatcher/>
 					</Router>

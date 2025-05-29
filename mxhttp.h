@@ -19,6 +19,4 @@ namespace mulex
 
 	void HttpInitUsersPdb();
 	std::optional<std::pair<std::string, std::string>> HttpGetUserCredentials(const std::string& username);
-
-	std::string HttpSha256Hex(const std::string& data);
 } // namespace mulex

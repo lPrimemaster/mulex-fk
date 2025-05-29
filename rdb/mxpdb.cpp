@@ -356,13 +356,57 @@ namespace mulex
 	std::string PdbGetUserRole(const std::string& username)
 	{
 		const static std::vector<PdbValueType> types = { PdbValueType::STRING };
-		PdbString data = PdbReadTable(
+		auto data = PdbReadTable(
 			"SELECT r.name AS role "
 			"FROM users u "
 			"JOIN roles r ON u.role_id = r.id "
 			"WHERE u.username = '" + username + "';", types
 		);
-		return data.c_str();
+
+		if(data.getSize() == 0)
+		{
+			LogError("[pdb] No such username %s.", username.c_str());
+			return "";
+		}
+
+		return data.asType<mulex::PdbString>().c_str();
+	}
+
+	std::int32_t PdbGetUserRoleId(const std::string& username)
+	{
+		const static std::vector<PdbValueType> types = { PdbValueType::INT32 };
+		auto data = PdbReadTable(
+			"SELECT r.id AS role "
+			"FROM users u "
+			"JOIN roles r ON u.role_id = r.id "
+			"WHERE u.username = '" + username + "';", types
+		);
+
+		if(data.getSize() == 0)
+		{
+			LogError("[pdb] No such username %s.", username.c_str());
+			return -1;
+		}
+
+		return data.asType<std::int32_t>();
+	}
+
+	std::int32_t PdbGetRoleId(const std::string& role)
+	{
+		const static std::vector<PdbValueType> types = { PdbValueType::INT32 };
+		auto data = PdbReadTable(
+			"SELECT id "
+			"FROM roles "
+			"WHERE name = '" + role + "';", types
+		);
+
+		if(data.getSize() == 0)
+		{
+			LogError("[pdb] No such role %s.", role.c_str());
+			return -1;
+		}
+
+		return data.asType<std::int32_t>();
 	}
 
 	static std::string PdbTypeName(const PdbValueType& type)
@@ -523,5 +567,161 @@ namespace mulex
 	{
 		ZoneScoped;
 		return PdbReadTable(PdbQuery(query), types);
+	}
+
+	static bool PdbCheckCurrentUserRolePermissionHierarchy(const std::string& username, const std::string& role)
+	{
+		std::int32_t current_role = PdbGetUserRoleId(username);
+		std::int32_t requested_role = PdbGetRoleId(role);
+
+		if(current_role < 0)
+		{
+			LogError("[pdb] Failed to fetch role from user %s.", username.c_str());
+			return false;
+		}
+
+		if(requested_role < 0)
+		{
+			LogError("[pdb] Failed to fetch role %s. No such role.", role.c_str());
+			return false;
+		}
+
+		return !(current_role > 1 && requested_role <= current_role);
+	}
+
+	bool PdbUserCreate(mulex::PdbString username, mulex::PdbString password, mulex::PdbString role)
+	{
+		std::string current_user = GetCurrentCallerUser();
+
+		// No user, we are on a backend (not on public API)
+		// Allow to create any user role
+
+		// Check if current_user can create role
+		if(!current_user.empty() && !PdbCheckCurrentUserRolePermissionHierarchy(current_user, role.c_str()))
+		{
+			LogError("[pdb] User <%s> has no permission to create user with role <%s>.", current_user.c_str(), role.c_str());
+			return false;
+		}
+
+		std::int32_t requested_role = PdbGetRoleId(role.c_str());
+
+		const static std::vector<PdbValueType> types = {
+			PdbValueType::NIL,
+			PdbValueType::STRING,
+			PdbValueType::STRING,
+			PdbValueType::STRING,
+			PdbValueType::INT32
+		};
+
+		std::string random_salt = SysGenerateSecureRandom256Hex();
+		std::string cat_pass_salt = random_salt + password.c_str();
+		std::vector<std::uint8_t> buffer(cat_pass_salt.size());
+		std::memcpy(buffer.data(), cat_pass_salt.c_str(), cat_pass_salt.size());
+		std::string hash = SysSHA256Hex(buffer);
+
+		std::vector<std::uint8_t> data = SysPackArguments(
+			username,
+			PdbString(random_salt),
+			PdbString(hash),
+			requested_role
+		);
+
+		if(PdbWriteTable("INSERT INTO users (id, username, salt, passhash, role_id) VALUES (?, ?, ?, ?, ?);", types, data))
+		{
+			LogDebug("[pdb] Created new user <%s> with role <%s>.", username.c_str(), role.c_str());
+			return true;
+		}
+		
+		LogError("[pdb] Failed to create new user <%s>. Maybe username exists?", username.c_str());
+		return false;
+	}
+
+	bool PdbUserDelete(mulex::PdbString username)
+	{
+		std::string current_user = GetCurrentCallerUser();
+		std::string role = PdbGetUserRole(username.c_str());
+		if(role.empty())
+		{
+			LogError("[pdb] Cannot delete user <%s>.", username.c_str());
+			return false;
+		}
+
+		if(!current_user.empty() && !PdbCheckCurrentUserRolePermissionHierarchy(current_user, role.c_str()))
+		{
+			LogError("[pdb] User <%s> has no permission to delete user with role <%s>.", current_user.c_str(), role.c_str());
+			return false;
+		}
+
+		// Username "admin" is reserved and cannot be deleted
+		if(std::string(username.c_str()) == "admin")
+		{
+			LogError("[pdb] Cannot delete restricted user <admin>.");
+			return false;
+		}
+
+		std::string query = std::string("DELETE FROM users WHERE username = '") + username.c_str() + "';";
+		if(PdbExecuteQuery(query))
+		{
+			LogDebug("[pdb] Deleted user <%s>.", username.c_str());
+			return true;
+		}
+
+		LogError("[pdb] Failed to delete user <%s>. Maybe user does not exist?", username.c_str());
+		return false;
+	}
+
+	bool PdbUserChangePassword(mulex::PdbString oldpass, mulex::PdbString newpass)
+	{
+		std::string current_user = GetCurrentCallerUser();
+		if(current_user.empty())
+		{
+			LogError("[pdb] Only a user can change their password.");
+			return false;
+		}
+
+		const static std::vector<PdbValueType> types = {
+			PdbValueType::STRING,
+			PdbValueType::STRING
+		};
+
+		std::string query = "SELECT salt, passhash FROM users WHERE username = '" + current_user + "';";
+		std::vector<std::uint8_t> data = PdbReadTable(query, types);
+		
+		if(data.empty())
+		{
+			LogError("[pdb] Failed to change password. No such user <%s>.", current_user.c_str());
+			return false;
+		}
+
+		PdbString dbsalt = reinterpret_cast<const char*>(data.data());
+		PdbString dbhash = reinterpret_cast<const char*>(data.data() + 512);
+
+		// Calculate hash
+		std::string cat_pass_salt = std::string(dbsalt.c_str()) + oldpass.c_str();
+		std::vector<std::uint8_t> buffer(cat_pass_salt.size());
+		std::memcpy(buffer.data(), cat_pass_salt.c_str(), cat_pass_salt.size());
+		std::string hash = SysSHA256Hex(buffer);
+
+		if(hash != dbhash.c_str())
+		{
+			LogError("[pdb] Failed to change password. Old password incorrect.");
+			return false;
+		}
+
+		// Calculate new password hash
+		cat_pass_salt = std::string(dbsalt.c_str()) + newpass.c_str();
+		buffer.resize(cat_pass_salt.size());
+		std::memcpy(buffer.data(), cat_pass_salt.c_str(), cat_pass_salt.size());
+		hash = SysSHA256Hex(buffer);
+
+		query = "UPDATE users SET passhash = '" + hash + "' WHERE username = '" + current_user + "';";
+		if(!PdbExecuteQueryUnrestricted(query))
+		{
+			LogError("[pdb] Failed to update password for user <%s>.", current_user.c_str());
+			return false;
+		}
+
+		LogDebug("[pdb] Updated password of user <%s>.", current_user.c_str());
+		return true;
 	}
 } // namespace mulex

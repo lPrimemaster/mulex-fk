@@ -722,9 +722,9 @@ class RPCGenerator:
         self._write_indented(0, '\n};\n')
         self._write_newline()
 
-        self._write_indented(0, 'inline mulex::PdbPermissions PdbGetUserPermissions(const std::string& username)\n')
+        self._write_indented(0, 'inline mulex::PdbPermissions PdbGetUserPermissions(const std::string& role)\n')
         self._write_indented(0, '{\n')
-        self._write_indented(1, 'auto user = _role_lookup.find(username);\n')
+        self._write_indented(1, 'auto user = _role_lookup.find(role);\n')
         self._write_indented(1, 'if(user != _role_lookup.end())\n')
         self._write_indented(1, '{\n')
         self._write_indented(2, 'return user->second;\n')
@@ -735,7 +735,7 @@ class RPCGenerator:
         
         self._write_indented(0, 'inline bool PdbCheckMethodPermissions(std::uint16_t pid, const mulex::PdbPermissions& perm)\n')
         self._write_indented(0, '{\n')
-        self._write_indented(1, 'if(perm.test(1)) return true; // SUPER always has permissions\n\n')
+        self._write_indented(1, 'if(perm.test(0)) return true; // SUPER always has permissions\n\n')
         self._write_indented(1, 'switch(pid)')
         self._write_indented(1, '{\n')
 

@@ -60,6 +60,7 @@ namespace mulex
 		Experiment _local_experiment;
 		std::string _ip;
 		mulex::PdbPermissions _user_permissions;
+		std::string _username;
 	};
 
 	static bool HttpStartWatcherThread()
@@ -419,8 +420,11 @@ namespace mulex
 
 				// Found username check for credentials
 				auto [salt, pass_hash] = credentials.value();
+				std::string cat_pass_salt = salt + password;
+				std::vector<std::uint8_t> buffer(cat_pass_salt.size());
+				std::memcpy(buffer.data(), cat_pass_salt.c_str(), cat_pass_salt.size());
 
-				if(!(HttpSha256Hex(salt + password) == pass_hash))
+				if(!(SysSHA256Hex(buffer) == pass_hash))
 				{
 					res->writeStatus("401 Unauthorized")->end("Invalid credentials");
 					return;
@@ -470,6 +474,29 @@ namespace mulex
 
 		res->onAborted([]() {
 			LogError("[mxhttp] Login request aborted.");
+		});
+	}
+
+	template<bool SSL>
+	static void HttpHandleUserData(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
+	{
+		res->onData([res, req](std::string_view, bool last) {
+			if(last)
+			{
+				auto [valid, username] = HttpCheckToken(res, req);
+				if(valid)
+				{
+					res->writeHeader("Content-Type", "application/json")->end("{\"return\":\"" + username + "\"}");
+				}
+				else
+				{
+					res->writeStatus("401 Unauthorized")->end("Invalid credentials");
+				}
+			}
+		});
+
+		res->onAborted([]() {
+			LogError("[mxhttp] Username request aborted.");
 		});
 	}
 
@@ -746,10 +773,13 @@ namespace mulex
 		ZoneScoped;
 		// using TAWSB = uWS::TemplatedApp<SSL>::template WebSocketBehavior<WsRpcBridge>;
 
+		// TODO: (Cesar) Automate this process
 		app.post("/api/login", [](auto* res, auto* req) {
 			HttpHandleLogin(res, req);
-		}).post("/api/public_rpc", [](auto* res, auto* req) {
+		}).post("/api/public", [](auto* res, auto* req) {
 			HttpHandlePublicRPC(res, req);
+		}).post("/api/auth/username", [](auto* res, auto* req) {
+			HttpHandleUserData(res, req);
 		}).get("/*", [](auto* res, auto* req) {
 			auto [valid, _] = HttpCheckToken(res, req);
 			if(valid)
@@ -785,6 +815,7 @@ namespace mulex
 				// Get the user role and therefore permissions
 				std::string user_role = PdbGetUserRole(username);
 				b._user_permissions = PdbGetUserPermissions(user_role);
+				b._username = username;
 
 				// Token is valid -> upgrade the connection
 				res->template upgrade<WsRpcBridge>(
@@ -825,7 +856,12 @@ namespace mulex
 				// 				 This will however be harder to do for events I think
 				// 				 I would say it is not worth the efort / problems if the local network call
 				// 				 does not pose any performance / latency problems in the future
-				bridge->_local_experiment._rpc_client = std::make_unique<RPCClientThread>("localhost", RPC_PORT, custom_id);
+				bridge->_local_experiment._rpc_client = std::make_unique<RPCClientThread>(
+					"localhost",
+					RPC_PORT,
+					custom_id,
+					bridge->_username
+				);
 
 				bridge->_local_experiment._evt_client = std::make_unique<EvtClientThread>(
 					"localhost",
@@ -1111,28 +1147,6 @@ namespace mulex
 		return std::string(reinterpret_cast<char*>(result), len);
 	}
 
-	static std::string HttpBufferToHex(const std::uint8_t* buffer, std::uint64_t size)
-	{
-		std::ostringstream ss;
-		for(std::uint64_t i = 0; i < size; i++)
-		{
-	  		ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buffer[i]);
-		}
-		return ss.str();
-	}
-
-	static std::string HttpGenerateSecureRandom256Hex()
-	{
-		std::uint8_t buffer[32];
-		if(RAND_bytes(buffer, 32) != 1)
-		{
-			LogError("[mxhttp] HttpGenerateSecureRandom256Hex: Failed to generate random string.");
-			return "";
-		}
-		
-		return HttpBufferToHex(buffer, 32);
-	}
-
 	static std::string HttpHandleSecretKey()
 	{
 		// Check if there is a key at the cache
@@ -1158,7 +1172,7 @@ namespace mulex
 		}
 
 		// Generate random key and write it to <jws.key> file
-		std::string secret = HttpGenerateSecureRandom256Hex();
+		std::string secret = SysGenerateSecureRandom256Hex();
 		if(secret.empty())
 		{
 			LogError("[mxhttp] HttpHandleSecretKey: Failed to generate JWS key.");
@@ -1310,7 +1324,10 @@ namespace mulex
 #ifndef CREATE_DEV_USER
 			std::string random_salt = HttpGenerateSecureRandom256Hex();
 			std::string random_pass = HttpGenerateRandomPassword();
-			std::string hash = HttpSha256Hex(random_salt + random_pass);
+			std::string cat_pass_salt = random_salt + random_pass;
+			std::vector<std::uint8_t> buffer(cat_pass_salt.size());
+			std::memcpy(buffer.data(), cat_pass_salt.c_str(), cat_pass_salt.size());
+			std::string hash = SysSHA256Hex(buffer);
 
 			std::vector<std::uint8_t> data = SysPackArguments(
 				PdbString("admin"),
@@ -1330,8 +1347,11 @@ namespace mulex
 			LogMessage("==============================================");
 			LogMessage("==============================================");
 #else
-			std::string random_salt = HttpGenerateSecureRandom256Hex();
-			std::string hash = HttpSha256Hex(random_salt + "dev");
+			std::string random_salt = SysGenerateSecureRandom256Hex();
+			std::string cat_pass_salt = random_salt + "dev";
+			std::vector<std::uint8_t> buffer(cat_pass_salt.size());
+			std::memcpy(buffer.data(), cat_pass_salt.c_str(), cat_pass_salt.size());
+			std::string hash = SysSHA256Hex(buffer);
 
 			std::vector<std::uint8_t> data = SysPackArguments(
 				PdbString("dev"),
@@ -1373,12 +1393,5 @@ namespace mulex
 
 		auto [salt, passhash] = credentials[0];
 		return std::make_pair(salt.c_str(), passhash.c_str());
-	}
-
-	std::string HttpSha256Hex(const std::string& data)
-	{
-		std::uint8_t hash[SHA256_DIGEST_LENGTH];
-		SHA256(reinterpret_cast<const std::uint8_t*>(data.data()), data.size(), hash);
-		return HttpBufferToHex(hash, SHA256_DIGEST_LENGTH);
 	}
 } // namespace mulex

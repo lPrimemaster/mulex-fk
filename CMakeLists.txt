@@ -173,10 +173,12 @@ if(WIN32)
 endif()
 
 # Create system object library
+find_package(OpenSSL REQUIRED)
 add_library(mxsys OBJECT mxsystem.cpp plug/fxfer.cpp)
 target_include_directories(mxsys PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
+target_link_libraries(mxsys PRIVATE OpenSSL::SSL)
 
 # Add mulex functionalities
 add_subdirectory(network)

@@ -22,14 +22,25 @@ const WarnBanner : Component<{ show: boolean, message: string }> = (props) => {
 	);
 };
 
+const VersionFooter : Component = () => {
+	return (
+		<div class="fixed bottom-0 left-0 right-0 bg-transparent text-sm font-semibold text-center p-3 z-50">
+			{__APP_VNAME__} v{__APP_VERSION__}<br/>{__APP_GBRANCH__}-{__APP_GHASH__}
+		</div>
+	);
+};
+
 const App : Component = () => {
 	const [username, setUsername] = createSignal<string>("");
 	const [password, setPassword] = createSignal<string>("");
 	const [expname, setExpname]   = createSignal<string>("");
 	const [showWarn, setShowWarn] = createSignal<boolean>(false);
+	const [failed, setFailed] = createSignal<boolean>(false);
+
+	let ftimeout: undefined | NodeJS.Timeout = undefined;
 
 	onMount(async () => {
-		const prpc = await fetch('/api/public_rpc', {
+		const prpc = await fetch('/api/public', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ info: 'expname' })
@@ -49,29 +60,19 @@ const App : Component = () => {
 			body: JSON.stringify({ username: username(), password: password() })
 		});
 
-		// TODO: (Cesar) Display some info to the user (wrong username or password)
 		if(loginResponse.ok) {
 			// We want a refresh so we can GET the new root
 			window.location.reload();
 		}
 		else {
+			setFailed(true);
+			if(ftimeout) clearTimeout(ftimeout);
+			ftimeout = setTimeout(() => setFailed(false), 5000);
 			console.error(await loginResponse.text());
 		}
 
-		// TODO: (Cesar) Display warning when not using HTTPS
-		// 				 The user should always enable HTTPS!
-		// 				 Not doing so is broken and leaks user data
-		// 				 Due to sending plain text password / usernames
-		// 				 This is not critical if you don't care and
-		// 				 are behind a VPN / proxy and trust other users
-
-		// TODO: (Cesar) Add vname and version number on this page
-
 		// TODO: (Cesar) JWTs are stateless - A deleted user has access
 		// 				 until token expiration date
-
-		// TODO: (Cesar) Allow some calls to be POST requestable on public interface
-		// 				 E.g. get experiment name
 	}
 
 	return (
@@ -91,6 +92,11 @@ const App : Component = () => {
 					<img src="/logo.png" class="w-full h-auto"/>
 				</div>
 				<h2 class="text-2xl font-semibold text-center mb-6">Login to {expname()}</h2>
+				<Show when={failed()}>
+					<div class="flex justify-center mb-6 border border-red-900 bg-red-300 text-red-900 rounded-lg w-full py-2">
+						Invalid Credentials
+					</div>
+				</Show>
 				<form onSubmit={loginRequest} class="space-y-4">
 					<div>
 						<label class="block text-gray-700 text-sm font-medium mb-1">Username</label>
@@ -122,6 +128,7 @@ const App : Component = () => {
 					</button>
 				</form>
 			</div>
+			<VersionFooter/>
 		</div>
 	);
 };
