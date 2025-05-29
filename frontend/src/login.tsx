@@ -15,7 +15,7 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
 const WarnBanner : Component<{ show: boolean, message: string }> = (props) => {
 	return (
 		<Show when={props.show}>
-			<div class="fixed top-0 left-0 right-0 bg-red-300 text-red-900 text-sm font-semibold text-center p-3 z-50 shadow">
+			<div class="fixed top-0 left-0 right-0 bg-red-300 text-red-900 text-sm font-semibold text-center p-3 z-30 shadow">
 				{props.message}
 			</div>
 		</Show>
@@ -24,7 +24,7 @@ const WarnBanner : Component<{ show: boolean, message: string }> = (props) => {
 
 const VersionFooter : Component = () => {
 	return (
-		<div class="fixed bottom-0 left-0 right-0 bg-transparent text-sm font-semibold text-center p-3 z-50">
+		<div class="fixed bottom-0 left-0 right-0 bg-transparent text-sm font-semibold text-center p-3 z-10">
 			{__APP_VNAME__} v{__APP_VERSION__}<br/>{__APP_GBRANCH__}-{__APP_GHASH__}
 		</div>
 	);
@@ -87,7 +87,7 @@ const App : Component = () => {
 					"You should not use this unless behind a VPN/Firewall! Refer to the docs on how to setup a reverse proxy."
 				}
 			/>
-			<div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+			<div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 z-20">
 				<div class="flex justify-center mb-6">
 					<img src="/logo.png" class="w-full h-auto"/>
 				</div>
