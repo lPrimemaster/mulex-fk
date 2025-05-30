@@ -4,6 +4,7 @@ export interface MapStoreAction {
 	add: Function;
 	remove: Function;
 	modify: Function;
+	add_or_modify: Function;
 	set: Function;
 	clear: Function;
 };
@@ -21,6 +22,10 @@ export function createMapStore<K, V>(values: Map<K, V>): [{ data: Map<K, V> }, M
 		if(store.data.has(key)) {
 			setStore((p) => { return { data: new Map<K, V>(p.data).set(key, value) }; });
 		}
+	};
+
+	const add_or_modify = (key: K, value: V) => {
+			setStore((p) => { return { data: new Map<K, V>(p.data).set(key, value) }; });
 	};
 
 	const remove = (key: K) => {
@@ -41,6 +46,6 @@ export function createMapStore<K, V>(values: Map<K, V>): [{ data: Map<K, V> }, M
 		setStore(() => { return { data: new Map<K, V>()}; });
 	};
 
-	return [store, { add, modify, remove, set, clear }];
+	return [store, { add, modify, add_or_modify, remove, set, clear }];
 }
 

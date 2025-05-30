@@ -7,10 +7,15 @@ import { MxButton } from "./api";
 import { MxWebsocket } from "./lib/websocket";
 import { MxGenericType } from "./lib/convert";
 import { MxPopup } from "./components/Popup";
+import DeleteIcon from './assets/delete.svg';
+import KeyIcon from './assets/key.svg';
+import AvatarIcon from './assets/avatar.svg';
+import { MxFileDropUpload } from "./components/FileDropUpload";
 
 export const Dashboard : Component = () => {
 	const [accDelPopup, setAccDelPopup] = createSignal<boolean>(false);
 	const [accChangePopup, setAccChangePopup] = createSignal<boolean>(false);
+	const [accAvatarPopup, setAccAvatarPopup] = createSignal<boolean>(false);
 	const [username, setUsername] = createSignal<string>('');
 	const [oldPassword, setOldPassword] = createSignal<string>('');
 	const [newPassword, setNewPassword] = createSignal<string>('');
@@ -142,6 +147,12 @@ export const Dashboard : Component = () => {
 								</form>
 							</div>
 						</MxPopup>
+
+						<MxPopup title="Change avatar" open={accAvatarPopup()} onOpenChange={setAccAvatarPopup}>
+							<div class="place-items-center">
+								<MxFileDropUpload limit={1} allowedExtensions={['png', 'jpeg', 'jpg', 'gif']}/>
+							</div>
+						</MxPopup>
 						{
 						// <MxButton onClick={() => {
 						// 	MxWebsocket.instance.rpc_call('mulex::PdbUserCreate', [
@@ -155,12 +166,19 @@ export const Dashboard : Component = () => {
 						}
 						<div class="flex gap-5">
 							<MxButton onClick={() =>  setAccDelPopup(true)} type="error" class="size-20 place-items-center" disabled={gLoggedUser() === 'admin'}>
-								<div>Delete</div>
-								<div>Account</div>
+								{/* @ts-ignore */}
+								<DeleteIcon class="size-10"/>
+								<div class="text-xs font-semibold">Delete Account</div>
 							</MxButton>
 							<MxButton onClick={() => setAccChangePopup(true)} class="size-20 place-items-center">
-								<div>Change</div>
-								<div>Password</div>
+								{/* @ts-ignore */}
+								<KeyIcon class="size-10"/>
+								<div class="text-xs font-semibold">Change Password</div>
+							</MxButton>
+							<MxButton onClick={() => setAccAvatarPopup(true)} class="size-20 place-items-center">
+								{/* @ts-ignore */}
+								<AvatarIcon class="size-10 fill-black"/>
+								<div class="text-xs font-semibold">Change Avatar</div>
 							</MxButton>
 						</div>
 					</Card>

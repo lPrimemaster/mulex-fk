@@ -178,6 +178,9 @@ namespace mulex
 	MX_RPC_METHOD MX_PERMISSION("create_user") bool PdbUserCreate(mulex::PdbString username, mulex::PdbString password, mulex::PdbString role);
 	MX_RPC_METHOD MX_PERMISSION("delete_user") bool PdbUserDelete(mulex::PdbString username);
 	MX_RPC_METHOD 							   bool PdbUserChangePassword(mulex::PdbString oldpass, mulex::PdbString newpass);
+	MX_RPC_METHOD							   bool PdbUserChangeAvatar(mulex::RPCGenericType filedata);
+
+	// Simple file database
 
 	// NOTE: (Cesar) Limited to 128 permissions
 	//				 Enlarge if required

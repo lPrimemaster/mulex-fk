@@ -11,6 +11,7 @@
 			"permissions": [
 				"create_user", "modify_user", "delete_user",
 				"read_entry", "write_entry", "modify_entry", "delete_entry",
+				"upload_files",
 				"run_control"
 			]
 		},
@@ -19,6 +20,7 @@
 			"description": "A normal user.",
 			"permissions": [
 				"read_entry", "write_entry", "modify_entry",
+				"upload_files",
 				"run_control"
 			]
 		}
@@ -35,6 +37,8 @@
 		{ "name": "write_entry", "description": "User can write an entry on the logbook." },
 		{ "name": "modify_entry", "description": "User can modify an entry on the logbook." },
 		{ "name": "delete_entry", "description": "User can delete an entry on the logbook." },
+
+		{ "name": "upload_files", "description": "Allows user to upload files to the logbook." },
 
 		{ "name": "run_control", "description": "User can start/stop/reset a run."}
 	]

@@ -724,4 +724,9 @@ namespace mulex
 		LogDebug("[pdb] Updated password of user <%s>.", current_user.c_str());
 		return true;
 	}
+
+	bool PdbUserChangeAvatar(mulex::RPCGenericType filedata)
+	{
+		return true;
+	}
 } // namespace mulex
