@@ -409,6 +409,24 @@ namespace mulex
 		return data.asType<std::int32_t>();
 	}
 
+	std::int32_t PdbGetUserId(const std::string& username)
+	{
+		const static std::vector<PdbValueType> types = { PdbValueType::INT32 };
+		auto data = PdbReadTable(
+			"SELECT id "
+			"FROM users "
+			"WHERE username = '" + username + "';", types
+		);
+
+		if(data.getSize() == 0)
+		{
+			LogError("[pdb] No such user %s.", username.c_str());
+			return -1;
+		}
+
+		return data.asType<std::int32_t>();
+	}
+
 	static std::string PdbTypeName(const PdbValueType& type)
 	{
 		ZoneScoped;
@@ -725,7 +743,7 @@ namespace mulex
 		return true;
 	}
 
-	bool PdbUserChangeAvatar(mulex::RPCGenericType filedata)
+	bool PdbUserChangeAvatar(mulex::FdbHandle handle)
 	{
 		return true;
 	}

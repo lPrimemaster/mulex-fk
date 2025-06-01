@@ -48,6 +48,10 @@ export const Dashboard : Component = () => {
 			}
 		});
 	}
+	
+	function uploadAvatar() {
+
+	}
 
 	return (
 		<div>
@@ -151,6 +155,8 @@ export const Dashboard : Component = () => {
 						<MxPopup title="Change avatar" open={accAvatarPopup()} onOpenChange={setAccAvatarPopup}>
 							<div class="place-items-center">
 								<MxFileDropUpload limit={1} allowedExtensions={['png', 'jpeg', 'jpg', 'gif']}/>
+							</div>
+							<div class="place-items-center">
 							</div>
 						</MxPopup>
 						{

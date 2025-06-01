@@ -239,13 +239,13 @@ namespace mulex
 			_client_current_caller.emplace(std::this_thread::get_id(), 0x00);
 		}
 
-		static constexpr std::uint64_t buffersize = 8192;
-		std::uint8_t fbuffer[buffersize];
+		static constexpr std::uint64_t buffersize = SYS_RECV_THREAD_BUFFER_SIZE;
+		std::vector<std::uint8_t> fbuffer(buffersize);
 
 		while(_rpc_thread_running.load() && _rpc_thread_sig.at(socket).load())
 		{
 			// Read the message
-			std::uint64_t read = sbs.fetch(fbuffer, buffersize);
+			std::uint64_t read = sbs.fetch(fbuffer.data(), buffersize);
 			// if(read <= 0 && (!_rpc_thread_running.load() || !_rpc_thread_sig.at(socket).load()))
 			if(read <= 0)
 			{
@@ -254,13 +254,13 @@ namespace mulex
 
 			// Read the header
 			RPCMessageHeader header;
-			std::memcpy(&header, fbuffer, RPC_MESSAGE_HEADER_SIZE);
+			std::memcpy(&header, fbuffer.data(), RPC_MESSAGE_HEADER_SIZE);
 
 			// Read the payload (if any)
 			std::vector<std::uint8_t> buffer(header.payloadsize);
 			if(header.payloadsize > 0)
 			{
-				std::memcpy(buffer.data(), fbuffer + RPC_MESSAGE_HEADER_SIZE, header.payloadsize);
+				std::memcpy(buffer.data(), fbuffer.data() + RPC_MESSAGE_HEADER_SIZE, header.payloadsize);
 			}
 
 			LogTrace("[rpcserver] Got RPC Call <%d> from <0x%llx>.", header.procedureid, header.client);

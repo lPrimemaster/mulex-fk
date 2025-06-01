@@ -18,6 +18,9 @@ namespace mulex
 
 		inline /* implicit */ mxstring(const std::string& data) : mxstring(data.c_str()) { }
 
+		template<std::uint64_t N>
+		inline /* implicit */ mxstring(const mxstring<N>& data) : mxstring(data.c_str()) { }
+
 		inline void operator=(const char* data)
 		{
 			std::size_t sz = std::strlen(data) + 1;

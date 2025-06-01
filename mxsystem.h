@@ -299,6 +299,8 @@ namespace mulex
 	std::string SysI16ToHexString(std::uint16_t value);
 	std::vector<std::uint8_t> SysReadBinFile(const std::string& file);
 	void SysWriteBinFile(const std::string& file, const std::vector<std::uint8_t>& data);
+	void SysAppendBinFile(const std::string& file, const std::vector<std::uint8_t>& data);
+	void SysDeleteFile(const std::string& file);
 	void SysCopyFile(const std::string& source, const std::string& destination);
 
 	std::string SysSHA256Hex(const std::vector<std::uint8_t>& data);

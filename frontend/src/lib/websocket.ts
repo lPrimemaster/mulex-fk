@@ -185,9 +185,16 @@ export class MxWebsocket {
 	private make_rpc_message(method: string, args: Array<MxGenericType>, response: boolean): [string, number] {
 		const id = this.messageid++;
 		// const tdec = new TextDecoder('iso8859-2');
+		// const tdec = new TextDecoder();
 
 		// Minimize network impact with b64 encoding for the arguments
-		const rawData = btoa(String.fromCharCode.apply(null, Array.from(MxGenericType.concatData(args))));
+		const CHUNK_SIZE = 0x8000;
+		let string = '';
+		const buffer = MxGenericType.concatData(args);
+		for(let i = 0; i < buffer.length; i+= CHUNK_SIZE) {
+			string += String.fromCharCode.apply(null, Array.from(buffer.subarray(i, i + CHUNK_SIZE)));
+		}
+		const rawData = btoa(string);
 		// const rawData = btoa(tdec.decode(MxGenericType.concatData(args)));
 
 		if(args.length > 0) {

@@ -332,6 +332,7 @@ namespace mulex
 
 		RdbInit(1024 * 1024);
 		PdbInit();
+		FdbInit();
 
 		SysStartPerformanceMetricsThread();
 
@@ -382,6 +383,7 @@ namespace mulex
 
 		SysStopPerformanceMetricsThread();
 
+		FdbClose();
 		PdbClose();
 		RdbClose();
 
@@ -504,11 +506,11 @@ namespace mulex
 	{
 		_handle = std::thread([&](){
 			static constexpr std::uint64_t SOCKET_RECV_BUFSIZE = 32768;
-			std::uint8_t rbuffer[SOCKET_RECV_BUFSIZE];
+			static std::vector<std::uint8_t> rbuffer(SOCKET_RECV_BUFSIZE);
 			std::uint64_t read;
 			while(true)
 			{
-				SocketResult r = SocketRecvBytes(socket, rbuffer, SOCKET_RECV_BUFSIZE, &read);
+				SocketResult r = SocketRecvBytes(socket, rbuffer.data(), SOCKET_RECV_BUFSIZE, &read);
 				if((r == SocketResult::DISCONNECT) || (r == SocketResult::ERROR))
 				{
 					break;
@@ -523,7 +525,7 @@ namespace mulex
 					continue;
 				}
 
-				if(!_stream.push(rbuffer, read))
+				if(!_stream.push(rbuffer.data(), read))
 				{
 					break;
 				}
@@ -951,7 +953,7 @@ namespace mulex
 	
 		if(!std::filesystem::is_directory(lock) && !std::filesystem::create_directory(lock))
 		{
-			LogError("SysGetCacheDir: Failed to create new directory for system cache lock.");
+			LogError("SysGetCacheLockDir: Failed to create new directory for system cache lock.");
 			return "";
 		}
 
@@ -1198,7 +1200,7 @@ namespace mulex
 		std::ifstream in(file, std::ios::in | std::ios::binary);
 		if(!in.is_open())
 		{
-			LogError("SysReadBinFile: Failed to open file <%s>", file.c_str());
+			LogError("SysReadBinFile: Failed to open file <%s>.", file.c_str());
 			return std::vector<std::uint8_t>();
 		}
 
@@ -1215,11 +1217,33 @@ namespace mulex
 		std::ofstream out(file, std::ios::out | std::ios::binary);
 		if(!out.is_open())
 		{
-			LogError("SysWriteBinFile: Failed to open file <%s>", file.c_str());
+			LogError("SysWriteBinFile: Failed to open file <%s>.", file.c_str());
 			return;
 		}
 
 		out.write(reinterpret_cast<const char*>(data.data()), data.size());
+	}
+
+	void SysAppendBinFile(const std::string& file, const std::vector<std::uint8_t>& data)
+	{
+		std::ofstream out(file, std::ios::app | std::ios::binary);
+		if(!out.is_open())
+		{
+			LogError("SysAppendBinFile: Failed to open file <%s>.", file.c_str());
+			return;
+		}
+
+		out.write(reinterpret_cast<const char*>(data.data()), data.size());
+	}
+
+	void SysDeleteFile(const std::string& file)
+	{
+		std::error_code ec;
+		std::filesystem::remove(file, ec);
+		if(ec)
+		{
+			LogError("SysDeleteFile: Failed to delete file <%s>.", file.c_str());
+		}
 	}
 
 	void SysCopyFile(const std::string& source, const std::string& destination)

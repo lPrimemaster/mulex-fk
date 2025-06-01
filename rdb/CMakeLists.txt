@@ -6,6 +6,7 @@ add_library(MxRdb
 	${sqlite3_SOURCE_DIR}/sqlite3.c
 	mxrdb.cpp
 	mxpdb.cpp
+	mxfdb.cpp
 )
 
 target_include_directories(MxRdb PRIVATE

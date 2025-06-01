@@ -12,10 +12,13 @@ namespace mulex
 	static constexpr std::uint64_t RDB_MAX_STRING_SIZE = 512;
 	static constexpr std::uint64_t PDB_MAX_TABLE_NAME_SIZE = 512;
 	static constexpr std::uint64_t PDB_MAX_STRING_SIZE = 512;
+	static constexpr std::uint64_t FDB_HANDLE_SIZE = 37;
 
 	using RdbKeyName = mxstring<RDB_MAX_KEY_SIZE>;
 	using PdbQuery = mxstring<PDB_MAX_TABLE_NAME_SIZE>;
 	using PdbString = mxstring<PDB_MAX_STRING_SIZE>;
+	using FdbHandle = mxstring<FDB_HANDLE_SIZE>;
+	using FdbPath = PdbString;
 
 	enum class RdbValueType : std::uint8_t
 	{
@@ -168,6 +171,7 @@ namespace mulex
 	std::string PdbGetUserRole(const std::string& username);
 	std::int32_t PdbGetUserRoleId(const std::string& username);
 	std::int32_t PdbGetRoleId(const std::string& role);
+	std::int32_t PdbGetUserId(const std::string& username);
 	bool PdbExecuteQueryUnrestricted(const std::string& query); // For very large local queries
 
 	MX_RPC_METHOD bool PdbExecuteQuery(mulex::PdbQuery query);
@@ -178,9 +182,23 @@ namespace mulex
 	MX_RPC_METHOD MX_PERMISSION("create_user") bool PdbUserCreate(mulex::PdbString username, mulex::PdbString password, mulex::PdbString role);
 	MX_RPC_METHOD MX_PERMISSION("delete_user") bool PdbUserDelete(mulex::PdbString username);
 	MX_RPC_METHOD 							   bool PdbUserChangePassword(mulex::PdbString oldpass, mulex::PdbString newpass);
-	MX_RPC_METHOD							   bool PdbUserChangeAvatar(mulex::RPCGenericType filedata);
+	MX_RPC_METHOD 							   bool PdbUserChangeAvatar(mulex::FdbHandle handle);
 
-	// Simple file database
+	void FdbInit();
+	void FdbClose();
+
+	FdbPath FdbGetFilePath(const FdbHandle& handle);
+
+	// Chunked upload is preferred for big files (>10MB)
+	// This avoids the need to have huge data buffers allocated
+	MX_RPC_METHOD MX_PERMISSION("upload_files") mulex::FdbHandle FdbChunkedUploadStart(mulex::string32 mimetype);
+	MX_RPC_METHOD MX_PERMISSION("upload_files") bool FdbChunkedUploadSend(mulex::PdbString handle, mulex::RPCGenericType chunk);
+	MX_RPC_METHOD MX_PERMISSION("upload_files") bool FdbChunkedUploadEnd(mulex::PdbString handle);
+
+	// NOTE: (Cesar) FdbUploadFile is limited by the SysRecvThread buffer size (~10MB filesize)
+	MX_RPC_METHOD MX_PERMISSION("upload_files") mulex::FdbHandle FdbUploadFile(mulex::RPCGenericType data, mulex::string32 mimetype);
+	MX_RPC_METHOD MX_PERMISSION("delete_files") bool FdbDeleteFile(mulex::FdbHandle handle);
+	MX_RPC_METHOD mulex::FdbPath FdbGetHandleRelativePath(mulex::FdbHandle handle);
 
 	// NOTE: (Cesar) Limited to 128 permissions
 	//				 Enlarge if required

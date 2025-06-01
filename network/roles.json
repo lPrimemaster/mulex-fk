@@ -11,7 +11,7 @@
 			"permissions": [
 				"create_user", "modify_user", "delete_user",
 				"read_entry", "write_entry", "modify_entry", "delete_entry",
-				"upload_files",
+				"upload_files", "delete_files",
 				"run_control"
 			]
 		},
@@ -38,7 +38,8 @@
 		{ "name": "modify_entry", "description": "User can modify an entry on the logbook." },
 		{ "name": "delete_entry", "description": "User can delete an entry on the logbook." },
 
-		{ "name": "upload_files", "description": "Allows user to upload files to the logbook." },
+		{ "name": "upload_files", "description": "Allows user to upload files to the FDB." },
+		{ "name": "delete_files", "description": "Allows user to delete files from the FDB." },
 
 		{ "name": "run_control", "description": "User can start/stop/reset a run."}
 	]

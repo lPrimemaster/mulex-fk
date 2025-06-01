@@ -2,10 +2,13 @@ import { Component, For, Show, createEffect, createSignal } from "solid-js";
 import { createMapStore } from "~/lib/rmap";
 import FileIcon from '~/assets/file.svg';
 import DeleteIcon from '~/assets/cross-circle.svg';
+import { MxWebsocket } from "~/lib/websocket";
+import { MxGenericType } from "~/lib/convert";
 
 interface MxFileDropUploadProps {
 	allowedExtensions?: Array<string>;
 	limit?: number;
+	onUploadCompleted?: (handles: Array<string>) => void;
 };
 
 export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
@@ -17,6 +20,45 @@ export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
 	createEffect(() => {
 		setAllowFiles(files.data.size < (props.limit || 1000));
 	});
+
+	async function uploadFiles() {
+		let handles = new Array<string>();
+		Array.from(files.data.values()).forEach(async (file) => {
+			const res = await MxWebsocket.instance.rpc_call('mulex::FdbChunkedUploadStart', [
+				MxGenericType.str32(file.type)
+			]);
+			const handle = res.astype('string');
+			const fileData = new Uint8Array(await file.arrayBuffer());
+			const chunkSize = 64 * 1024; // Upload chunks of 64KB
+
+			for(let i = 0; i < fileData.length; i += chunkSize)
+			{
+				const chunk = fileData.slice(i, i + chunkSize);
+				const chunkOk = await MxWebsocket.instance.rpc_call('mulex::FdbChunkedUploadSend', [
+					MxGenericType.str512(handle),
+					MxGenericType.makeData(chunk, 'generic')
+				]);
+
+				if(!chunkOk.astype('bool'))
+				{
+					console.error('Failed to upload chunk. Handle ' + handle + '.');
+				}
+			}
+
+			const uploadOk = await MxWebsocket.instance.rpc_call('mulex::FdbChunkedUploadEnd', [MxGenericType.str512(handle)]);
+
+			if(!uploadOk.astype('bool'))
+			{
+				console.error('Failed to end chunk upload. Handle ' + handle + '.');
+			}
+
+			handles.push(handle);
+		});
+
+		if(props.onUploadCompleted) {
+			props.onUploadCompleted(handles);
+		}
+	}
 
 	function onDrop(e: DragEvent) {
 		e.preventDefault();
@@ -86,6 +128,12 @@ export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
 			</Show>
 
 			<Show when={files.data.size > 0}>
+				<button
+					class="w-full bg-blue-600 text-white px-8 py-2 mt-4 rounded-lg hover:bg-blue-700 transition"
+					onClick={uploadFiles}
+				>
+					Upload Files
+				</button>
 				<div class="flex gap-2 flex-wrap w-full mt-4 place-content-center">
 					<For each={Array.from(files.data.values())}>{(file) => {
 						return (
