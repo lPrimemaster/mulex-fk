@@ -743,8 +743,30 @@ namespace mulex
 		return true;
 	}
 
-	bool PdbUserChangeAvatar(mulex::FdbHandle handle)
+	bool PdbUserChangeAvatar(mulex::PdbString handle)
 	{
+		// Set the user avatar to the given handle
+		std::string current_user = GetCurrentCallerUser();
+		if(current_user.empty())
+		{
+			LogError("[pdb] Only a user can change their avatar.");
+			return false;
+		}
+
+		if(!FdbCheckHandle(handle))
+		{
+			LogError("[pdb] Failed to update user avatar with invalid handle <%s>.", handle.c_str());
+			return false;
+		}
+
+		if(!PdbExecuteQueryUnrestricted(
+			"UPDATE users SET avatar_handle = '" + std::string(handle.c_str()) + "' WHERE username = '" + current_user + "';"
+		))
+		{
+			LogError("[pdb] Failed to update user avatar with handle <%s>.", handle.c_str());
+			return false;
+		}
+
 		return true;
 	}
 } // namespace mulex

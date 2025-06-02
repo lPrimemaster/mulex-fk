@@ -239,6 +239,14 @@ namespace mulex
 		return std::get<0>(paths[0]);
 	}
 
+	bool FdbCheckHandle(const FdbHandle& handle)
+	{
+		static PdbAccessLocal accessor;
+		static auto reader = accessor.getReader<PdbString>("storage_index", {"id"});
+		auto paths = reader(std::string("WHERE id = '") + handle.c_str() + "'");
+		return !paths.empty();
+	}
+
 	static void FdbComputeNewFileSizeLog(const FdbHandle& handle, const std::string& path)
 	{
 		std::error_code ec;

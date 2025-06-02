@@ -48,10 +48,6 @@ export const Dashboard : Component = () => {
 			}
 		});
 	}
-	
-	function uploadAvatar() {
-
-	}
 
 	return (
 		<div>
@@ -154,24 +150,28 @@ export const Dashboard : Component = () => {
 
 						<MxPopup title="Change avatar" open={accAvatarPopup()} onOpenChange={setAccAvatarPopup}>
 							<div class="place-items-center">
-								<MxFileDropUpload limit={1} allowedExtensions={['png', 'jpeg', 'jpg', 'gif']}/>
+								<MxFileDropUpload
+									limit={1}
+									maxSize={1024 * 1024} // 1MB max
+									allowedExtensions={['png', 'jpeg', 'jpg', 'gif']}
+									onUploadCompleted={async (handles) => {
+										const res = await MxWebsocket.instance.rpc_call('mulex::PdbUserChangeAvatar', [
+											MxGenericType.str512(handles[0])
+										]);
+
+										if(!res.astype('bool')) {
+											console.error('Failed to set user avatar');
+										}
+
+										setAccAvatarPopup(false); // Close this popup
+									}}
+								/>
 							</div>
 							<div class="place-items-center">
 							</div>
 						</MxPopup>
-						{
-						// <MxButton onClick={() => {
-						// 	MxWebsocket.instance.rpc_call('mulex::PdbUserCreate', [
-						// 		MxGenericType.str512('test_user'),
-						// 		MxGenericType.str512('test_password'),
-						// 		MxGenericType.str512('user')
-						// 	]);
-						// }}>
-						// 	Create User
-						// </MxButton>
-						}
 						<div class="flex gap-5">
-							<MxButton onClick={() =>  setAccDelPopup(true)} type="error" class="size-20 place-items-center" disabled={gLoggedUser() === 'admin'}>
+							<MxButton onClick={() => setAccDelPopup(true)} type="error" class="size-20 place-items-center" disabled={gLoggedUser() === 'admin'}>
 								{/* @ts-ignore */}
 								<DeleteIcon class="size-10"/>
 								<div class="text-xs font-semibold">Delete Account</div>

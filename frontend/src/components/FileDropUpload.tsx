@@ -4,11 +4,15 @@ import FileIcon from '~/assets/file.svg';
 import DeleteIcon from '~/assets/cross-circle.svg';
 import { MxWebsocket } from "~/lib/websocket";
 import { MxGenericType } from "~/lib/convert";
+import { Progress, ProgressLabel, ProgressValueLabel } from "./ui/progress";
+import { bps_to_string, bytes_to_string } from "~/lib/utils";
 
 interface MxFileDropUploadProps {
 	allowedExtensions?: Array<string>;
 	limit?: number;
+	maxSize?: number;
 	onUploadCompleted?: (handles: Array<string>) => void;
+	onUploadProgress?: (progress: number) => void;
 };
 
 export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
@@ -16,22 +20,43 @@ export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
 	const [files, filesActions] = createMapStore<string, File>(new Map<string, File>());
 	const [allowFiles, setAllowFiles] = createSignal<boolean>(true);
 	const [errorMsg, setErrorMsg] = createSignal<string>('');
+	const [progress, setProgress] = createSignal<number>(0);
+	const [maxProgress, setMaxProgress] = createSignal<number>(0);
+	const [uploading, setUploading] = createSignal<boolean>(false);
+	const [currFilename, setCurrFilename] = createSignal<string>('');
+	const [calculatedBps, setCalculatedBps] = createSignal<number>(0);
 
 	createEffect(() => {
 		setAllowFiles(files.data.size < (props.limit || 1000));
 	});
 
 	async function uploadFiles() {
+		setUploading(true);
+
 		let handles = new Array<string>();
-		Array.from(files.data.values()).forEach(async (file) => {
+		let bytesTransfered = 0;
+
+		const interval = setInterval(() => {
+			setCalculatedBps(bytesTransfered * 2);
+			bytesTransfered = 0;
+		}, 500);
+
+		for(const file of files.data.values()) {
 			const res = await MxWebsocket.instance.rpc_call('mulex::FdbChunkedUploadStart', [
 				MxGenericType.str32(file.type)
 			]);
 			const handle = res.astype('string');
 			const fileData = new Uint8Array(await file.arrayBuffer());
+			const dataSize = fileData.length;
 			const chunkSize = 64 * 1024; // Upload chunks of 64KB
+			const noChunks = Math.ceil(dataSize / chunkSize);
+			let currChunk = 0;
 
-			for(let i = 0; i < fileData.length; i += chunkSize)
+			setProgress(0);
+			setMaxProgress(noChunks);
+			setCurrFilename(file.name);
+
+			for(let i = 0; i < dataSize; i += chunkSize)
 			{
 				const chunk = fileData.slice(i, i + chunkSize);
 				const chunkOk = await MxWebsocket.instance.rpc_call('mulex::FdbChunkedUploadSend', [
@@ -43,6 +68,13 @@ export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
 				{
 					console.error('Failed to upload chunk. Handle ' + handle + '.');
 				}
+
+				bytesTransfered += chunk.length;
+
+				setProgress(++currChunk);
+				if(props.onUploadProgress) {
+					props.onUploadProgress(currChunk / noChunks);
+				}
 			}
 
 			const uploadOk = await MxWebsocket.instance.rpc_call('mulex::FdbChunkedUploadEnd', [MxGenericType.str512(handle)]);
@@ -53,11 +85,45 @@ export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
 			}
 
 			handles.push(handle);
-		});
+		}
 
 		if(props.onUploadCompleted) {
 			props.onUploadCompleted(handles);
 		}
+
+		clearInterval(interval);
+		setUploading(false);
+	}
+
+	function checkExtension(file: File) {
+		if(props.allowedExtensions) {
+			const ext = file.name.split('.').pop();
+			if(ext && props.allowedExtensions.includes(ext.toLowerCase())) {
+				return true;
+			}
+			else {
+				setErrorMsg('Cannot upload ' + file.name + ' (invalid extension).');
+				setTimeout(() => setErrorMsg(''), 5000);
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	function checkSize(file: File) {
+		if(props.maxSize) {
+			if(file.size <= props.maxSize) {
+				return true;
+			}
+			else {
+				setErrorMsg('Cannot upload ' + file.name + ' (too large).');
+				setTimeout(() => setErrorMsg(''), 5000);
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	function onDrop(e: DragEvent) {
@@ -68,17 +134,7 @@ export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
 		
 		Array.from(e.dataTransfer?.files || []).forEach((file, idx) => {
 			if((props.limit || 1000) > idx) {
-				if(props.allowedExtensions) {
-					const ext = file.name.split('.').pop();
-					if(ext && props.allowedExtensions.includes(ext.toLowerCase())) {
-						filesActions.add_or_modify(file.name, file);
-					}
-					else {
-						setErrorMsg('Cannot upload ' + file.name + ' (invalid extension).');
-						setTimeout(() => setErrorMsg(''), 5000);
-					}
-				}
-				else {
+				if(checkExtension(file) && checkSize(file)) {
 					filesActions.add_or_modify(file.name, file);
 				}
 			}
@@ -91,6 +147,9 @@ export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
 				<p>Drop files here</p>
 				<Show when={props.allowedExtensions}>
 					<p>(.{props.allowedExtensions!.reduce((pext, ext) => pext + ' .' + ext)})</p>
+				</Show>
+				<Show when={props.maxSize}>
+					<p>(Maximum size {bytes_to_string(props.maxSize!)})</p>
 				</Show>
 			</>
 		);
@@ -125,6 +184,21 @@ export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
 				>
 					{errorMsg()}
 				</div>
+			</Show>
+
+			<Show when={uploading()}>
+				<Progress
+					value={progress()}
+					minValue={0}
+					maxValue={maxProgress()}
+					getValueLabel={() => bps_to_string(calculatedBps(), false)}
+					class="w-full p-3 my-4"
+				>
+					<div class="flex justify-between">
+						<ProgressLabel>Uploading '{currFilename()}'...</ProgressLabel>
+						<ProgressValueLabel/>
+					</div>
+				</Progress>
 			</Show>
 
 			<Show when={files.data.size > 0}>

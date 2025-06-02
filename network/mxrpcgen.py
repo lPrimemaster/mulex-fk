@@ -215,7 +215,9 @@ class RPCRoleGenerator:
                 "\tpasshash TEXT NOT NULL,\n"
                 "\trole_id INTEGER,\n"
                 "\tcreated_at DATETIME DEFAULT CURRENT_TIMESTAMP,\n"
-                "\tFOREIGN KEY (role_id) REFERENCES roles(id)\n"
+                "\tFOREIGN KEY (role_id) REFERENCES roles(id),\n"
+                # NOTE: (Cesar) We cannot use FOREIGN KEY here (the fdb index table might not exist)
+                "\tavatar_handle TEXT NULL\n"
             ");\n"
         )
 
