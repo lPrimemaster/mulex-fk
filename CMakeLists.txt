@@ -188,6 +188,7 @@ add_subdirectory(run)
 add_subdirectory(bck)
 add_subdirectory(plug)
 add_subdirectory(rexs)
+add_subdirectory(lbk)
 
 if(BUILD_CTARGETS)
 	add_subdirectory(ctargets)

@@ -347,7 +347,7 @@ namespace mulex
 		return true;
 	}
 
-	bool FdbDeleteFile(mulex::FdbHandle handle)
+	bool FdbDeleteFile(mulex::PdbString handle)
 	{
 		std::string file_path = FdbGetFilePath(handle).c_str();
 		if(file_path.empty())
@@ -363,10 +363,11 @@ namespace mulex
 		}
 		
 		SysDeleteFile(file_path);
+		LogDebug("[fdb] Deleted file with handle <%s>.", handle.c_str());
 		return true;
 	}
 
-	FdbPath FdbGetHandleRelativePath(mulex::FdbHandle handle)
+	FdbPath FdbGetHandleRelativePath(mulex::PdbString handle)
 	{
 		FdbPath fullpath = FdbGetFilePath(handle);
 		return std::filesystem::relative(fullpath.c_str(), SysGetExperimentHome()).string();

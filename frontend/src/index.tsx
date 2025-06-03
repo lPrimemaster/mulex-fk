@@ -17,6 +17,7 @@ import { DynamicRouter, DynamicRouterProvider } from './components/DynamicRouter
 import { MetaProvider, Link } from '@solidjs/meta';
 import { RouterCatcher } from './components/RouterCatcher';
 import { Dashboard } from './Dashboard';
+import { LogBook } from './LogBook';
 
 const root = document.getElementById('root');
 
@@ -45,6 +46,7 @@ render(() => (
 						<Route path='/events' component={EventsViewer}/>
 						<Route path='/backends' component={BackendViewer}/>
 						<Route path='/dashboard' component={Dashboard}/>
+						<Route path='/logbook' component={LogBook}/>
 						<DynamicRouter/>
 						<RouterCatcher/>
 					</Router>

@@ -183,6 +183,7 @@ namespace mulex
 	MX_RPC_METHOD MX_PERMISSION("delete_user") bool PdbUserDelete(mulex::PdbString username);
 	MX_RPC_METHOD 							   bool PdbUserChangePassword(mulex::PdbString oldpass, mulex::PdbString newpass);
 	MX_RPC_METHOD 							   bool PdbUserChangeAvatar(mulex::PdbString handle);
+	MX_RPC_METHOD mulex::FdbPath PdbUserGetAvatarPath();
 
 	void FdbInit();
 	void FdbClose();
@@ -198,8 +199,8 @@ namespace mulex
 
 	// NOTE: (Cesar) FdbUploadFile is limited by the SysRecvThread buffer size (~10MB filesize)
 	MX_RPC_METHOD MX_PERMISSION("upload_files") mulex::FdbHandle FdbUploadFile(mulex::RPCGenericType data, mulex::string32 mimetype);
-	MX_RPC_METHOD MX_PERMISSION("delete_files") bool FdbDeleteFile(mulex::FdbHandle handle);
-	MX_RPC_METHOD mulex::FdbPath FdbGetHandleRelativePath(mulex::FdbHandle handle);
+	MX_RPC_METHOD MX_PERMISSION("delete_files") bool FdbDeleteFile(mulex::PdbString handle);
+	MX_RPC_METHOD mulex::FdbPath FdbGetHandleRelativePath(mulex::PdbString handle);
 
 	// NOTE: (Cesar) Limited to 128 permissions
 	//				 Enlarge if required

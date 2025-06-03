@@ -8,7 +8,8 @@ import {
 	For,
 	Show,
 	Accessor,
-	Setter
+	Setter,
+    untrack
 } from 'solid-js';
 import { BadgeLabel } from './ui/badge-label';
 
@@ -124,3 +125,67 @@ export const SearchBar: Component<{ items: Array<string>, display?: Function, pl
 	);
 };
 
+export const SearchBarServerSide: Component<{ queryFunc: (query: string) => Promise<number>, placeholder?: string }> = (props) => {
+	const [query, setQuery] = createSignal<string>('');
+	const [flen, setFlen] = createSignal<number>(0);
+	const [isWorking, setIsWorking] = createSignal<boolean>(false);
+
+	function handleInputEvent(e: InputEvent) {
+		if(e.currentTarget) {
+			setQuery((e.currentTarget as HTMLInputElement).value);
+		}
+	}
+
+	createEffect(() => {
+		const qlength = query().length;
+		if(qlength > 0 && !untrack(isWorking)) {
+			setTimeout(() => {
+				if(query().length !== qlength) return;
+
+				setIsWorking(true);
+				props.queryFunc(query()).then((count: number) => {
+					setIsWorking(false);
+					setFlen(count);
+				});
+			}, 1000);
+		}
+		else {
+			setFlen(0);
+		}
+	});
+
+	return (
+		<div class="py-0">
+			<div class="flex flex-nowrap w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border border-gray-400">
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					class="mx-2 size-6 shrink-0 opacity-50 flex-none"
+				>
+					<path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+					<path d="M21 21l-6 -6" />
+				</svg>
+				<input
+					class="bg-transparent outline-none font-medium flex-grow"
+					type="text" placeholder={props.placeholder} value={query()} onInput={handleInputEvent}
+				/>
+				<Show when={query().length > 0}>
+					<div class="flex-none mr-5">
+						<BadgeLabel class="truncate" type={
+							isWorking() ? "display" : flen() ? "success" : "error"
+						}>
+						{
+							isWorking() ? 'Working' : `${flen()} Matches`
+						}
+						</BadgeLabel>
+					</div>
+				</Show>
+			</div>
+		</div>
+	);
+};

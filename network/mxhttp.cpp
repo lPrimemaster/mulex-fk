@@ -163,6 +163,7 @@ namespace mulex
 		if (ext == ".jpg")  return "image/jpeg";
 		if (ext == ".jpeg") return "image/jpeg";
 		if (ext == ".ico")  return "image/x-icon";
+		if (ext == ".pdf")  return "application/pdf";
 		return "text/plain";
 	}
 
@@ -440,6 +441,22 @@ namespace mulex
 
 		res->onAborted([]() {
 			LogError("[mxhttp] Login request aborted.");
+		});
+	}
+
+	template<bool SSL>
+	static void HttpHandleLogout(uWS::HttpResponse<SSL>* res, uWS::HttpRequest* req)
+	{
+		res->onData([res](std::string_view, bool last) {
+			if(last)
+			{
+				res->writeHeader("Set-Cookie", "token=deleted; HttpOnly; Path=/; SameSite=Strict; Max-Age=0;");
+				res->end("Logged out");
+			}
+		});
+
+		res->onAborted([]() {
+			LogError("[mxhttp] Logout request aborted.");
 		});
 	}
 
@@ -776,6 +793,8 @@ namespace mulex
 		// TODO: (Cesar) Automate this process
 		app.post("/api/login", [](auto* res, auto* req) {
 			HttpHandleLogin(res, req);
+		}).post("/api/logout", [](auto* res, auto* req) {
+			HttpHandleLogout(res, req);
 		}).post("/api/public", [](auto* res, auto* req) {
 			HttpHandlePublicRPC(res, req);
 		}).post("/api/auth/username", [](auto* res, auto* req) {

@@ -12,6 +12,12 @@ namespace mulex
 
 		inline /* implicit */ mxstring(const char* data)
 		{
+			if(data == nullptr)
+			{
+				_data[0] = 0;
+				return;
+			}
+
 			std::size_t sz = std::strlen(data) + 1;
 			std::memcpy(_data, data, sz > S ? S : sz);
 		}

@@ -92,6 +92,11 @@ const Sidebar: Component = () => {
 						</NavigationMenuItem>
 						<NavigationMenuItem>
 							<NavigationMenuTrigger>
+								<A href='/logbook'>LogBook</A>
+							</NavigationMenuTrigger>
+						</NavigationMenuItem>
+						<NavigationMenuItem>
+							<NavigationMenuTrigger>
 								<A href='/dashboard'>Dashboard</A>
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
