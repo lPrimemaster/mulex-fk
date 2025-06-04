@@ -4,7 +4,7 @@ add_executable(mxrexs
 )
 
 # Link main
-target_link_libraries(mxrexs PRIVATE mxrpc mxrdb mxdrv mxhttp mxbck)
+target_link_libraries(mxrexs PRIVATE mxrpc mxrdb mxdrv mxhttp mxbck mxlbk)
 
 if(WIN32)
 	target_link_libraries(mxrexs PRIVATE pdh advapi32)

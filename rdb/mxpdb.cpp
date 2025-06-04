@@ -89,6 +89,7 @@ namespace mulex
 			case PdbValueType::FLOAT32: return sizeof(float);
 			case PdbValueType::FLOAT64: return sizeof(double);
 			case PdbValueType::STRING: return PDB_MAX_STRING_SIZE; // HACK: For now store the max size
+			case PdbValueType::CSTRING: return 0; // Calculated at insert/select time
 			case PdbValueType::BOOL: return sizeof(bool);
 			case PdbValueType::BINARY: return 0; // Calculated at insert/select time
 			case PdbValueType::NIL: return 0;
@@ -152,12 +153,22 @@ namespace mulex
 				break;
 			}
 
+			case PdbValueType::CSTRING:
+			{
+				const std::uint8_t* data = sqlite3_column_text(stmt, col);
+				const char* cstr = reinterpret_cast<const char*>(data);
+				const std::uint64_t size = std::strlen(cstr) + 1;
+				PdbPushBufferBytes(data, size, buffer);
+				break;
+			}
+
 			case PdbValueType::BINARY:
 			{
 				const std::uint8_t* p = reinterpret_cast<const std::uint8_t*>(sqlite3_column_blob(stmt, col));
-				std::int32_t size = sqlite3_column_bytes(stmt, col);
-				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&size), sizeof(std::int32_t), buffer);
+				std::uint64_t size = sqlite3_column_bytes(stmt, col);
+				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&size), sizeof(std::uint64_t), buffer);
 				PdbPushBufferBytes(p, size, buffer);
+				break;
 			}
 
 			case PdbValueType::NIL:
@@ -212,6 +223,13 @@ namespace mulex
 			{
 				offset += PdbTypeSize(type);
 				return sqlite3_bind_text(stmt, col, reinterpret_cast<const PdbString*>(ptr)->c_str(), -1, SQLITE_STATIC) == SQLITE_OK;
+			}
+			case PdbValueType::CSTRING:
+			{
+				const char* cstr = reinterpret_cast<const char*>(ptr);
+				const std::uint64_t size = std::strlen(cstr) + 1;
+				offset += size;
+				return sqlite3_bind_text(stmt, col, cstr, -1, SQLITE_STATIC) == SQLITE_OK;
 			}
 			case PdbValueType::BINARY:
 			{
@@ -446,6 +464,7 @@ namespace mulex
 			case PdbValueType::FLOAT64:
 				return "REAL";
 			case PdbValueType::STRING:
+			case PdbValueType::CSTRING:
 				return "TEXT";
 			case PdbValueType::BINARY:
 				return "BLOB";

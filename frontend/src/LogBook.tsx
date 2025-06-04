@@ -13,6 +13,7 @@ import RemoveIconW from './assets/removeW.svg';
 import RemoveIconB from './assets/removeB.svg';
 import DeleteIcon from './assets/delete.svg';
 import PostIcon from './assets/post.svg';
+import CrossIcon from './assets/cross-circle.svg';
 import { Checkbox } from "./components/ui/checkbox";
 import { SetStoreFunction, createStore } from "solid-js/store";
 import { TextField, TextFieldInput, TextFieldLabel } from "./components/ui/text-field";
@@ -21,32 +22,71 @@ import { Avatar, AvatarFallback, AvatarImage } from "./components/ui/avatar";
 import { MarkdownDisplay } from "./components/MarkdownEditor";
 import { MxColorBadge } from "./components/Badges";
 import { MxGenericType } from "./lib/convert";
-import { TextEncoder } from "util";
 
 interface LogBookContextType {
 	pagePosts: LogBookPostArray;
 	setPagePosts: SetStoreFunction<LogBookPostArray>;
-	addPost: () => void;
-	newPostPage: Accessor<boolean>;
-	setNewPostPage: Setter<boolean>;
+	addPost: (id: number, user: string, title: string, date: string, meta: string) => void;
+	clearPosts: () => void;
+	newPostPage: Accessor<LogBookPageType>;
+	setNewPostPage: Setter<LogBookPageType>;
+	readPageId: Accessor<number | undefined>;
+	setReadPageId: Setter<number | undefined>;
 };
 
 interface LogBookPost {
+	id: number;
 	selected: boolean;
+	body?: string;
+	meta?: LogBookFileHandlerArray;
+	title: string;
+	user: string;
+	date: string;
+	fileTypes: Array<string>;
 };
 
 interface LogBookPostArray {
 	items: Array<LogBookPost>;
 };
 
+enum LogBookPageType {
+	ListPage,
+	EditPage,
+	ReadPage
+};
+
 const LogBookContext = createContext<LogBookContextType>();
 
 const LogBookContextProvider : Component<{ children?: JSXElement }> = (props) => {
 	const [pagePosts, setPagePosts] = createStore<LogBookPostArray>({ items: [] });
-	const [newPostPage, setNewPostPage] = createSignal<boolean>(false);
+	const [newPostPage, setNewPostPage] = createSignal<LogBookPageType>(LogBookPageType.ListPage);
+	const [readPageId, setReadPageId] = createSignal<number>();
 
-	function addPost() {
-		setPagePosts("items", (p) => [...p, { selected: false }]);
+	function clearPosts() {
+		setPagePosts("items", []);
+	}
+
+	function addPost(id: number, user: string, title: string, date: string, meta: string) {
+		const metadataObject = JSON.parse(meta);
+		const extensions = new Array<string>();
+		for(const file of metadataObject.items) {
+			const filename = file.localName as string;
+			const ext = filename.split('.').pop();
+
+			if(ext) {
+				extensions.push(ext);
+			}
+		}
+
+		setPagePosts("items", (p) => [...p, {
+			id: id,
+			selected: false,
+			title: title,
+			user: user,
+			date: date,
+			meta: metadataObject,
+			fileTypes: [...new Set(extensions)] // Unique file extensions
+		}]);
 	}
 
 	return (
@@ -54,9 +94,13 @@ const LogBookContextProvider : Component<{ children?: JSXElement }> = (props) =>
 			pagePosts,
 			setPagePosts,
 			addPost,
+			clearPosts,
 
 			newPostPage,
-			setNewPostPage
+			setNewPostPage,
+
+			readPageId,
+			setReadPageId
 		}}>
 			{props.children}
 		</LogBookContext.Provider>
@@ -122,6 +166,18 @@ interface LogBookFileHandlerArray {
 	items: Array<LogBookFileHandler>;
 };
 
+function modifyBody(text: string, files: LogBookFileHandlerArray) {
+	let modifiedBody = text;
+	// Replace all file references on text for our uploaded handles.
+	for(const file of files.items) {
+		if(file.serverPath) {
+			modifiedBody = modifiedBody.replaceAll(file.localName, file.serverPath);
+		}
+	}
+
+	return modifiedBody;
+}
+
 const LogBookWritePost : Component = () => {
 	const { setNewPostPage } = useContext(LogBookContext) as LogBookContextType;
 	const [avatarUrl, setAvatarUrl] = createSignal<string>('');
@@ -138,6 +194,7 @@ const LogBookWritePost : Component = () => {
 	onMount(async () => {
 		const path = await MxWebsocket.instance.rpc_call('mulex::PdbUserGetAvatarPath');
 		setAvatarUrl(path.astype('string'));
+		triggerDraftSaveAttachments(files); // Empty meta for server in case the user does not upload anything
 	});
 
 	function deleteFile(id: number) {
@@ -147,18 +204,6 @@ const LogBookWritePost : Component = () => {
 		}
 		filesActions("items", items => items.filter(item => item.id !== id));
 		triggerDraftSaveAttachments(files);
-	}
-
-	function modifyBody(text: string) {
-		let modifiedBody = text;
-		// Replace all file references on text for our uploaded handles.
-		for(const file of files.items) {
-			if(file.serverPath) {
-				modifiedBody = modifiedBody.replaceAll(file.localName, file.serverPath);
-			}
-		}
-
-		return modifiedBody;
 	}
 
 	async function uploadFile(id: number) {
@@ -302,13 +347,26 @@ const LogBookWritePost : Component = () => {
 				metaRaw = new Uint8Array(te.encode(filesText));
 			}
 
-			MxWebsocket.instance.rpc_call('mulex::LbkPost', [
+			MxWebsocket.instance.rpc_call('mulex::LbkPostCreate', [
 				MxGenericType.str512(title()), 			 	// Title
 				MxGenericType.makeData(bodyRaw, 'generic'), // Body
 				MxGenericType.makeData(metaRaw, 'generic')	// Meta (useful for modifications)
-			]);
+			]).then((res) => {
+				if(res.astype('bool')) {
+					// NOTE: (Cesar) Cannot call deleteDraft
+					// 				 Don't want to delete files
+					localStorage.removeItem('md-post-draft-title');
+					localStorage.removeItem('md-post-draft-body');
+					localStorage.removeItem('md-post-draft-files');
+					setNewPostPage(LogBookPageType.ListPage); // Go back to search page
+				}
+				else {
+					// TODO: (Cesar) Error
+				}
+			});
 		}
 		else {
+			// TODO: (Cesar) Error
 		}
 	}
 
@@ -394,7 +452,7 @@ const LogBookWritePost : Component = () => {
 							value={body()}
 							onKeyDown={postTabHandle}
 							style="white-space: pre; tab-size: 4;" // 4 space tabs
-							placeholder={`Start typing HTML, Markdown or KaTeX...\nYou can also drag files here...`}
+							placeholder={`Start typing HTML, Markdown or LaTeX...\nYou can also drag files here...`}
 							onDragOver={onDragOver}
 							onDragLeave={onDragLeave}
 							onDrop={onDrop}
@@ -423,16 +481,16 @@ const LogBookWritePost : Component = () => {
 					</Show>
 				</div>
 				<Show when={markMode() !== 0}>
-					<div><MarkdownDisplay content={'# ' + title() + '\n\n' + modifyBody(body())}/></div>
+					<div><MarkdownDisplay content={'# ' + title() + '\n\n' + modifyBody(body(), files)}/></div>
 				</Show>
 			</div>
 			<div class="flex gap-2 mt-2">
-				<MxButton onClick={() => {}} class="place-items-center flex gap-1 py-1" type="success">
+				<MxButton onClick={post} class="place-items-center flex gap-1 py-1" type="success">
 					{/* @ts-ignore */}
 					<PostIcon class="size-5"/>
 					<div class="text-xs font-semibold">Post</div>
 				</MxButton>
-				<MxButton type="error" onClick={() => { setNewPostPage(false); deleteDraft(); }}>
+				<MxButton type="error" onClick={() => { setNewPostPage(LogBookPageType.ListPage); deleteDraft(); }}>
 					<div class="flex gap-1 items-center">
 						{/* @ts-ignore */}
 						<DeleteIcon class="size-5"/>
@@ -444,16 +502,60 @@ const LogBookWritePost : Component = () => {
 	);
 };
 
-const LogBookTable : Component = () => {
-	const { pagePosts, setPagePosts, addPost } = useContext(LogBookContext) as LogBookContextType;
+const LogBookReadPost : Component = () => {
+	const { setNewPostPage, readPageId, pagePosts } = useContext(LogBookContext) as LogBookContextType;
+	const [readPage, setReadPage] = createSignal<LogBookPost>();
 
 	onMount(() => {
-		for(let i = 0; i < 50; i++) {
-			addPost();
+		const id = readPageId();
+		setReadPage(pagePosts.items.find(p => p.id === id));
+	});
+
+	return (
+		<div class="relative m-2">
+			<div
+				class="absolute right-0 top-0 cursor-pointer size-8 -mr-4 -mt-4"
+				onClick={() => setNewPostPage(LogBookPageType.ListPage)}
+			>
+				{ /* @ts-ignore */}
+				<CrossIcon class="size-8"/>
+			</div>
+			<Show when={readPage() !== undefined}>
+				<MarkdownDisplay content={'# ' + readPage()!.title + '\n\n' + modifyBody(readPage()!.body!, readPage()!.meta!)}/>
+			</Show>
+		</div>
+	);
+};
+
+const LogBookTable : Component = () => {
+	const { pagePosts, setNewPostPage, setPagePosts, addPost, clearPosts, setReadPageId } = useContext(LogBookContext) as LogBookContextType;
+
+	onMount(async () => {
+		clearPosts();
+		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetEntriesPage', [MxGenericType.uint64(50n), MxGenericType.uint64(0n)], 'generic');
+		const posts = res.unpack(['int32', 'str512', 'str512', 'str512', 'bytearray']);
+		for(const post of posts.reverse()) {
+			const [ id, user, title, date, meta ] = post;
+			const decoder = new TextDecoder();
+			addPost(id, user, title, date, decoder.decode(meta));
 		}
 	});
 
-	function onPostClick() {
+	async function onPostClick(post: LogBookPost) {
+		if(!post.body) {
+			const res = await MxWebsocket.instance.rpc_call('mulex::LbkPostRead', [MxGenericType.int32(post.id)], 'generic');
+			if(res.data.length != 0) {
+				const mdcontent = res.astype('string');
+				setPagePosts("items", pagePosts.items.findIndex(p => p.id === post.id), "body", mdcontent);
+			}
+			else {
+				// ERROR no such post
+				return;
+			}
+		}
+
+		setReadPageId(post.id);
+		setNewPostPage(LogBookPageType.ReadPage);
 	}
 
 	return (
@@ -479,12 +581,12 @@ const LogBookTable : Component = () => {
 									(checked: boolean) => setPagePosts("items", index(), "selected", checked)
 								}/>
 							</TableCell>
-							<TableCell class="py-1 cursor-pointer" onClick={onPostClick}>Entry sample</TableCell>
-							<TableCell class="py-1 cursor-pointer" onClick={onPostClick}>02/06/2025</TableCell>
-							<TableCell class="py-1 cursor-pointer" onClick={onPostClick}>c.godinho</TableCell>
-							<TableCell class="py-1 cursor-pointer" onClick={onPostClick}>No comments</TableCell>
-							<TableCell class="py-1 cursor-pointer" onClick={onPostClick}>
-								<BadgeLabel type="display">pdf</BadgeLabel>
+							<TableCell class="py-1 cursor-pointer" onClick={() => onPostClick(post)}>{post.title}</TableCell>
+							<TableCell class="py-1 cursor-pointer" onClick={() => onPostClick(post)}>{post.date}</TableCell>
+							<TableCell class="py-1 cursor-pointer" onClick={() => onPostClick(post)}>{post.user}</TableCell>
+							<TableCell class="py-1 cursor-pointer" onClick={() => onPostClick(post)}>No comments</TableCell>
+							<TableCell class="py-1 cursor-pointer" onClick={() => onPostClick(post)}>
+								{ /* <BadgeLabel type="display">pdf</BadgeLabel> */ }
 							</TableCell>
 						</TableRow>
 					}</For>
@@ -511,7 +613,7 @@ const LogBookControls : Component = () => {
 					placeholder="Search for name, date or author..."
 				/>
 				<div class="flex mt-3 gap-3">
-					<MxButton onClick={() => setNewPostPage(true)} class="place-items-center flex gap-1 py-1" type="success">
+					<MxButton onClick={() => setNewPostPage(LogBookPageType.EditPage)} class="place-items-center flex gap-1 py-1" type="success">
 						{/* @ts-ignore */}
 						<AddIcon class="size-5"/>
 						<div class="text-xs font-semibold">New Post</div>
@@ -535,7 +637,6 @@ const LogBookControls : Component = () => {
 
 const LogBookBrowse : Component = () => {
 	const [page, setPage] = createSignal<number>(1);
-	const ENTRIES_PER_PAGE = 50;
 
 	return (
 		<div>
@@ -565,13 +666,18 @@ const LogBookPage : Component = () => {
 	const { newPostPage } = useContext(LogBookContext) as LogBookContextType;
 	return (
 		<div>
+			{/* Read Page */}
+			<Show when={newPostPage() === LogBookPageType.ReadPage}>
+				<LogBookReadPost/>
+			</Show>
+
 			{/* Browse Page */}
-			<Show when={!newPostPage()}>
+			<Show when={newPostPage() === LogBookPageType.ListPage}>
 				<LogBookBrowse/>
 			</Show>
 
 			{/* New Post Page */}
-			<Show when={newPostPage()}>
+			<Show when={newPostPage() === LogBookPageType.EditPage}>
 				<LogBookWritePost/>
 			</Show>
 		</div>

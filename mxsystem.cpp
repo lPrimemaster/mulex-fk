@@ -13,6 +13,7 @@
 #include "mxmsg.h"
 #include "plug/plug.h"
 #include "rexs/mxrexs.h"
+#include "mxlbk.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -333,6 +334,7 @@ namespace mulex
 		RdbInit(1024 * 1024);
 		PdbInit();
 		FdbInit();
+		LbkInit();
 
 		SysStartPerformanceMetricsThread();
 
@@ -383,6 +385,7 @@ namespace mulex
 
 		SysStopPerformanceMetricsThread();
 
+		LbkClose();
 		FdbClose();
 		PdbClose();
 		RdbClose();

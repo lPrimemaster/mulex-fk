@@ -7,7 +7,7 @@ if(WIN32)
 	target_link_libraries(MxBackend PUBLIC wsock32 ws2_32 Shlwapi pdh)
 endif()
 
-target_link_libraries(MxBackend PUBLIC mxrdb mxhttp mxrpc)
+target_link_libraries(MxBackend PUBLIC mxrdb mxhttp mxrpc mxlbk)
 # target_link_libraries(MxBackend PRIVATE $<TARGET_OBJECTS:mxsys>)
 # target_link_libraries(MxBackend mxrdb mxrpc)
 
@@ -38,6 +38,7 @@ if(WIN32)
 	find_dependency(libuv REQUIRED)
 endif()
 find_dependency(MxHttp REQUIRED)
+find_dependency(MxLbk REQUIRED)
 "
 )
 install_target(MxBackend mxbackend.h)

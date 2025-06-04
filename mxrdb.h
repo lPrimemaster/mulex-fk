@@ -50,6 +50,7 @@ namespace mulex
 		FLOAT32,
 		FLOAT64,
 		STRING,
+		CSTRING,
 		BOOL,
 		BINARY,
 		NIL // Avoid clash with NULL
@@ -320,6 +321,7 @@ namespace mulex
 		std::is_same_v<double, std::decay_t<T>> ||
 		std::is_same_v<bool  , std::decay_t<T>> ||
 		std::is_same_v<PdbString, std::decay_t<T>> ||
+		std::is_same_v<std::string, std::decay_t<T>> ||
 		std::is_same_v<std::vector<std::uint8_t>, std::decay_t<T>>;
 
 	template<typename Policy>
@@ -352,6 +354,12 @@ namespace mulex
 							std::uint64_t size = args.value().size();
 							PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&size), sizeof(std::uint64_t), data);
 							PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(args.value().data()), args.value().size(), data);
+						}
+						else if constexpr(std::is_same_v<Vs, std::string>)
+						{
+							const std::string& value = args.value();
+							std::uint64_t size = value.size();
+							PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(value.c_str()), size + 1, data);
 						}
 						else
 						{
@@ -404,6 +412,7 @@ namespace mulex
 			if constexpr(std::is_same_v<T, float>) return PdbValueType::FLOAT32;
 			if constexpr(std::is_same_v<T, double>) return PdbValueType::FLOAT64;
 			if constexpr(std::is_same_v<T, PdbString>) return PdbValueType::STRING;
+			if constexpr(std::is_same_v<T, std::string>) return PdbValueType::CSTRING;
 			if constexpr(std::is_same_v<T, bool>) return PdbValueType::BOOL;
 			if constexpr(std::is_same_v<T, std::vector<std::uint8_t>>) return PdbValueType::BINARY;
 			
@@ -425,6 +434,7 @@ namespace mulex
 			if constexpr(std::is_same_v<T, float>) return PdbValueType::FLOAT32;
 			if constexpr(std::is_same_v<T, double>) return PdbValueType::FLOAT64;
 			if constexpr(std::is_same_v<T, PdbString>) return PdbValueType::STRING;
+			if constexpr(std::is_same_v<T, std::string>) return PdbValueType::CSTRING;
 			if constexpr(std::is_same_v<T, bool>) return PdbValueType::BOOL;
 			if constexpr(std::is_same_v<T, std::vector<std::uint8_t>>) return PdbValueType::BINARY;
 			
@@ -441,6 +451,16 @@ namespace mulex
 				std::vector<std::uint8_t> value(size);
 				std::memcpy(value.data(), buffer.data() + offset + sizeof(std::int32_t), size);
 				offset += (sizeof(std::int32_t) + size);
+				return value;
+			}
+			else if constexpr(std::is_same_v<T, std::string>)
+			{
+				const char* cstr = reinterpret_cast<const char*>(buffer.data() + offset);
+				const std::uint64_t size = std::strlen(cstr);
+				std::string value;
+				value.resize(size);
+				std::memcpy(value.data(), cstr, size);
+				offset += (size + 1);
 				return value;
 			}
 			else

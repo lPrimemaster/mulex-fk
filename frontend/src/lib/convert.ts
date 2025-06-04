@@ -444,6 +444,15 @@ export class MxGenericType
 					element.push(new Uint8Array(view.buffer, view.byteOffset + packoffset, arr_size));
 					packoffset += arr_size;
 				}
+				else if(type === 'cstr') {
+					const decoder = new TextDecoder();
+					// @ts-ignore
+					const string = decoder.decode(view.buffer.slice(view.byteOffset + packoffset)).split('\0').shift();
+					if(string) {
+						element.push(string); // Null terminate the string
+						packoffset += string.length + 1;
+					}
+				}
 				else {
 					// TODO: (Cesar) Emit frontend errors to the frontend (toast, etc, ...)
 					console.log('MxGenericType.unpack: Could not convert from unknown type <' + type + '>.');
