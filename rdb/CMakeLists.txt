@@ -9,6 +9,8 @@ add_library(MxRdb
 	mxfdb.cpp
 )
 
+target_compile_definitions(MxRdb PRIVATE SQLITE_ENABLE_FTS5)
+
 target_include_directories(MxRdb PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 	${sqlite3_SOURCE_DIR}

@@ -60,6 +60,9 @@ namespace mulex
 			return;
 		}
 
+		// Turn on WAL mode if not on already
+		PdbExecuteQuery("PRAGMA journal_mode = WAL;");
+
 		LogDebug("[pdb] Init() OK.");
 	}
 

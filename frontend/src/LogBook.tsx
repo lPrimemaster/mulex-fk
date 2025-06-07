@@ -32,6 +32,10 @@ interface LogBookContextType {
 	setNewPostPage: Setter<LogBookPageType>;
 	readPageId: Accessor<number | undefined>;
 	setReadPageId: Setter<number | undefined>;
+	numPosts: Accessor<number>;
+	setNumPosts: Setter<number>;
+	query: Accessor<string>;
+	setQuery: Setter<string>;
 };
 
 interface LogBookPost {
@@ -61,6 +65,8 @@ const LogBookContextProvider : Component<{ children?: JSXElement }> = (props) =>
 	const [pagePosts, setPagePosts] = createStore<LogBookPostArray>({ items: [] });
 	const [newPostPage, setNewPostPage] = createSignal<LogBookPageType>(LogBookPageType.ListPage);
 	const [readPageId, setReadPageId] = createSignal<number>();
+	const [numPosts, setNumPosts] = createSignal<number>(0);
+	const [query, setQuery] = createSignal<string>('');
 
 	function clearPosts() {
 		setPagePosts("items", []);
@@ -100,8 +106,15 @@ const LogBookContextProvider : Component<{ children?: JSXElement }> = (props) =>
 			setNewPostPage,
 
 			readPageId,
-			setReadPageId
+			setReadPageId,
+
+			numPosts,
+			setNumPosts,
+
+			query,
+			setQuery
 		}}>
+
 			{props.children}
 		</LogBookContext.Provider>
 	);
@@ -528,16 +541,55 @@ const LogBookReadPost : Component = () => {
 };
 
 const LogBookTable : Component = () => {
-	const { pagePosts, setNewPostPage, setPagePosts, addPost, clearPosts, setReadPageId } = useContext(LogBookContext) as LogBookContextType;
+	const {
+		pagePosts,
+		setNewPostPage,
+		setPagePosts,
+		addPost,
+		clearPosts,
+		setReadPageId,
+		setNumPosts,
+		query
+	} = useContext(LogBookContext) as LogBookContextType;
 
-	onMount(async () => {
+	async function fetchAll(page: number) {
 		clearPosts();
-		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetEntriesPage', [MxGenericType.uint64(50n), MxGenericType.uint64(0n)], 'generic');
+		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetEntriesPage', [MxGenericType.uint64(50n), MxGenericType.uint64(BigInt(page))], 'generic');
 		const posts = res.unpack(['int32', 'str512', 'str512', 'str512', 'bytearray']);
 		for(const post of posts.reverse()) {
 			const [ id, user, title, date, meta ] = post;
 			const decoder = new TextDecoder();
 			addPost(id, user, title, date, decoder.decode(meta));
+		}
+	}
+
+	async function fetchQuery(page: number) {
+		clearPosts();
+		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetEntriesPageSearch', [
+			MxGenericType.str512(query()),
+			MxGenericType.uint64(50n),
+			MxGenericType.uint64(BigInt(page))
+		], 'generic');
+		const posts = res.unpack(['int32', 'str512', 'str512', 'str512', 'bytearray']);
+		for(const post of posts.reverse()) {
+			const [ id, user, title, date, meta ] = post;
+			const decoder = new TextDecoder();
+			addPost(id, user, title, date, decoder.decode(meta));
+		}
+	}
+
+	onMount(async () => {
+		clearPosts();
+		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetNumEntriesWithCondition', [MxGenericType.str512('')]);
+		setNumPosts(Number(res.astype('int64')));
+	});
+
+	createEffect(async () => {
+		if(query().length > 0) {
+			fetchQuery(0);
+		}
+		else {
+			fetchAll(0);
 		}
 	});
 
@@ -598,17 +650,20 @@ const LogBookTable : Component = () => {
 
 const LogBookControls : Component = () => {
 	const [selection, setSelection] = createSignal<boolean>(false);
-	const { setNewPostPage } = useContext(LogBookContext) as LogBookContextType;
+	const { setNewPostPage, setNumPosts, setQuery } = useContext(LogBookContext) as LogBookContextType;
 
 	return (
 		<div class="mb-5">
 			<Card title="">
 				<SearchBarServerSide
 					queryFunc={async (text: string) => {
-						// const res = await MxWebsocket.instance.rpc_call('mulex::LbkSearch');
-
-						
-						return 69;
+						const count = await MxWebsocket.instance.rpc_call('mulex::LbkGetNumEntriesWithCondition', [
+							MxGenericType.str512(text)
+						]);
+						const nposts = Number(count.astype('int64'));
+						setNumPosts(nposts);
+						setQuery(text);
+						return nposts;
 					}}
 					placeholder="Search for name, date or author..."
 				/>
@@ -637,6 +692,7 @@ const LogBookControls : Component = () => {
 
 const LogBookBrowse : Component = () => {
 	const [page, setPage] = createSignal<number>(1);
+	const POSTS_PER_PAGE = 50;
 
 	return (
 		<div>

@@ -138,7 +138,12 @@ export const SearchBarServerSide: Component<{ queryFunc: (query: string) => Prom
 
 	createEffect(() => {
 		const qlength = query().length;
-		if(qlength > 0 && !untrack(isWorking)) {
+		if(qlength === 0) {
+			props.queryFunc('');
+			setIsWorking(false);
+			setFlen(0);
+		}
+		else if(!untrack(isWorking)) {
 			setTimeout(() => {
 				if(query().length !== qlength) return;
 

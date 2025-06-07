@@ -5,7 +5,7 @@ namespace mulex
 {
 	static void LbkInitTables()
 	{
-		const std::string posts = 
+		const std::string posts =
 		"CREATE TABLE IF NOT EXISTS posts ("
 			"id INTEGER PRIMARY KEY AUTOINCREMENT,"
 			"author INTEGER NOT NULL,"
@@ -20,7 +20,39 @@ namespace mulex
 		");";
 		PdbExecuteQuery(posts);
 
-		const std::string comments = 
+		const std::string posts_fts5 =
+		"CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING FTS5("
+			"author, title, mdbody, created_at, modified_at,"
+			"content='posts', content_rowid='id'"
+		");";
+		PdbExecuteQuery(posts_fts5);
+
+		const std::string posts_trigger_insert =
+		"CREATE TRIGGER IF NOT EXISTS posts_ti AFTER INSERT ON posts BEGIN\n"
+			"\tINSERT INTO posts_fts(rowid, author, title, mdbody, created_at, modified_at)\n"
+			"\tVALUES(new.id, new.author, new.title, new.mdbody, new.created_at, new.modified_at);\n"
+		"END;";
+		PdbExecuteQuery(posts_trigger_insert);
+
+		const std::string posts_trigger_update =
+		"CREATE TRIGGER IF NOT EXISTS posts_tu AFTER UPDATE ON posts BEGIN\n"
+			"\tUPDATE posts_fts SET\n"
+				"\t\tauthor = new.author,\n"
+				"\t\ttitle = new.title,\n"
+				"\t\tmdbody = new.mdbody,\n"
+				"\t\tcreated_at = new.created_at,\n"
+				"\t\tmodified_at = new.modified_at\n"
+			"\tWHERE rowid = new.id;\n"
+		"END;";
+		PdbExecuteQuery(posts_trigger_update);
+
+		const std::string posts_trigger_delete =
+		"CREATE TRIGGER IF NOT EXISTS posts_td AFTER DELETE ON posts BEGIN\n"
+			"\tDELETE FROM posts_fts WHERE rowid = old.id;\n"
+		"END;";
+		PdbExecuteQuery(posts_trigger_delete);
+
+		const std::string comments =
 		"CREATE TABLE IF NOT EXISTS comments ("
 			"id INTEGER PRIMARY KEY AUTOINCREMENT,"
 			"author INTEGER NOT NULL,"
@@ -120,9 +152,27 @@ namespace mulex
 		return raw;
 	}
 
-	mulex::RPCGenericType LbkSearch(mulex::PdbString query)
+	mulex::RPCGenericType LbkGetEntriesPageSearch(mulex::PdbString query, std::uint64_t limit, std::uint64_t page)
 	{
-		return {};
+		std::string fquery = 
+		"SELECT posts.id, users.username, posts.title, posts.created_at, posts.metadata FROM posts_fts "
+		"JOIN posts ON posts_fts.rowid = posts.id "
+		"JOIN users ON posts.author = users.id "
+		"WHERE posts_fts MATCH '";
+		fquery += query.c_str();
+		fquery += "' ORDER BY rank LIMIT ";
+		fquery += std::to_string(limit) + " OFFSET (";
+		fquery += std::to_string(page) + " * " + std::to_string(limit) + ");";
+
+		static const std::vector<PdbValueType> types = {
+			PdbValueType::INT32,
+			PdbValueType::STRING,
+			PdbValueType::STRING,
+			PdbValueType::STRING,
+			PdbValueType::BINARY
+		};
+	
+		return PdbReadTable(fquery, types);
 	}
 
 	mulex::RPCGenericType LbkGetEntriesPage(std::uint64_t limit, std::uint64_t page)
@@ -143,5 +193,25 @@ namespace mulex
 
 		const std::vector<std::uint8_t> data = PdbReadTable(query, types);
 		return data;
+	}
+
+	std::int64_t LbkGetNumEntriesWithCondition(mulex::PdbString query)
+	{
+		std::string squery = query.c_str();
+		if(squery.empty())
+		{
+			const auto data = PdbReadTable("SELECT COUNT(*) FROM posts;", std::vector<PdbValueType>{ PdbValueType::INT64 });
+			return data;
+		}
+		else
+		{
+			std::string fquery = 
+			"SELECT COUNT(*) FROM posts_fts "
+			"JOIN posts ON posts_fts.rowid = posts.id "
+			"WHERE posts_fts MATCH '";
+			fquery += squery + "';";
+			const auto data = PdbReadTable(fquery, std::vector<PdbValueType>{ PdbValueType::INT64 });
+			return data;
+		}
 	}
 }
