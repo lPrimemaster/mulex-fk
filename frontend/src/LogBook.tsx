@@ -1,4 +1,4 @@
-import { Accessor, Component, For, JSXElement, Setter, Show, createContext, createEffect, createSignal, onCleanup, onMount, useContext } from "solid-js";
+import { Accessor, Component, For, JSXElement, Setter, Show, createContext, createEffect, createSignal, onMount, useContext } from "solid-js";
 import { DynamicTitle } from "./components/DynamicTitle";
 import Sidebar from "./components/Sidebar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
@@ -23,6 +23,9 @@ import { MarkdownDisplay } from "./components/MarkdownEditor";
 import { MxColorBadge } from "./components/Badges";
 import { MxGenericType } from "./lib/convert";
 
+const POSTS_PER_PAGE = 25;
+const COMMENTS_PER_PAGE = 10;
+
 interface LogBookContextType {
 	pagePosts: LogBookPostArray;
 	setPagePosts: SetStoreFunction<LogBookPostArray>;
@@ -36,6 +39,7 @@ interface LogBookContextType {
 	setNumPosts: Setter<number>;
 	query: Accessor<string>;
 	setQuery: Setter<string>;
+	cache: Map<string, any>;
 };
 
 interface LogBookPost {
@@ -67,6 +71,7 @@ const LogBookContextProvider : Component<{ children?: JSXElement }> = (props) =>
 	const [readPageId, setReadPageId] = createSignal<number>();
 	const [numPosts, setNumPosts] = createSignal<number>(0);
 	const [query, setQuery] = createSignal<string>('');
+	const cache = new Map<string, any>();
 
 	function clearPosts() {
 		setPagePosts("items", []);
@@ -112,7 +117,9 @@ const LogBookContextProvider : Component<{ children?: JSXElement }> = (props) =>
 			setNumPosts,
 
 			query,
-			setQuery
+			setQuery,
+
+			cache
 		}}>
 
 			{props.children}
@@ -171,7 +178,6 @@ interface LogBookFileHandler {
 	uploadProgress: number;
 	serverHandle?: string;
 	serverPath?: string;
-	markedDelete?: boolean;
 	processing: boolean;
 };
 
@@ -515,6 +521,169 @@ const LogBookWritePost : Component = () => {
 	);
 };
 
+interface LogBookComment {
+	author: string;
+	body: string;
+	date: string;
+};
+
+interface LogBookCommentsArray {
+	items: Array<LogBookComment>;
+};
+
+const LogBookCommentBox : Component<{ comment: LogBookComment }> = (props) => {
+	const { cache } = useContext(LogBookContext) as LogBookContextType;
+	const [avatarPath, setAvatarPath] = createSignal<string>('');
+
+	onMount(async () => {
+		if(cache.has('user_avatar') && cache.get('user_avatar').has(props.comment.author)) {
+			const path = cache.get('user_avatar').get(props.comment.author);
+			setAvatarPath(path);
+		}
+		else {
+			const res = await MxWebsocket.instance.rpc_call('mulex::PdbUserGetOtherAvatarPath', [MxGenericType.str512(props.comment.author)]);
+			const path = res.astype('string');
+			setAvatarPath(path);
+
+			if(cache.has('user_avatar')) {
+				const map = cache.get('user_avatar');
+				map.set(props.comment.author, path);
+			}
+			else {
+				const map =  new Map<string, string>();
+				map.set(props.comment.author, path);
+				cache.set('user_avatar', map);
+			}
+		}
+	});
+
+	return (
+		<div class="bg-gray-100 w-full lg:w-3/4 rounded-md shadow-md">
+			<div class="p-5">
+				<div class="flex gap-1 items-center mb-2">
+					<Avatar>
+						<AvatarImage src={avatarPath()}/>
+						<AvatarFallback class="bg-gray-300">{props.comment.author.toUpperCase().slice(0, 2)}</AvatarFallback>
+					</Avatar>
+					<div class="text-md font-semibold">{props.comment.author}</div>
+					<div class="text-xs font-normal">{props.comment.date}</div>
+				</div>
+				<div class="ml-10 text-justify text-wrap">
+					{props.comment.body}
+				</div>
+			</div>
+		</div>
+	);
+};
+
+const LogBookCommentWrite : Component<{ postId: number }> = (props) => {
+	const [content, setContent] = createSignal<string>('');
+
+	function publishComment() {
+		const te = new TextEncoder();
+		const contentRaw = te.encode(content());
+
+		MxWebsocket.instance.rpc_call('mulex::LbkCommentCreate', [
+			MxGenericType.int32(props.postId),
+			MxGenericType.makeData(contentRaw, 'generic')
+		]).then((res) => {
+			if(res.astype('bool')) {
+				localStorage.removeItem('comment-draft-body');
+				setContent('');
+			}
+		});
+	}
+
+	return (
+		<div class="mb-5">
+			<textarea
+				class="w-full focus:outline-none focus:ring-0
+					   rounded-md overflow-hidden resize-none
+					   p-2 font-mono shadow-md my-0"
+				onInput={(e) => {
+					const el = e.currentTarget;
+					el.style.height = "auto";
+					el.style.height = el.scrollHeight + "px";
+					setContent(el.value);
+				}}
+				value={content()}
+				style="white-space: pre; tab-size: 4;" // 4 space tabs
+				placeholder="Add comment..."
+			/>
+			<div class="flex gap-2 mt-2">
+				<MxButton onClick={publishComment} class="place-items-center flex gap-1 py-1" type="success" disabled={content().length === 0}>
+					{/* @ts-ignore */}
+					<PostIcon class="size-5"/>
+					<div class="text-xs font-semibold">Post</div>
+				</MxButton>
+			</div>
+		</div>
+	);
+};
+
+const LogBookComments : Component<{ postId: number }> = (props) => {
+	const [page, setPage] = createSignal<number>(1);
+	const [numComments, setNumComments] = createSignal<number>(0);
+	const [comments, commentsActions] = createStore<LogBookCommentsArray>({ items: [] });
+
+	createEffect(async () => {
+		const nc = await MxWebsocket.instance.rpc_call('mulex::LbkGetNumComments', [MxGenericType.int32(props.postId)]);
+		setNumComments(Number(nc.astype('int64')));
+	});
+
+	createEffect(async () => {
+		if(numComments() > 0) {
+			const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetComments', [
+				MxGenericType.int32(props.postId),
+				MxGenericType.int64(BigInt(COMMENTS_PER_PAGE)),
+				MxGenericType.int64(BigInt(page() - 1))
+			], 'generic');
+
+			commentsActions("items", []);
+			const comments = res.unpack(['str512', 'cstr', 'str512']);
+
+			for(const comment of comments) {
+				const [ user, body, date ] = comment;
+				commentsActions("items", (p) => [...p, { author: user, body: body, date: date }]);
+			}
+		}
+	});
+
+	return (
+		<div class="m-0 mt-1 rounded-md shadow-md bg-white">
+			<div class="p-5">
+				<div class="font-semibold text-md mb-5">Discussion</div>
+				<LogBookCommentWrite postId={props.postId}/>
+
+				<Show when={numComments() > 0}>
+					<div class="flex flex-col gap-5">
+						<For each={comments.items}>{(comment: LogBookComment) =>
+							<LogBookCommentBox comment={comment}/>
+						}</For>
+					</div>
+
+					<div class="container mt-5">
+						<div class="flex w-full items-center place-content-center">
+							<Pagination
+								count={Math.ceil(numComments() / COMMENTS_PER_PAGE)}
+								fixedItems
+								page={page()}
+								onPageChange={setPage}
+								itemComponent={(p) => <PaginationItem page={p.page}>{p.page}</PaginationItem>}
+								ellipsisComponent={() => <PaginationEllipsis/>}
+							>
+								<PaginationPrevious/>
+								<PaginationItems/>
+								<PaginationNext/>
+							</Pagination>
+						</div>
+					</div>
+				</Show>
+			</div>
+		</div>
+	);
+};
+
 const LogBookReadPost : Component = () => {
 	const { setNewPostPage, readPageId, pagePosts } = useContext(LogBookContext) as LogBookContextType;
 	const [readPage, setReadPage] = createSignal<LogBookPost>();
@@ -535,12 +704,13 @@ const LogBookReadPost : Component = () => {
 			</div>
 			<Show when={readPage() !== undefined}>
 				<MarkdownDisplay content={'# ' + readPage()!.title + '\n\n' + modifyBody(readPage()!.body!, readPage()!.meta!)}/>
+				<LogBookComments postId={readPage()!.id}/>
 			</Show>
 		</div>
 	);
 };
 
-const LogBookTable : Component = () => {
+const LogBookTable : Component<{ page: number }> = (props) => {
 	const {
 		pagePosts,
 		setNewPostPage,
@@ -549,14 +719,19 @@ const LogBookTable : Component = () => {
 		clearPosts,
 		setReadPageId,
 		setNumPosts,
+		numPosts,
 		query
 	} = useContext(LogBookContext) as LogBookContextType;
 
 	async function fetchAll(page: number) {
+		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetEntriesPage', [
+			MxGenericType.uint64(BigInt(POSTS_PER_PAGE)),
+			MxGenericType.uint64(BigInt(page))
+		], 'generic');
+
 		clearPosts();
-		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetEntriesPage', [MxGenericType.uint64(50n), MxGenericType.uint64(BigInt(page))], 'generic');
 		const posts = res.unpack(['int32', 'str512', 'str512', 'str512', 'bytearray']);
-		for(const post of posts.reverse()) {
+		for(const post of posts) {
 			const [ id, user, title, date, meta ] = post;
 			const decoder = new TextDecoder();
 			addPost(id, user, title, date, decoder.decode(meta));
@@ -564,18 +739,23 @@ const LogBookTable : Component = () => {
 	}
 
 	async function fetchQuery(page: number) {
-		clearPosts();
 		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetEntriesPageSearch', [
 			MxGenericType.str512(query()),
-			MxGenericType.uint64(50n),
+			MxGenericType.uint64(BigInt(POSTS_PER_PAGE)),
 			MxGenericType.uint64(BigInt(page))
 		], 'generic');
+
+		clearPosts();
 		const posts = res.unpack(['int32', 'str512', 'str512', 'str512', 'bytearray']);
-		for(const post of posts.reverse()) {
+		for(const post of posts) {
 			const [ id, user, title, date, meta ] = post;
 			const decoder = new TextDecoder();
 			addPost(id, user, title, date, decoder.decode(meta));
 		}
+	}
+
+	function clampPage(page: number) {
+		return page <= 0 || page > Math.ceil(numPosts() / POSTS_PER_PAGE) ? 0 : (page - 1);
 	}
 
 	onMount(async () => {
@@ -584,12 +764,12 @@ const LogBookTable : Component = () => {
 		setNumPosts(Number(res.astype('int64')));
 	});
 
-	createEffect(async () => {
+	createEffect(() => {
 		if(query().length > 0) {
-			fetchQuery(0);
+			fetchQuery(clampPage(props.page));
 		}
 		else {
-			fetchAll(0);
+			fetchAll(clampPage(props.page));
 		}
 	});
 
@@ -637,8 +817,10 @@ const LogBookTable : Component = () => {
 							<TableCell class="py-1 cursor-pointer" onClick={() => onPostClick(post)}>{post.date}</TableCell>
 							<TableCell class="py-1 cursor-pointer" onClick={() => onPostClick(post)}>{post.user}</TableCell>
 							<TableCell class="py-1 cursor-pointer" onClick={() => onPostClick(post)}>No comments</TableCell>
-							<TableCell class="py-1 cursor-pointer" onClick={() => onPostClick(post)}>
-								{ /* <BadgeLabel type="display">pdf</BadgeLabel> */ }
+							<TableCell class="py-1 cursor-pointer flex gap-1 flex-wrap" onClick={() => onPostClick(post)}>
+								<For each={post.fileTypes}>{(ext: string) =>
+									<BadgeLabel type="display">{ext}</BadgeLabel>
+								}</For>
 							</TableCell>
 						</TableRow>
 					}</For>
@@ -665,7 +847,7 @@ const LogBookControls : Component = () => {
 						setQuery(text);
 						return nposts;
 					}}
-					placeholder="Search for name, date or author..."
+					placeholder="Search for name, date, content or author..."
 				/>
 				<div class="flex mt-3 gap-3">
 					<MxButton onClick={() => setNewPostPage(LogBookPageType.EditPage)} class="place-items-center flex gap-1 py-1" type="success">
@@ -692,16 +874,16 @@ const LogBookControls : Component = () => {
 
 const LogBookBrowse : Component = () => {
 	const [page, setPage] = createSignal<number>(1);
-	const POSTS_PER_PAGE = 50;
+	const { numPosts } = useContext(LogBookContext) as LogBookContextType;
 
 	return (
 		<div>
 			<LogBookControls/>
-			<LogBookTable/>
+			<LogBookTable page={page()}/>
 			<div class="container mt-5">
 				<div class="flex w-full items-center place-content-center">
 					<Pagination
-						count={1}
+						count={Math.ceil(numPosts() / POSTS_PER_PAGE)}
 						fixedItems
 						page={page()}
 						onPageChange={setPage}
@@ -743,11 +925,6 @@ const LogBookPage : Component = () => {
 export const LogBook : Component = () => {
 
 	// TODO: (Cesar)
-	// - Pagination
-	// - Search bar (content, author, date and files)
-	// - File types display
-	// - Views
-	// - Markdown editor / create post
 	// - Reply/comments/discussion on message
 	// - Delete posts
 	// - Modify posts

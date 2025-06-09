@@ -792,6 +792,20 @@ namespace mulex
 		return true;
 	}
 
+	static mulex::FdbPath PdbUserGetAvatarInternal(const std::string& username)
+	{
+		static PdbAccessLocal accessor;
+		static auto reader = accessor.getReader<PdbString>("users", {"avatar_handle"});
+		auto avatar = reader("WHERE username = '" + username + "'");
+
+		if(avatar.empty()) return ""; // No user ?? in the database
+
+		std::string path = std::get<0>(avatar[0]).c_str();
+		if(path.empty()) return ""; // No avatar
+		
+		return FdbGetHandleRelativePath(path);
+	}
+
 	mulex::FdbPath PdbUserGetAvatarPath()
 	{
 		// Set the user avatar to the given handle
@@ -801,16 +815,12 @@ namespace mulex
 			LogError("[pdb] Only a user can fetch their avatar.");
 			return "";
 		}
-
-		static PdbAccessLocal accessor;
-		static auto reader = accessor.getReader<PdbString>("users", {"avatar_handle"});
-		auto avatar = reader("WHERE username = '" + current_user + "'");
-
-		if(avatar.empty()) return ""; // No user ?? in the database
-
-		std::string path = std::get<0>(avatar[0]).c_str();
-		if(path.empty()) return ""; // No avatar
 		
-		return FdbGetHandleRelativePath(path);
+		return PdbUserGetAvatarInternal(current_user);
+	}
+
+	mulex::FdbPath PdbUserGetOtherAvatarPath(mulex::PdbString username)
+	{
+		return PdbUserGetAvatarInternal(username.c_str());
 	}
 } // namespace mulex

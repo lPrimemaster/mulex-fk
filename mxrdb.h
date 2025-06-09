@@ -185,6 +185,7 @@ namespace mulex
 	MX_RPC_METHOD 							   bool PdbUserChangePassword(mulex::PdbString oldpass, mulex::PdbString newpass);
 	MX_RPC_METHOD 							   bool PdbUserChangeAvatar(mulex::PdbString handle);
 	MX_RPC_METHOD mulex::FdbPath PdbUserGetAvatarPath();
+	MX_RPC_METHOD mulex::FdbPath PdbUserGetOtherAvatarPath(mulex::PdbString username);
 
 	void FdbInit();
 	void FdbClose();

@@ -11,4 +11,7 @@ namespace mulex
 	MX_RPC_METHOD mulex::RPCGenericType LbkGetEntriesPageSearch(mulex::PdbString query, std::uint64_t limit, std::uint64_t page);
 	MX_RPC_METHOD mulex::RPCGenericType LbkGetEntriesPage(std::uint64_t limit, std::uint64_t page);
 	MX_RPC_METHOD std::int64_t LbkGetNumEntriesWithCondition(mulex::PdbString query);
+	MX_RPC_METHOD mulex::RPCGenericType LbkGetComments(std::int32_t postid, std::uint64_t limit, std::uint64_t page);
+	MX_RPC_METHOD std::int64_t LbkGetNumComments(std::int32_t postid);
+	MX_RPC_METHOD MX_PERMISSION("write_entry") bool LbkCommentCreate(std::int32_t postid, mulex::RPCGenericType body);
 } // namespace mulex

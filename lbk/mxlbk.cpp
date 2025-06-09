@@ -160,7 +160,7 @@ namespace mulex
 		"JOIN users ON posts.author = users.id "
 		"WHERE posts_fts MATCH '";
 		fquery += query.c_str();
-		fquery += "' ORDER BY rank LIMIT ";
+		fquery += "' ORDER BY posts.created_at DESC LIMIT ";
 		fquery += std::to_string(limit) + " OFFSET (";
 		fquery += std::to_string(page) + " * " + std::to_string(limit) + ");";
 
@@ -187,7 +187,7 @@ namespace mulex
 
 		std::string query = 
 			"SELECT posts.id, users.username, posts.title, posts.created_at, posts.metadata "
-			"FROM posts JOIN users ON posts.author = users.id LIMIT "
+			"FROM posts JOIN users ON posts.author = users.id ORDER BY posts.created_at DESC LIMIT "
 			+ std::to_string(limit) + " OFFSET (" + std::to_string(page)
 			+ " * " + std::to_string(limit) + ");";
 
@@ -213,5 +213,86 @@ namespace mulex
 			const auto data = PdbReadTable(fquery, std::vector<PdbValueType>{ PdbValueType::INT64 });
 			return data;
 		}
+	}
+
+	mulex::RPCGenericType LbkGetComments(std::int32_t postid, std::uint64_t limit, std::uint64_t page)
+	{
+		static const std::vector<PdbValueType> types = {
+			PdbValueType::STRING,
+			PdbValueType::CSTRING,
+			PdbValueType::STRING
+		};
+
+		std::string query = 
+			"SELECT users.username, comments.body, comments.created_at "
+			"FROM comments JOIN users ON comments.author = users.id WHERE comments.post_id = " +
+			std::to_string(postid) + " "
+			" ORDER BY comments.created_at DESC LIMIT "
+			+ std::to_string(limit) + " OFFSET (" + std::to_string(page)
+			+ " * " + std::to_string(limit) + ");";
+
+		const std::vector<std::uint8_t> data = PdbReadTable(query, types);
+		return data;
+	}
+
+	std::int64_t LbkGetNumComments(std::int32_t postid)
+	{
+		std::string query = "SELECT COUNT(*) FROM comments WHERE post_id = " + std::to_string(postid) + ";";
+		const auto data = PdbReadTable(query, std::vector<PdbValueType>{ PdbValueType::INT64 });
+		return data;
+	}
+
+	bool LbkCommentCreate(std::int32_t postid, mulex::RPCGenericType body)
+	{
+		std::string current_user = GetCurrentCallerUser();
+		if(current_user.empty())
+		{
+			LogError("[pdb] Only a user can create a comment.");
+			return false;
+		}
+
+		std::int32_t user_id = PdbGetUserId(current_user);
+		if(user_id == -1)
+		{
+			return false;
+		}
+
+
+		const std::vector<std::uint8_t> bodyBytes = body;
+		const std::string sbody(bodyBytes.begin(), bodyBytes.end());
+		if(sbody.empty())
+		{
+			LogError("[lbk] Failed to create comment. Body cannot be empty.");
+			return false;
+		}
+
+		static PdbAccessLocal accessor;
+		static auto writer = accessor.getWriter<
+			std::int32_t,
+			std::int32_t,
+			std::int32_t,
+			std::string
+		>("comments", {
+			"id",
+			"author",
+			"post_id",
+			"body"
+		});
+
+		bool ok = writer(
+			std::nullopt,
+			user_id,
+			postid,
+			sbody
+		);
+
+		if(!ok)
+		{
+			LogError("[lbk] Failed to create comment.");
+			return false;
+		}
+
+		LogDebug("[lbk] Created new comment.");
+		return true;
 	}
 }

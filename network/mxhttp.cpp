@@ -164,6 +164,7 @@ namespace mulex
 		if (ext == ".jpeg") return "image/jpeg";
 		if (ext == ".ico")  return "image/x-icon";
 		if (ext == ".pdf")  return "application/pdf";
+		if (ext == ".mp4")  return "video/mp4";
 		return "text/plain";
 	}
 
