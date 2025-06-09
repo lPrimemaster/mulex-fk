@@ -576,7 +576,7 @@ const LogBookCommentBox : Component<{ comment: LogBookComment }> = (props) => {
 	);
 };
 
-const LogBookCommentWrite : Component<{ postId: number }> = (props) => {
+const LogBookCommentWrite : Component<{ postId: number, onUpdate: () => void }> = (props) => {
 	const [content, setContent] = createSignal<string>('');
 
 	function publishComment() {
@@ -590,6 +590,7 @@ const LogBookCommentWrite : Component<{ postId: number }> = (props) => {
 			if(res.astype('bool')) {
 				localStorage.removeItem('comment-draft-body');
 				setContent('');
+				props.onUpdate();
 			}
 		});
 	}
@@ -631,21 +632,25 @@ const LogBookComments : Component<{ postId: number }> = (props) => {
 		setNumComments(Number(nc.astype('int64')));
 	});
 
+	async function updateComments() {
+		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetComments', [
+			MxGenericType.int32(props.postId),
+			MxGenericType.int64(BigInt(COMMENTS_PER_PAGE)),
+			MxGenericType.int64(BigInt(page() - 1))
+		], 'generic');
+
+		commentsActions("items", []);
+		const comments = res.unpack(['str512', 'cstr', 'str512']);
+
+		for(const comment of comments) {
+			const [ user, body, date ] = comment;
+			commentsActions("items", (p) => [...p, { author: user, body: body, date: date }]);
+		}
+	}
+
 	createEffect(async () => {
 		if(numComments() > 0) {
-			const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetComments', [
-				MxGenericType.int32(props.postId),
-				MxGenericType.int64(BigInt(COMMENTS_PER_PAGE)),
-				MxGenericType.int64(BigInt(page() - 1))
-			], 'generic');
-
-			commentsActions("items", []);
-			const comments = res.unpack(['str512', 'cstr', 'str512']);
-
-			for(const comment of comments) {
-				const [ user, body, date ] = comment;
-				commentsActions("items", (p) => [...p, { author: user, body: body, date: date }]);
-			}
+			updateComments();
 		}
 	});
 
@@ -653,7 +658,7 @@ const LogBookComments : Component<{ postId: number }> = (props) => {
 		<div class="m-0 mt-1 rounded-md shadow-md bg-white">
 			<div class="p-5">
 				<div class="font-semibold text-md mb-5">Discussion</div>
-				<LogBookCommentWrite postId={props.postId}/>
+				<LogBookCommentWrite postId={props.postId} onUpdate={updateComments}/>
 
 				<Show when={numComments() > 0}>
 					<div class="flex flex-col gap-5">
