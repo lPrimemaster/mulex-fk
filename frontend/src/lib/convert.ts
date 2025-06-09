@@ -360,6 +360,10 @@ export class MxGenericType
 		}
 	}
 
+	public isEmpty() : boolean {
+		return this.intype === 'generic' ? this.data.byteLength <= 8 : this.data.byteLength === 0;
+	}
+
 	public unpack(structure: Array<string>) : any {
 		if(this.data.byteLength === 0) {
 			return null;

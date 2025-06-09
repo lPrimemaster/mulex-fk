@@ -103,10 +103,12 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 			[MxGenericType.uint64(cid), MxGenericType.uint32(props.maxLogs)],
 			'generic'
 		).then((res: MxGenericType) => {
-			const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
-			for(const l of logs.reverse()) {
-				const [ _, level, cid, timestamp, message ] = l;
-				addMessageToSingle(cid, timestamp, level, message, false);
+			if(!res.isEmpty()) {
+				const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
+				for(const l of logs.reverse()) {
+					const [ _, level, cid, timestamp, message ] = l;
+					addMessageToSingle(cid, timestamp, level, message, false);
+				}
 			}
 		});
 	}
@@ -133,10 +135,12 @@ export const LogProvider: Component<{ children: JSXElement, maxLogs: number }> =
 	function sync_and_sub_logs() {
 		// Fetch the logs
 		MxWebsocket.instance.rpc_call('mulex::MsgGetLastLogs', [MxGenericType.uint32(props.maxLogs)], 'generic').then((res: MxGenericType) => {
-			const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
-			for(const l of logs.reverse()) {
-				const [ _, level, cid, timestamp, message ] = l;
-				addMessageToAll(cid, timestamp, level, message, false);
+			if(!res.isEmpty()) {
+				const logs = res.unpack(['int32', 'uint8', 'uint64', 'int64', 'str512']);
+				for(const l of logs.reverse()) {
+					const [ _, level, cid, timestamp, message ] = l;
+					addMessageToAll(cid, timestamp, level, message, false);
+				}
 			}
 		});
 

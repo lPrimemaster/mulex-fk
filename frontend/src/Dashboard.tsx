@@ -109,8 +109,10 @@ export const Dashboard : Component = () => {
 							</MxButton>
 						</div>
 					</Card>
-					<Card title="Notifications">
-					</Card>
+					{
+					// <Card title="Notifications">
+					// </Card>
+					}
 
 					<MxPopup title="Delete account?" open={accDelPopup()} onOpenChange={setAccDelPopup}>
 						<div class="place-items-center">
