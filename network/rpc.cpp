@@ -144,7 +144,7 @@ namespace mulex
 		SysByteStream& sbs = recvthread->_stream;
 		_rpc_stream = &recvthread->_stream;
 		static constexpr std::uint64_t buffersize = SYS_RECV_THREAD_BUFFER_SIZE;
-		static std::vector<std::uint8_t> fbuffer(buffersize);
+		std::vector<std::uint8_t> fbuffer(buffersize);
 		
 		while(_rpc_thread_running.load())
 		{

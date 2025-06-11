@@ -509,7 +509,7 @@ namespace mulex
 	{
 		_handle = std::thread([&](){
 			static constexpr std::uint64_t SOCKET_RECV_BUFSIZE = 32768;
-			static std::vector<std::uint8_t> rbuffer(SOCKET_RECV_BUFSIZE);
+			std::vector<std::uint8_t> rbuffer(SOCKET_RECV_BUFSIZE);
 			std::uint64_t read;
 			while(true)
 			{

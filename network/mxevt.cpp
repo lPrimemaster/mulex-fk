@@ -671,24 +671,6 @@ namespace mulex
 			// Relay event to clients that are subscribed
 			{
 				std::unique_lock<std::mutex> lock(_evt_sub_lock);
-				LogTrace("[evtserver] Try to relay <%d>.", header.eventid);
-				LogTrace("[evtserver] Registered events:");
-
-				for(const auto& pair : _evt_server_reg)
-				{
-					LogTrace("[evtserver]\t . %s -> %d", pair.first.c_str(), pair.second);
-				}
-
-				LogTrace("[evtserver] Client subscriptions:");
-				for(const auto& pair : _evt_current_subscriptions)
-				{
-					LogTrace("[evtserver]\t . <%d>", pair.first);
-					for(const std::uint64_t cid : pair.second)
-					{
-						LogTrace("[evtserver]\t\t . <0x%llx>", cid);
-					}
-				}
-
 				for(const std::uint64_t cid : _evt_current_subscriptions.at(header.eventid))
 				{
 					LogTrace("[evtserver] Relaying event <%d> from <0x%llx> to <0x%llx>.", header.eventid, header.client, cid);
