@@ -8,6 +8,9 @@ execute_process(
 		--dirs ${CMAKE_SOURCE_DIR}
 		--ignore ${CMAKE_BINARY_DIR}
 		--output-file rpcspec.inl
+		--permissions-input ${CMAKE_SOURCE_DIR}/network/roles.json
+		--permissions-check-output ${PERM_SPEC_FILE}
+		--sql-output ${USER_DB_SETUP}
 		--recursive
 	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 	RESULT_VARIABLE mxrpcret

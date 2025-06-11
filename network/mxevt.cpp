@@ -319,36 +319,6 @@ namespace mulex
 			return;
 		}
 
-		// Register this subscription on the rdb
-		// This is informative only and does not reflect internal state subscription
-		// RdbAccess rda;
-		// std::string skey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/totalcalls";
-		// if(!rda[skey].exists())
-		// {
-		// 	rda.create(skey, RdbValueType::UINT64, 0);
-		// }
-		//
-		// // TODO: (Cesar): Maybe come up with a syntax for rda[key]++
-		// std::uint64_t calls = rda[skey];
-		// rda[skey] = calls + 1;
-		//
-		// std::string ckey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/count";
-		// if(!rda[ckey].exists())
-		// {
-		// 	rda.create(ckey, RdbValueType::UINT32, 0);
-		// }
-		// std::uint32_t count = rda[ckey];
-		// rda[ckey] = count + 1;
-		// std::string rkey = "/system/clients/" + std::to_string(SysGetClientId()) + "/events/subscribed/ids";
-		// if(!rda[rkey].exists())
-		// {
-		// 	rda.create(rkey, RdbValueType::UINT16, nullptr, 100);
-		// }
-		//
-		// std::vector<std::uint16_t> ids = rda[rkey];
-		// ids[count] = eventid;
-		// rda[rkey] = ids;
-
 		auto eid_callbacks = _evt_callbacks.find(eventid);
 		if(eid_callbacks != _evt_callbacks.end())
 		{
@@ -701,6 +671,24 @@ namespace mulex
 			// Relay event to clients that are subscribed
 			{
 				std::unique_lock<std::mutex> lock(_evt_sub_lock);
+				LogTrace("[evtserver] Try to relay <%d>.", header.eventid);
+				LogTrace("[evtserver] Registered events:");
+
+				for(const auto& pair : _evt_server_reg)
+				{
+					LogTrace("[evtserver]\t . %s -> %d", pair.first.c_str(), pair.second);
+				}
+
+				LogTrace("[evtserver] Client subscriptions:");
+				for(const auto& pair : _evt_current_subscriptions)
+				{
+					LogTrace("[evtserver]\t . <%d>", pair.first);
+					for(const std::uint64_t cid : pair.second)
+					{
+						LogTrace("[evtserver]\t\t . <0x%llx>", cid);
+					}
+				}
+
 				for(const std::uint64_t cid : _evt_current_subscriptions.at(header.eventid))
 				{
 					LogTrace("[evtserver] Relaying event <%d> from <0x%llx> to <0x%llx>.", header.eventid, header.client, cid);
