@@ -19,12 +19,12 @@ for multiple backends and frontends. As long as your machines have ethernet conn
 - Low CPU impact
 - Backend remote start/stop
 - User login system
+- Electronic logbook
+- Run file logging
 
 ## Getting Started
 To get started using the mx system checkout [the docs](https://lprimemaster.github.io/mulex-fk/).
 
 ## Upcoming Features
-
-- Electronic logbook
 - Event timeline view
 - Alarms
