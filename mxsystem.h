@@ -58,8 +58,9 @@ namespace mulex
 	{
 		static_assert(
 			std::is_same_v<T, mulex::RPCGenericType> ||
-			std::is_trivially_copyable_v<T>,
-			"SysPackArguments requires trivially copyable arguments."
+			std::is_trivially_copyable_v<T> ||
+			std::is_same_v<T, std::vector<std::uint8_t>>,
+			"SysPackArguments requires trivially copyable arguments or a binary buffer."
 		);
 
 		if constexpr(std::is_same_v<T, mulex::RPCGenericType>)
@@ -69,9 +70,12 @@ namespace mulex
 			buffer.insert(buffer.end(), sbuf, sbuf + sizeof(std::uint64_t));
 			buffer.insert(buffer.end(), t._data.begin(), t._data.end());
 		}
+		else if constexpr(std::is_same_v<T, std::vector<std::uint8_t>>)
+		{
+			buffer.insert(buffer.end(), t.begin(), t.end());
+		}
 		else
 		{
-
 			std::uint8_t ibuf[sizeof(T)];
 			*reinterpret_cast<T*>(ibuf) = t; // NOTE: Copy constructor
 			buffer.insert(buffer.end(), ibuf, ibuf + sizeof(T));
@@ -148,10 +152,11 @@ namespace mulex
 		void push(const std::vector<std::uint8_t>& data);
 		std::vector<std::uint8_t> pop();
 		void requestUnblock();
+		std::uint64_t size() const;
 
 	private:
 		std::stack<std::vector<std::uint8_t>> _stack;
-		std::mutex _mutex;
+		mutable std::mutex _mutex;
 		std::atomic<bool> _sig_unblock = false;
 		std::condition_variable _notifier;
 	};

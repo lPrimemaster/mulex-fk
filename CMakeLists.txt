@@ -22,8 +22,8 @@ if(CROSS_COMP_WINDOWS)
 endif()
 
 # Version configuration
-project(mulex-fk VERSION 0.9.9)
-set(PROJECT_VNAME Ross)
+project(mulex-fk VERSION 1.0.0)
+set(PROJECT_VNAME "Epsilon Eridani")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

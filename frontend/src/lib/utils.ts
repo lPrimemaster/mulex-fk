@@ -125,6 +125,18 @@ export function download_data(filename: string, data: any, mimetype: string = 'a
 	URL.revokeObjectURL(url);
 }
 
+export function concat_bytes(chunks: Array<Uint8Array>) {
+	const totalSize = chunks.reduce((s, a) => s + a.length, 0);
+	const result = new Uint8Array(totalSize);
+
+	let offset = 0;
+	for(const chunk of chunks) {
+		result.set(chunk, offset);
+		offset += chunk.length;
+	}
+	return result;
+}
+
 export function calculate_text_color_yiq(color: string, alpha: number = 255) {
 	const h = color.replace('#', '');
 	let r = parseInt(h.substring(0, 2), 16);

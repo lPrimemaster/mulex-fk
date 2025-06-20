@@ -13,6 +13,7 @@ import { LogTable } from './components/LogTable';
 import { ResourcePanel } from './components/ResourcePanel';
 import { ClientsTable } from './components/ClientsTable';
 import { DynamicTitle } from './components/DynamicTitle';
+import { MxPopup } from './components/Popup';
 
 const [socketStatus, setSocketStatus] = createSignal<boolean>(true);
 const [runStatus, setRunStatus] = createSignal<string>('Stopped');
@@ -21,6 +22,9 @@ const [runTimestamp, setRunTimestamp] = createSignal<number>(0);
 
 const Home: Component = () => {
 	const rdb = new MxRdb();
+
+	const [runReset, setRunReset] = createSignal<boolean>(false);
+	const [runResetCheckPhrase, setRunResetCheckPhrase] = createSignal<string>('');
 
 	function watchRunInfo() {
 		rdb.watch('/system/run/status', (_: string, value: MxGenericType) => {
@@ -145,9 +149,7 @@ const Home: Component = () => {
 							>Stop Run</MxButton>
 							<MxButton
 								class="col-span-1 row-span-2 row-start-3 m-1"
-								onClick={() => {
-									MxWebsocket.instance.rpc_call('mulex::RunReset', [], 'none');
-								}}
+								onClick={() => setRunReset(true)}
 								disabled={runStatus() != 'Stopped'}
 								type="error"
 							>Reset Run</MxButton>
@@ -181,6 +183,44 @@ const Home: Component = () => {
 					<Card title="Clients">
 						<ClientsTable/>
 					</Card>
+
+					<MxPopup title="Reset Run" open={runReset()} onOpenChange={setRunReset}>
+						<div class="place-items-center">
+							<div class="place-content-center justify-center font-semibold text-md">
+								You are about to reset all of the run data. This will invalidate ALL DATA.
+							</div>
+							<div class="place-content-center justify-center font-semibold text-md">
+								Type 'I understand.' bellow to confirm.
+							</div>
+							<div class="place-content-center justify-center font-semibold text-lg mt-2 text-red-500">
+								This action is irreversible.
+							</div>
+							<div class="flex flex-col place-intems-center justify center my-5 w-3/4">
+								<input
+									type="text"
+									value={runResetCheckPhrase()}
+									onInput={(e) => setRunResetCheckPhrase(e.currentTarget.value)}
+									class="w-full h-10 border border-red-300 rounded-lg
+										   px-4 mr-2 py-2 focus:outline-none focus:ring-2
+										   focus:ring-red-500 text-red-500 placeholder-red-200"
+									placeholder="I understand."
+									required
+								/>
+								<MxButton 
+									type="error"
+									class="w-full h-10 mt-2"
+									onClick={() => {
+										MxWebsocket.instance.rpc_call('mulex::RunReset', [], 'none');
+										setRunReset(false);
+										setRunResetCheckPhrase('');
+									}}
+									disabled={runResetCheckPhrase() != 'I understand.'}
+								>
+									Reset Run and Invalidate Data
+								</MxButton>
+							</div>
+						</div>
+					</MxPopup>
 				</div>
 			</div>
 		</div>

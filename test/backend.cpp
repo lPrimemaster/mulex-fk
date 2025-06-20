@@ -2,6 +2,7 @@
 #include "../mxbackend.h"
 #include "../mxlogger.h"
 #include "../mxsystem.h"
+#include <thread>
 
 using namespace mulex;
 
@@ -27,6 +28,8 @@ public:
 			log.info("Test message triggering on events page...");
 		}, 0, 500);
 
+		registerRunStartStop(&TestBackend::onRunStart, &TestBackend::onRunStop);
+
 		// auto [status, ret] = callUserRpc<std::int32_t>(
 		// 	"pmc8742.exe",
 		// 	CallTimeout(1000),
@@ -41,10 +44,19 @@ public:
 
 	void onRunStart(std::uint64_t runno)
 	{
+		std::string data = "Bing Xiling";
+		logRunWriteFile("somefile_bx.txt", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+
+		std::this_thread::sleep_for(std::chrono::seconds(2));
+
+		data = "Bing Xiling 2";
+		logRunWriteFile("somefile_bx.txt", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
 	}
 
 	void onRunStop(std::uint64_t runno)
 	{
+		std::string data = "Bing Xiling";
+		logRunWriteFile("somefile_bx_stop.txt", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
 	}
 
 	RPCGenericType userRpc(const std::vector<std::uint8_t>& data)

@@ -293,7 +293,7 @@ export class MxGenericType
 			}
 		}
 		else if(type === 'uint8') {
-			const u8arr = new Int8Array(data.buffer, offset);
+			const u8arr = new Uint8Array(data.buffer, offset);
 			if(u8arr.length === 1) {
 				return u8arr[0];
 			}

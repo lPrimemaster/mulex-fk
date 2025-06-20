@@ -7,13 +7,16 @@
 #include "../mxrdb.h"
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <random>
 #include <sstream>
 #include <iomanip>
 #include <unordered_map>
 
-static std::unordered_map<std::string, std::string> _fdb_chunk_filepath_cache;
-static std::shared_mutex 							_fdb_chunk_filepath_cache_lock;
+static std::unordered_map<std::string, std::unique_ptr<mulex::SysBufferStack>> _fdb_chunk_stream;
+static std::unordered_map<std::string, std::uint64_t> 		  				   _fdb_chunk_size_cache;
+static std::unordered_map<std::string, std::string> 		  				   _fdb_chunk_filepath_cache;
+static std::shared_mutex 							  		  				   _fdb_chunk_filepath_cache_lock;
 
 namespace mulex
 {
@@ -52,30 +55,49 @@ namespace mulex
 		return ss.str();
 	}
 
-	static void FdbCacheTransferInit(const FdbHandle& handle)
+	static bool FdbCacheTransferInit(const FdbHandle& handle, std::uint64_t chunksz)
 	{
 		std::string path = FdbGetFilePath(handle).c_str();
 
 		if(path.empty())
 		{
 			LogError("[fdb] Failed to start cache transfer init. Maybe handle is invalid.");
-			return;
+			return false;
 		}
 		
 		std::unique_lock lock(_fdb_chunk_filepath_cache_lock);
 		bool valid_insert;
 		std::tie(std::ignore, valid_insert) = _fdb_chunk_filepath_cache.emplace(handle.c_str(), path);
+		_fdb_chunk_size_cache.emplace(handle.c_str(), chunksz);
+		_fdb_chunk_stream.emplace(handle.c_str(), std::make_unique<SysBufferStack>());
 
 		if(!valid_insert)
 		{
 			LogError("[fdb] A cache transfer for handle <%s> is in progress.", handle.c_str());
 		}
+
+		return valid_insert;
 	}
 
 	static void FdbCacheTransferFinalize(const FdbHandle& handle)
 	{
 		std::unique_lock lock(_fdb_chunk_filepath_cache_lock);
 		_fdb_chunk_filepath_cache.erase(handle.c_str());
+		_fdb_chunk_size_cache.erase(handle.c_str());
+		_fdb_chunk_stream.erase(handle.c_str());
+	}
+
+	static std::uint64_t FdbCacheTransferGetChunkSize(const FdbHandle& handle)
+	{
+		std::shared_lock lock(_fdb_chunk_filepath_cache_lock);
+		auto chunk_size = _fdb_chunk_size_cache.find(handle.c_str());
+		if(chunk_size == _fdb_chunk_size_cache.end())
+		{
+			LogError("[fdb] No cache transfer in progress for handle <%s>.", handle.c_str());
+			return 0;
+		}
+
+		return chunk_size->second;
 	}
 
 	static std::string FdbCacheTransferGetPath(const FdbHandle& handle)
@@ -89,6 +111,19 @@ namespace mulex
 		}
 
 		return file_path->second;
+	}
+
+	static SysBufferStack* FdbCacheTransferGetStream(const FdbHandle& handle)
+	{
+		std::shared_lock lock(_fdb_chunk_filepath_cache_lock);
+		auto stream = _fdb_chunk_stream.find(handle.c_str());
+		if(stream == _fdb_chunk_stream.end())
+		{
+			LogError("[fdb] No cache transfer in progress for handle <%s>.", handle.c_str());
+			return nullptr;
+		}
+
+		return stream->second.get();
 	}
 
 	static void FdbInitTables()
@@ -125,6 +160,52 @@ namespace mulex
 		const std::string path = std::string(SysGetExperimentHome()) + "/.storage/buckets/" + bucket;
 		std::filesystem::create_directories(path);
 		return path;
+	}
+
+	std::string FdbGetMimeFromExt(const std::string& ext)
+	{
+		static const std::unordered_map<std::string, std::string> _extensions_to_mime = {
+			{"jpg",  "image/jpeg"},
+			{"png",  "image/png"},
+			{"gif",  "image/gif"},
+			{"webp", "image/webp"},
+			{"svg",  "image/svg+xml"},
+			{"bmp",  "image/bmp"},
+			{"tiff", "image/tiff"},
+
+			{"mp4",  "video/mp4"},
+			{"webm", "video/webm"},
+			{"ogv",  "video/ogg"},
+
+			{"mp3",  "audio/mpeg"},
+			{"ogg",  "audio/ogg"},
+			{"wav",  "audio/wav"},
+			{"weba", "audio/webm"},
+
+			{"pdf",  "application/pdf"},
+			{"zip",  "application/zip"},
+			{"gz",   "application/gzip"},
+			{"tar",  "application/x-tar"},
+			{"json", "application/json"},
+			{"js",   "application/javascript"},
+			{"xml",  "application/xml"},
+			{"bin",  "application/octet-stream"},
+
+			{"txt",  "text/plain"},
+			{"html", "text/html"},
+			{"css",  "text/css"},
+			{"csv",  "text/csv"}
+		};
+
+		auto mime = _extensions_to_mime.find(ext);
+		if(mime != _extensions_to_mime.end())
+		{
+			return mime->second;
+		}
+
+		LogWarning("[fdb] Failed to infer file mime type for extension <%s>.", ext.c_str());
+		LogWarning("[fdb] Using <application/octet-stream> as mime type.");
+		return "application/octet-stream";
 	}
 
 	static std::string FdbGetExtFromMime(const std::string& mimetype)
@@ -308,16 +389,11 @@ namespace mulex
 		SysAppendBinFile(path.c_str(), buffer);
 	}
 
-	FdbHandle FdbUploadFile(mulex::RPCGenericType data, mulex::string32 mimetype)
-	{
-		return FdbWriteFile(data, mimetype);
-	}
-
 	FdbHandle FdbChunkedUploadStart(mulex::string32 mimetype)
 	{
 		// NOTE: (Cesar) Touch the file
 		FdbHandle handle = FdbWriteFile({}, mimetype);
-		FdbCacheTransferInit(handle);
+		FdbCacheTransferInit(handle, 0);
 		return handle;
 	}
 
@@ -347,6 +423,75 @@ namespace mulex
 		return true;
 	}
 
+	bool FdbChunkedDownloadStart(mulex::PdbString handle, std::uint64_t chunksize)
+	{
+		if(!FdbCacheTransferInit(handle, chunksize))
+		{
+			return false;
+		}
+
+		// Start preloading chunks in the cache
+		std::thread([handle, chunksize]() {
+			SysBufferStack* stream = FdbCacheTransferGetStream(handle);
+			std::string path = FdbCacheTransferGetPath(handle);
+			
+			std::ifstream file(path, std::ios::binary);
+			std::vector<std::uint8_t> buffer(chunksize);
+
+			if(!file)
+			{
+				LogError("[fdb] Failed to open file with handle <%s> for streaming.", handle.c_str());
+				stream->requestUnblock();
+				return;
+			}
+
+			while(file.read(reinterpret_cast<char*>(buffer.data()), chunksize) || file.gcount() > 0)
+			{
+				std::uint64_t size = file.gcount();
+				std::vector<std::uint8_t> ibuf;
+				std::uint8_t last = (size < chunksize) || file.eof() ? 1 : 0;
+
+				ibuf.reserve(size + 1 + sizeof(uint64_t));
+				buffer.resize(size);
+
+				ibuf.push_back(last); // Last chunk flag
+				for(int i = 0; i < 8; i++) ibuf.push_back(static_cast<std::uint8_t>(size >> (i * 8))); // Bytearray size
+				ibuf.insert(ibuf.end(), buffer.begin(), buffer.end()); // Bytearray
+
+				stream->push(ibuf);
+			}
+		}).detach();
+
+		return true;
+	}
+
+	mulex::RPCGenericType FdbChunkedDownloadReceive(mulex::PdbString handle)
+	{
+		std::string path = FdbCacheTransferGetPath(handle);
+		SysBufferStack* stream = FdbCacheTransferGetStream(handle);
+
+		if(path.empty() || stream == nullptr)
+		{
+			LogError("[fdb] Failed to send chunk to client. Maybe did not call FdbChunkedDownloadStart or Chunked download ended.");
+			return {};
+		}
+		// TODO: (Cesar) This won't work very well probably due to the nature of notify
+		return stream->pop();
+	}
+
+	bool FdbChunkedDownloadEnd(mulex::PdbString handle)
+	{
+		SysBufferStack* stream = FdbCacheTransferGetStream(handle);
+		if(stream != nullptr && stream->size() != 0)
+		{
+			LogError("[fdb] Donwload End was called, but chunks are still pending.");
+			return false;
+		}
+
+		FdbCacheTransferFinalize(handle);
+		return true;
+	}
+
 	bool FdbDeleteFile(mulex::PdbString handle)
 	{
 		std::string file_path = FdbGetFilePath(handle).c_str();
@@ -371,6 +516,20 @@ namespace mulex
 	{
 		FdbPath fullpath = FdbGetFilePath(handle);
 		return std::filesystem::relative(fullpath.c_str(), SysGetExperimentHome()).string();
+	}
+
+	mulex::PdbString FdbGetFileTimestamp(mulex::PdbString handle)
+	{
+		static PdbAccessLocal accessor;
+		static auto reader = accessor.getReader<PdbString>("storage_index", {"created_at"});
+		auto timestamps = reader(std::string("WHERE id = '") + handle.c_str() + "'");
+
+		if(timestamps.empty())
+		{
+			return "";
+		}
+
+		return std::get<0>(timestamps[0]);
 	}
 
 	void FdbClose()

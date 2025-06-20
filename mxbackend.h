@@ -92,6 +92,10 @@ namespace mulex
 			return status;
 		}
 
+		// Run log
+		void logRunWriteFile(const std::string& alias, const std::vector<std::uint8_t>& buffer);
+		void logRunWriteFile(const std::string& alias, const std::uint8_t* buffer, std::uint64_t size);
+
 	private:
 		// User RPC
 		void userRpcInternal(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* udata);
@@ -135,6 +139,9 @@ namespace mulex
 
 		// Programatically stop backend
 		mutable std::atomic<bool> _prog_stop = false;
+
+		// State Context
+		std::atomic<bool> _inside_stop_ctx = false;
 	};
 
 	template<typename T>

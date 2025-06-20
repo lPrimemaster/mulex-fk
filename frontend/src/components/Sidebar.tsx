@@ -1,12 +1,9 @@
-import { Component, createEffect, createSignal, Show, useContext } from 'solid-js';
+import { Component, createSignal, Show, useContext } from 'solid-js';
 import About from './About';
 import { A } from '@solidjs/router';
 import {
   NavigationMenu,
-  // NavigationMenuContent,
-  // NavigationMenuIcon,
   NavigationMenuItem,
-  // NavigationMenuLink,
   NavigationMenuTrigger
 } from '~/components/ui/navigation-menu';
 
@@ -63,6 +60,11 @@ const Sidebar: Component = () => {
 						<NavigationMenuItem>
 							<NavigationMenuTrigger>
 								<A href='/'>Home</A>
+							</NavigationMenuTrigger>
+						</NavigationMenuItem>
+						<NavigationMenuItem>
+							<NavigationMenuTrigger>
+								<A href='/run'>Run Panel</A>
 							</NavigationMenuTrigger>
 						</NavigationMenuItem>
 						<NavigationMenuItem>

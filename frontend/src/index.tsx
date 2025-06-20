@@ -18,6 +18,7 @@ import { MetaProvider, Link } from '@solidjs/meta';
 import { RouterCatcher } from './components/RouterCatcher';
 import { Dashboard } from './Dashboard';
 import { LogBook } from './LogBook';
+import { RunViewer } from './RunViewer';
 
 const root = document.getElementById('root');
 
@@ -40,6 +41,7 @@ render(() => (
 				<LogProvider maxLogs={100}>
 					<Router>
 						<Route path='/' component={Home}/>
+						<Route path='/run' component={RunViewer}/>
 						<Route path='/project' component={Project}/>
 						<Route path='/rdb' component={RdbViewer}/>
 						<Route path='/history' component={HistoryViewer}/>

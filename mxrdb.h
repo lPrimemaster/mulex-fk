@@ -192,6 +192,7 @@ namespace mulex
 
 	FdbPath FdbGetFilePath(const FdbHandle& handle);
 	bool FdbCheckHandle(const FdbHandle& handle);
+	std::string FdbGetMimeFromExt(const std::string& ext);
 
 	// Chunked upload is preferred for big files (>10MB)
 	// This avoids the need to have huge data buffers allocated
@@ -199,10 +200,13 @@ namespace mulex
 	MX_RPC_METHOD MX_PERMISSION("upload_files") bool FdbChunkedUploadSend(mulex::PdbString handle, mulex::RPCGenericType chunk);
 	MX_RPC_METHOD MX_PERMISSION("upload_files") bool FdbChunkedUploadEnd(mulex::PdbString handle);
 
-	// NOTE: (Cesar) FdbUploadFile is limited by the SysRecvThread buffer size (~10MB filesize)
-	MX_RPC_METHOD MX_PERMISSION("upload_files") mulex::FdbHandle FdbUploadFile(mulex::RPCGenericType data, mulex::string32 mimetype);
+	MX_RPC_METHOD MX_PERMISSION("download_files") bool FdbChunkedDownloadStart(mulex::PdbString handle, std::uint64_t chunksize);
+	MX_RPC_METHOD MX_PERMISSION("download_files") mulex::RPCGenericType FdbChunkedDownloadReceive(mulex::PdbString handle);
+	MX_RPC_METHOD MX_PERMISSION("download_files") bool FdbChunkedDownloadEnd(mulex::PdbString handle);
+
 	MX_RPC_METHOD MX_PERMISSION("delete_files") bool FdbDeleteFile(mulex::PdbString handle);
 	MX_RPC_METHOD mulex::FdbPath FdbGetHandleRelativePath(mulex::PdbString handle);
+	MX_RPC_METHOD mulex::PdbString FdbGetFileTimestamp(mulex::PdbString handle);
 
 	// NOTE: (Cesar) Limited to 128 permissions
 	//				 Enlarge if required

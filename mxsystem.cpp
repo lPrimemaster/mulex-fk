@@ -595,6 +595,13 @@ namespace mulex
 		_notifier.notify_all();
 	}
 
+	std::uint64_t SysBufferStack::size() const
+	{
+		// NOTE: (Cesar) This could be a shared lock
+		std::unique_lock<std::mutex> lock(_mutex);
+		return _stack.size();
+	}
+
 	void SysRefBufferStack::push(std::vector<std::uint8_t>&& data, std::uint16_t ref)
 	{
 		_refcount.store(ref);

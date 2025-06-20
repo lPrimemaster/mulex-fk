@@ -254,7 +254,11 @@ namespace mulex
 				LogTrace("[mxbacked] Run %llu stopping.", no);
 				if(_user_run_stop)
 				{
-					_io.schedule([this, no](){ (*this.*_user_run_stop)(no); });
+					_io.schedule([this, no](){ 
+						_inside_stop_ctx.store(true);
+						(*this.*_user_run_stop)(no);
+						_inside_stop_ctx.store(false);
+					});
 				}
 			}
 
@@ -440,5 +444,63 @@ namespace mulex
 	{
 		_dep_fail = flag;
 		return *this;
+	}
+
+	void MxBackend::logRunWriteFile(const std::string& alias, const std::vector<std::uint8_t>& buffer)
+	{
+		logRunWriteFile(alias, buffer.data(), buffer.size());
+	}
+
+	void MxBackend::logRunWriteFile(const std::string& alias, const std::uint8_t* buffer, std::uint64_t size)
+	{
+		if(!SysGetConnectedExperiment().has_value())
+		{
+			LogError("[mxbackend] Failed to log run file. Not connected to an experiment.");
+			return;
+		}
+
+		std::uint8_t status = rdb["/system/run/status"];
+		if(static_cast<RunStatus>(status) != RunStatus::RUNNING && !_inside_stop_ctx) // Run if we are inside stop ctx
+		{
+			LogError("[mxbackend] Failed to log run file. Run not running.");
+			return;
+		}
+		
+		static constexpr std::uint64_t CHUNK_SIZE = 64 * 1024; // Upload chunks of 64KB
+		auto ext_pos = alias.find_last_of('.');
+		string32 deduced_mime = "application/octet-stream";
+		if(ext_pos != std::string::npos)
+		{
+			deduced_mime = FdbGetMimeFromExt(alias.substr(ext_pos + 1));
+		}
+
+		FdbHandle handle = _experiment->_rpc_client->call<mulex::FdbHandle>(RPC_CALL_MULEX_FDBCHUNKEDUPLOADSTART, deduced_mime);
+
+		for(std::uint64_t i = 0; i < size; i += CHUNK_SIZE)
+		{
+			const std::uint8_t* ptr = buffer + i;
+			const std::uint64_t sz = (i + CHUNK_SIZE) > size ? (size - i) : CHUNK_SIZE;
+			_experiment->_rpc_client->call<bool>(RPC_CALL_MULEX_FDBCHUNKEDUPLOADSEND, mxstring<512>(handle), RPCGenericType::FromData(ptr, sz));
+		}
+
+		if(!_experiment->_rpc_client->call<bool>(RPC_CALL_MULEX_FDBCHUNKEDUPLOADEND, handle))
+		{
+			LogError("[mxbackend] Failed to log run file. Failed to upload file.");
+			return;
+		}
+
+		RunLogFileMetadata meta = {
+			._runno = rdb["/system/run/number"],
+			._handle = handle,
+			._alias = alias
+		};
+
+		if(!_experiment->_rpc_client->call<bool>(RPC_CALL_MULEX_RUNLOGFILE, meta))
+		{
+			LogError("[mxbackend] Failed to log run file. Failed to register metadata.");
+			return;
+		}
+
+		LogTrace("[mxbackend] Log run file OK.");
 	}
 } // namespace mulex
