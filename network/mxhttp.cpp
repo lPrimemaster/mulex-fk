@@ -1342,7 +1342,7 @@ namespace mulex
 			};
 
 #ifndef CREATE_DEV_USER
-			std::string random_salt = HttpGenerateSecureRandom256Hex();
+			std::string random_salt = SysGenerateSecureRandom256Hex();
 			std::string random_pass = HttpGenerateRandomPassword();
 			std::string cat_pass_salt = random_salt + random_pass;
 			std::vector<std::uint8_t> buffer(cat_pass_salt.size());
