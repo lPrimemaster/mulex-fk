@@ -334,6 +334,10 @@ MyBackend::MyBackend(int argc, char* argv[]) //...
 }
 ```
 
+> :warning: Dependency checking occurs at the time of expression evaluation but 
+the backend still runs its i/o loop for at least once before terminate is called.
+Do not rely on this feature to terminate the backend consistently.
+
 ## Writing run files
 If you want to make a file produced from a backend available (registered to the run log),
 you can upload files to the server. As long as a run is in the `RUNNING` state anywhere
@@ -348,10 +352,6 @@ void MyBackend::some_method()
     logRunWriteFile("my_file.txt", buffer);
 }
 ```
-
-> :warning: Dependency checking occurs at the time of expression evaluation but 
-the backend still runs its i/o loop for at least once before terminate is called.
-Do not rely on this feature to terminate the backend consistently.
 
 ## Setting custom arguments
 Let's say you want to add some custom argument as to where some config

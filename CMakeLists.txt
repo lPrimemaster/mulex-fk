@@ -175,6 +175,7 @@ endif()
 # Create system object library
 find_package(OpenSSL REQUIRED)
 add_library(mxsys OBJECT mxsystem.cpp plug/fxfer.cpp)
+add_dependencies(mxsys generate_build_info)
 target_include_directories(mxsys PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
