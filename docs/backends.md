@@ -334,6 +334,21 @@ MyBackend::MyBackend(int argc, char* argv[]) //...
 }
 ```
 
+## Writing run files
+If you want to make a file produced from a backend available (registered to the run log),
+you can upload files to the server. As long as a run is in the `RUNNING` state anywhere
+from a backend. This file becomes available in the Run Panel page on the frontend.
+You may also call this function from the backend registered run start and stop functions.
+
+```cpp
+void MyBackend::some_method()
+{
+    std::vector<std::uint8_t> buffer;
+    // ...
+    logRunWriteFile("my_file.txt", buffer);
+}
+```
+
 > :warning: Dependency checking occurs at the time of expression evaluation but 
 the backend still runs its i/o loop for at least once before terminate is called.
 Do not rely on this feature to terminate the backend consistently.
