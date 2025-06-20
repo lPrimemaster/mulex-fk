@@ -123,7 +123,7 @@ const Sidebar: Component = () => {
 				</Show>
 				<footer class="p-5" style="position:fixed; bottom:0">
 					<div class="grid justify-items-center">
-						<small>Version {__APP_VNAME__}</small>
+						<small class="text-center">Version<br/>{__APP_VNAME__}</small>
 						<small class="text-gray-400 cursor-default select-none" onClick={checkDev}>v{__APP_VERSION__}</small>
 					</div>
 				</footer>
