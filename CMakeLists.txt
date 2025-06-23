@@ -10,16 +10,11 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # Options
 option(LTRACE "Enable/Disable trace logging." OFF)
 option(PROFILE "Enable/Disable profiling with tracy." OFF)
-option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." ON)
+option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." OFF)
 option(BUILD_TESTS "Build tests." OFF)
 option(BUILD_EXAMPLES "Build examples." OFF)
 option(BUILD_CTARGETS "Build extra targets." OFF)
 option(GH_ACTION_MODE "Signals this configure is running in a github action." OFF)
-option(CROSS_COMP_WINDOWS "When on UNIX sets the mode to cross compile to windows x64 using mingw." OFF)
-
-if(CROSS_COMP_WINDOWS)
-	set(CMAKE_TOOLCHAIN_FILE "cmake/MingwToolchain.cmake")
-endif()
 
 # Version configuration
 project(mulex-fk VERSION 1.0.0)
@@ -39,18 +34,6 @@ if(NOT GH_ACTION_MODE)
 	else()
 		set(FETCHCONTENT_FULLY_DISCONNECTED OFF)
 	endif()
-endif()
-
-# Use vcpkg if we are on windows
-if(WIN32)
-	if(CROSS_COMP_WINDOWS)
-		message(WARNING "Cross compiling for Windows (x64).")
-
-		# Make afunix.h available
-		# https://raw.githubusercontent.com/mingw-w64/mingw-w64/refs/heads/master/mingw-w64-headers/include/afunix.h
-	endif()
-	message(WARNING "On windows, all packages must be installed as x64-mingw-dynamic if using vcpkg.")
-	set(VCPKG_TARGET_TRIPLET "x64-mingw-dynamic" CACHE STRING "Vcpkg target triplet.")
 endif()
 
 if(LTRACE)

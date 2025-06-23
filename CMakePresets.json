@@ -1,0 +1,13 @@
+{
+	"version": 4,
+	"configurePresets": [
+		{
+			"name": "windows-mingw",
+			"displayName": "Windows MinGW Build",
+			"generator": "MinGW Makefiles",
+			"cacheVariables": {
+				"VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic"
+			}
+		}
+	]
+}
