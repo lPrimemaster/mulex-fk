@@ -1,0 +1,8 @@
+{
+	"name": "mulex-fk",
+	"dependencies": [
+		"libuv",
+		"zlib",
+		"openssl"
+	]
+}

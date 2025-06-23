@@ -54,8 +54,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            vcpkg_installed
+            buildtrees
+            packages
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}
+
       - name: Install dependencies
-        run: choco install mingw cmake python3 -y
+        run: |
+          choco feature enable -n allowGlobalConfirmation
+          choco install mingw cmake python3 --no-progress -y
 
       - name: Install vcpkg
         run: |
