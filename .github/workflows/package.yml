@@ -67,7 +67,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          choco feature enable -n allowGlobalConfirmation
           choco install mingw cmake python3 --no-progress -y
 
       - name: Install vcpkg
@@ -75,18 +74,19 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git C:\\vcpkg
           C:\\vcpkg\\bootstrap-vcpkg.bat
 
-      - name: Install vcpkg dependencies
-        run: |
-          C:\\vcpkg\\vcpkg install libuv zlib --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic
-          C:\\vcpkg\\vcpkg install openssl --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic --clean-after-build
-          C:\\vcpkg\\vcpkg integrate install
+      # - name: Install vcpkg dependencies
+      #   run: |
+      #     C:\\vcpkg\\vcpkg install --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic
+      #     C:\\vcpkg\\vcpkg install libuv zlib --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic
+      #     C:\\vcpkg\\vcpkg install openssl --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic --clean-after-build
+      #     C:\\vcpkg\\vcpkg integrate install
 
       - name: Configure
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLTRACE=OFF -DUSB_SUPPORT=OFF -DGH_ACTION_MODE=ON -G"MinGW Makefiles" -DCMAKE_TOOLCHAIN_FILE="C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET="x64-mingw-dynamic" -DVCPKG_ROOT="C:\\vcpkg"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DLTRACE=OFF -DGH_ACTION_MODE=ON -DCMAKE_TOOLCHAIN_FILE="C:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET="x64-mingw-dynamic" -DVCPKG_ROOT="C:\\vcpkg" --preset windows-mingw
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel --config Release
 
         # Make VERSION and VNAME available
       - name: Read version
