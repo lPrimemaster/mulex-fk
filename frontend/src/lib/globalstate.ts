@@ -31,9 +31,15 @@ interface BackendStatusList {
 	[key: string]: BackendStatus;
 };
 
+interface UserRole {
+	name: string;
+	id: number;
+};
+
 // Global signals/stores
 const [backends, setBackends] = createStore<BackendStatusList>();
 const [loggedUser, setLoggedUser] = createSignal<string>('');
+const [loggedUserRole, setLoggedUserRole] = createSignal<UserRole>({ name: 'none', id: -1 });
 const [expname, setExpname] = createSignal<string>('');
 
 export {
@@ -42,9 +48,10 @@ export {
 	// Would be possible to move all this to a solidjs context
 	// and use it on the root file. However I decided to use this
 	// and I remember reasoning about it, but now I don't know why...
-	backends 	as gBackends,
-	loggedUser 	as gLoggedUser,
-	expname 	as gExpname,
+	backends 	   as gBackends,
+	loggedUser 	   as gLoggedUser,
+	loggedUserRole as gLoggedUserRole,
+	expname 	   as gExpname,
 
 	// Global state init funtion
 	init_global_state as initGlobalState
@@ -91,6 +98,12 @@ async function fetch_client_name() {
 
 	const data = await res.json();
 	setLoggedUser(data.return);
+}
+
+async function fetch_client_role() {
+	const role = await MxWebsocket.instance.rpc_call('mulex::PdbUserGetCurrentRole', [], 'generic');
+	const [id, name] = role.unpack(['int32', 'str512'])[0];
+	setLoggedUserRole({ name, id });
 }
 
 async function fetch_experiment_name() {
@@ -164,6 +177,8 @@ async function init_global_state() {
 	await init_client_status();
 
 	await fetch_client_name();
+
+	await fetch_client_role();
 
 	await fetch_experiment_name();
 

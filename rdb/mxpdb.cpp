@@ -823,4 +823,26 @@ namespace mulex
 	{
 		return PdbUserGetAvatarInternal(username.c_str());
 	}
+
+	mulex::RPCGenericType PdbUserGetCurrentRole()
+	{
+		std::string user = GetCurrentCallerUser();
+
+		if(user.empty())
+		{
+			LogError("[pdb] Only a user can get the current user role.");
+			return "";
+		}
+
+		PdbString role_name = PdbGetUserRole(user);
+		std::int32_t role_id = PdbGetUserRoleId(user);
+		
+		return SysPackArguments(role_id, role_name);
+	}
+
+	mulex::RPCGenericType PdbUserGetAllUsers()
+	{
+		static const std::vector<PdbValueType> types = { PdbValueType::STRING, PdbValueType::INT32 };
+		return PdbReadTable("SELECT username, role_id FROM users;", types);
+	}
 } // namespace mulex

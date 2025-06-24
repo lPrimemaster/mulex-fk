@@ -186,7 +186,8 @@ namespace mulex
 	MX_RPC_METHOD 							   bool PdbUserChangeAvatar(mulex::PdbString handle);
 	MX_RPC_METHOD mulex::FdbPath PdbUserGetAvatarPath();
 	MX_RPC_METHOD mulex::FdbPath PdbUserGetOtherAvatarPath(mulex::PdbString username);
-
+	MX_RPC_METHOD mulex::RPCGenericType PdbUserGetCurrentRole();
+	MX_RPC_METHOD MX_PERMISSION("delete_user") mulex::RPCGenericType PdbUserGetAllUsers();
 	void FdbInit();
 	void FdbClose();
 
