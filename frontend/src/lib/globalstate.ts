@@ -4,6 +4,7 @@ import { MxWebsocket } from "./websocket";
 import { MxRdb } from "./rdb";
 import { extract_backend_name } from "./utils";
 import { createSignal } from "solid-js";
+import { showToast } from "~/components/ui/toast";
 
 class BackendStatus {
 	name: string;
@@ -41,6 +42,10 @@ const [backends, setBackends] = createStore<BackendStatusList>();
 const [loggedUser, setLoggedUser] = createSignal<string>('');
 const [loggedUserRole, setLoggedUserRole] = createSignal<UserRole>({ name: 'none', id: -1 });
 const [expname, setExpname] = createSignal<string>('');
+const [socketStatus, setSocketStatus] = createSignal<boolean>(true);
+const [runStatus, setRunStatus] = createSignal<string>('Stopped');
+const [runNumber, setRunNumber] = createSignal<number>(0);
+const [runTimestamp, setRunTimestamp] = createSignal<number>(0);
 
 export {
 	// Global state variables
@@ -48,10 +53,24 @@ export {
 	// Would be possible to move all this to a solidjs context
 	// and use it on the root file. However I decided to use this
 	// and I remember reasoning about it, but now I don't know why...
+	
+	// Backends
 	backends 	   as gBackends,
+
+	// Users
 	loggedUser 	   as gLoggedUser,
 	loggedUserRole as gLoggedUserRole,
+
+	// Experiment
 	expname 	   as gExpname,
+
+	// Socket
+	socketStatus   as gSocketStatus,
+
+	// Run data
+	runStatus	   as gRunStatus,
+	runNumber	   as gRunNumber,
+	runTimestamp   as gRunTimestamp,
 
 	// Global state init funtion
 	init_global_state as initGlobalState
@@ -109,6 +128,70 @@ async function fetch_client_role() {
 async function fetch_experiment_name() {
 	const name = await MxWebsocket.instance.rpc_call('mulex::SysGetExperimentName');
 	setExpname(name.astype('string'));
+}
+
+function setRunStatusFromCode(code: number) {
+	switch(code) {
+		case 0: setRunStatus('Stopped'); break;
+		case 1: setRunStatus('Running'); break;
+		case 2: setRunStatus('Starting'); break;
+		case 3: setRunStatus('Stopping'); break;
+	}
+}
+
+async function init_run_status() {
+	const rdb = new MxRdb();
+
+	rdb.watch('/system/run/status', (_: string, value: MxGenericType) => {
+		setRunStatusFromCode(value.astype('uint8'));
+		if(value.astype('uint8') == 1) {
+			showToast({ title: 'Run ' + runNumber() + ' started.', variant: 'success'});
+		}
+		else if(value.astype('uint8') == 0) {
+			showToast({ title: 'Run ' + runNumber() + ' stopped.', variant: 'error'});
+		}
+	});
+
+	rdb.watch('/system/run/number', (_: string, value: MxGenericType) => {
+		setRunNumber(value.astype('uint64'));
+	});
+
+	rdb.watch('/system/run/timestamp', (_: string, value: MxGenericType) => {
+		setRunTimestamp(Number(value.astype('int64')));
+	});
+
+	MxWebsocket.instance.on_connection_change((conn: boolean) => {
+		setSocketStatus(conn);
+	});
+
+	MxWebsocket.instance.rpc_call(
+		'mulex::RdbReadValueDirect',
+		[MxGenericType.str512('/system/run/status')],
+		'generic').then((res: MxGenericType) => {
+			const rstatus = res.astype('uint8');
+			// Status MEMO:
+			// 0 - Stopped
+			// 1 - Running
+			// 2 - Starting
+			// 3 - Stopping
+			setRunStatusFromCode(rstatus);
+	});
+
+	MxWebsocket.instance.rpc_call(
+		'mulex::RdbReadValueDirect',
+		[MxGenericType.str512('/system/run/number')],
+		'generic').then((res: MxGenericType) => {
+			const rnumber = res.astype('uint64');
+			setRunNumber(Number(rnumber));
+	});
+
+	MxWebsocket.instance.rpc_call(
+		'mulex::RdbReadValueDirect',
+		[MxGenericType.str512('/system/run/timestamp')],
+		'generic').then((res: MxGenericType) => {
+			const rts = res.astype('int64');
+			setRunTimestamp(Number(rts));
+	});
 }
 
 async function init_backend_status() {
@@ -183,4 +266,6 @@ async function init_global_state() {
 	await fetch_experiment_name();
 
 	await init_backend_status();
+
+	await init_run_status();
 }
