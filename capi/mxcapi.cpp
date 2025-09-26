@@ -54,6 +54,11 @@ public:
 		return mulex::RPCGenericType::FromData(reinterpret_cast<std::uint8_t*>(retval) + sizeof(std::uint64_t), size);
 	}
 
+	inline void bypassInterruptSignal(bool value)
+	{
+		bypassIntHandler(value);
+	}
+
 private:
 	CMxBackendRpcCallbackFunc _rpc_func = nullptr;
 };
@@ -167,7 +172,7 @@ C_LINKAGE void CMxBackendStatusSet(CMxContext* ctx, const char* status, const ch
 // Emulate writting to run log
 C_LINKAGE void CMxBackendRunLogWriteFile(CMxContext* ctx, const char* alias, const std::uint8_t* buffer, std::uint64_t size);
 
-// TODO: (César) Check if it makes sense to emulate execution deferal
+// TODO: (César) Check if it makes sense to emulate execution deferral
 
 // Emulate init
 C_LINKAGE bool CMxBackendInit(CMxContext* ctx)
@@ -175,7 +180,14 @@ C_LINKAGE bool CMxBackendInit(CMxContext* ctx)
 	if(CMxCheckContext(ctx))
 	{
 		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+
+		// We don't want to setup an interrupt signal handler here
+		// Let the the underlying implementation control this
+		// NOTE: (César) Needs to be before init()
+		bck->bypassInterruptSignal(true);
+
 		bck->init();
+
 		return bck->checkStatus();
 	}
 

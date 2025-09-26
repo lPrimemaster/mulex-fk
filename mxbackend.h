@@ -96,6 +96,8 @@ namespace mulex
 		void logRunWriteFile(const std::string& alias, const std::vector<std::uint8_t>& buffer);
 		void logRunWriteFile(const std::string& alias, const std::uint8_t* buffer, std::uint64_t size);
 
+		void bypassIntHandler(bool value);
+
 	private:
 		// User RPC
 		void userRpcInternal(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* udata);
@@ -144,6 +146,9 @@ namespace mulex
 
 		// State Context
 		std::atomic<bool> _inside_stop_ctx = false;
+
+		// Interrupt signal bypass
+		bool _bypass_int_sig = false;
 	};
 
 	template<typename T>

@@ -270,10 +270,14 @@ namespace mulex
 			// Silently ignore other transition states
 		});
 		
-		// So we stop on ctrl-C
-		LogMessage("[mxbackend] Running...");
-		LogMessage("[mxbackend] Press ctrl-C to exit.");
-		stop = mulex::SysSetupExitSignal();
+		// Check if we want to setup a ctrl-C signal catcher handler
+		if(!_bypass_int_sig)
+		{
+			// So we stop on ctrl-C
+			LogMessage("[mxbackend] Running...");
+			LogMessage("[mxbackend] Press ctrl-C to exit.");
+			stop = mulex::SysSetupExitSignal();
+		}
 
 		// Check the current status and schedule start
 		std::uint8_t status = rdb["/system/run/status"];
@@ -507,5 +511,10 @@ namespace mulex
 		}
 
 		LogTrace("[mxbackend] Log run file OK.");
+	}
+
+	void MxBackend::bypassIntHandler(bool value)
+	{
+		_bypass_int_sig = value;
 	}
 } // namespace mulex
