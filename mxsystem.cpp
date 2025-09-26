@@ -1058,6 +1058,11 @@ namespace mulex
 		return _sys_expname.c_str();
 	}
 
+	void SysOverrideBinaryName(const std::string& name)
+	{
+		_sys_binname = name;
+	}
+
 	std::string_view SysGetBinaryName()
 	{
 		if(!_sys_binname.empty())

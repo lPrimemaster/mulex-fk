@@ -109,6 +109,8 @@ namespace mulex
 		// Stop via code
 		void terminate() const;
 
+		bool checkStatus() const;
+
 		// Execution defer
 		template<std::derived_from<MxBackend> D>
 		void deferExec(void (D::* func)(void), std::int64_t delay = 0, std::int64_t interval = 0)

@@ -296,6 +296,7 @@ namespace mulex
 	bool SysCreateNewExperiment(const std::string& expname);
 	std::string SysGetExperimentHome();
 	MX_RPC_METHOD mulex::mxstring<512> SysGetExperimentName();
+	void SysOverrideBinaryName(const std::string& name);
 	std::string_view SysGetBinaryName();
 	std::string_view SysGetBinaryFullName();
 	std::string_view SysGetHostname();

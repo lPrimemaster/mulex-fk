@@ -222,6 +222,11 @@ namespace mulex
 		_prog_stop.store(true);
 	}
 
+	bool MxBackend::checkStatus() const
+	{
+		return _init_ok;
+	}
+
 	void MxBackend::deferExec(std::function<void()> func, std::int64_t delay, std::int64_t interval)
 	{
 		_io.schedule(func, delay, interval);

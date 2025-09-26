@@ -24,6 +24,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# We need PIC to be able to compile mxcapi
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Disable fetch content network check for gh actions
 if(NOT GH_ACTION_MODE)
 	# Check internet connection
@@ -173,6 +176,7 @@ add_subdirectory(bck)
 add_subdirectory(plug)
 add_subdirectory(rexs)
 add_subdirectory(lbk)
+add_subdirectory(capi)
 
 if(BUILD_CTARGETS)
 	add_subdirectory(ctargets)
