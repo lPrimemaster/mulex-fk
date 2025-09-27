@@ -20,8 +20,17 @@
 
 typedef void CMxContext;
 typedef void (*CMxBackendEvtCallbackFunc)(const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata);
-typedef void* (*CMxBackendRpcCallbackFunc)(const std::uint8_t* data, std::uint64_t len);
+typedef char* (*CMxBackendRpcCallbackFunc)(const char* data, std::uint64_t len);
 typedef void (*CMxBackendRunStartStopCallbackFunc)(std::uint64_t);
+
+// NOTE: (César) This is not managed by us and
+// 				 should be freed on the caller side
+C_LINKAGE struct CMxRpcReturn
+{
+	std::uint8_t status;
+	std::uint8_t* data;
+	std::uint64_t size;
+};
 
 // NOTE: (César)
 // Allow for overriding the backend name
@@ -53,7 +62,9 @@ C_LINKAGE MX_API void CMxBackendStatusSet(CMxContext* ctx, const char* status, c
 // TODO: (César)
 
 // Emulate calling user RPC
-// TODO: (César)
+C_LINKAGE MX_API CMxRpcReturn CMxBackendRpcCall(CMxContext* ctx, const char* backend, const std::uint8_t* data, std::uint64_t size, std::int64_t timeout);
+
+C_LINKAGE MX_API void CMxBackendRpcFreeReturn(CMxRpcReturn ret);
 
 // Emulate writting to run log
 C_LINKAGE MX_API void CMxBackendRunLogWriteFile(CMxContext* ctx, const char* alias, const std::uint8_t* buffer, std::uint64_t size);

@@ -71,6 +71,11 @@ public:
 		setStatus(status, color);
 	}
 
+	inline std::tuple<mulex::BckUserRpcStatus, mulex::RPCGenericType> publicRpcCall(const std::string& backend, const std::uint8_t* data, std::uint64_t size, std::int64_t timeout)
+	{
+		return callUserRpc(backend, std::vector<std::uint8_t>(data, data + size), timeout);
+	}
+
 	inline void publicRunLogWriteFile(const std::string& alias, const std::uint8_t* buffer, std::uint64_t size)
 	{
 		logRunWriteFile(alias, buffer, size);
@@ -79,7 +84,10 @@ public:
 private:
 	inline mulex::RPCGenericType internalRpcCallback(const std::vector<std::uint8_t>& data)
 	{
-		void* retval = _rpc_func(data.data(), data.size());
+		// NOTE: (César) retval should never be managed by us
+		// 				 the _rpc_func is responsible for the
+		// 				 returned memory lifetime
+		char* retval = _rpc_func(reinterpret_cast<const char*>(data.data()), data.size());
 		if(!retval)
 		{
 			// nullptr is void
@@ -122,6 +130,22 @@ static bool CMxCheckContext(CMxContext* ctx)
 		return false;
 	}
 	return true;
+}
+
+static CMxRpcReturn CMxRpcReturnAllocateFromCall(std::uint8_t status, mulex::RPCGenericType& data)
+{
+	CMxRpcReturn output;
+	output.status = status;
+	output.size = data.getSize();
+	output.data = nullptr;
+
+	if(output.size > 0)
+	{
+		output.data = new std::uint8_t[data.getSize()];
+		std::memcpy(output.data, data.getData(), data.getSize());
+	}
+
+	return output;
 }
 
 C_LINKAGE void CMxBinaryOverrideName(const char* name)
@@ -229,7 +253,30 @@ C_LINKAGE void CMxBackendStatusSet(CMxContext* ctx, const char* status, const ch
 // TODO: (César)
 
 // Emulate calling user RPC
-// TODO: (César)
+C_LINKAGE CMxRpcReturn CMxBackendRpcCall(CMxContext* ctx, const char* backend, const std::uint8_t* data, std::uint64_t size, std::int64_t timeout)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		auto [status, value] = bck->publicRpcCall(backend, data, size, timeout);
+		return CMxRpcReturnAllocateFromCall(static_cast<std::uint8_t>(status), value);
+	}
+
+	// NOTE: (César): Use NO_SUCH_BACKEND when the context is invalid
+	// 				  One could generate a different code or flags just
+	// 				  for this, but it is self-explanatory when the error
+	// 				  log is displayed before
+	mulex::LogError("[mxcapi] Invalid context. CMxBackendRpcCall() issued NO_SUCH_BACKEND to signal this.");
+	return { static_cast<std::uint8_t>(mulex::BckUserRpcStatus::NO_SUCH_BACKEND), nullptr, 0 };
+}
+
+C_LINKAGE MX_API void CMxBackendRpcFreeReturn(CMxRpcReturn ret)
+{
+	if(ret.data && ret.size > 0)
+	{
+		delete[] ret.data;
+	}
+}
 
 // Emulate writting to run log
 C_LINKAGE void CMxBackendRunLogWriteFile(CMxContext* ctx, const char* alias, const std::uint8_t* buffer, std::uint64_t size)

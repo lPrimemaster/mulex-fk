@@ -30,15 +30,12 @@ public:
 
 		registerRunStartStop(&TestBackend::onRunStart, &TestBackend::onRunStop);
 
-		// auto [status, ret] = callUserRpc<std::int32_t>(
-		// 	"pmc8742.exe",
-		// 	CallTimeout(1000),
-		// 	string32("pleaseSmt"),
-		// 	std::int32_t(0),
-		// 	std::int32_t(1),
-		// 	std::int32_t(2)
-		// );
-		// std::cout << static_cast<int>(status) << " -> " << ret << std::endl;
+		auto [status, ret] = callUserRpc<std::int32_t, std::int32_t>(
+			"test.py",
+			CallTimeout(1000),
+			std::int32_t(2)
+		);
+		std::cout << static_cast<int>(status) << " -> " << ret << std::endl;
 		// registerDependency("pmc8742.exe").required(true).onFail(RexDependencyManager::LOG_ERROR);
 	}
 
@@ -64,8 +61,8 @@ public:
 		log.info("User RPC called!");
 		log.info("Data size: %llu", data.size());
 
-		std::uint8_t forty_two = *data.data();
-		mulex::LogDebug("forty_two: %d", forty_two);
+		// std::uint8_t forty_two = *data.data();
+		// mulex::LogDebug("forty_two: %d", forty_two);
 		return 3.1415f;
 	}
 };
