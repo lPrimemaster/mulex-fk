@@ -58,11 +58,11 @@ C_LINKAGE MX_API void CMxBackendStatusSet(CMxContext* ctx, const char* status, c
 // Emulate writting to run log
 C_LINKAGE MX_API void CMxBackendRunLogWriteFile(CMxContext* ctx, const char* alias, const std::uint8_t* buffer, std::uint64_t size);
 
-// TODO: (César) Check if it makes sense to emulate execution deferal
+// TODO: (César) Check if it makes sense to emulate execution deferral
 
 // Emulate init
 C_LINKAGE MX_API bool CMxBackendInit(CMxContext* ctx);
 
 // NOTE: (César) as we only use this API for python
-// 				 implementing sping and terminate
+// 				 implementing spin and terminate
 // 				 might not make sense

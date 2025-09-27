@@ -34,10 +34,49 @@ public:
 
 	inline void publicRpcRegister(CMxBackendRpcCallbackFunc func)
 	{
-		_rpc_func = func;
-		registerUserRpc(&CEmulatedBackend::internalRpcCallback);
+		if(func)
+		{
+			_rpc_func = func;
+			registerUserRpc(&CEmulatedBackend::internalRpcCallback);
+		}
 	}
 
+	inline void bypassInterruptSignal(bool value)
+	{
+		bypassIntHandler(value);
+	}
+
+	inline void publicStartStopRegister(CMxBackendRunStartStopCallbackFunc start, CMxBackendRunStartStopCallbackFunc stop)
+	{
+		if(start && stop)
+		{
+			_start_func = start;
+			_stop_func = stop;
+			registerRunStartStop(&CEmulatedBackend::internalStartCallback, &CEmulatedBackend::internalStopCallback);
+		}
+		else if(start)
+		{
+			_start_func = start;
+			registerRunStartStop<CEmulatedBackend>(&CEmulatedBackend::internalStartCallback, nullptr);
+		}
+		else if(stop)
+		{
+			_stop_func = stop;
+			registerRunStartStop<CEmulatedBackend>(nullptr, &CEmulatedBackend::internalStopCallback);
+		}
+	}
+
+	inline void publicStatusSet(const std::string& status, const std::string& color)
+	{
+		setStatus(status, color);
+	}
+
+	inline void publicRunLogWriteFile(const std::string& alias, const std::uint8_t* buffer, std::uint64_t size)
+	{
+		logRunWriteFile(alias, buffer, size);
+	}
+
+private:
 	inline mulex::RPCGenericType internalRpcCallback(const std::vector<std::uint8_t>& data)
 	{
 		void* retval = _rpc_func(data.data(), data.size());
@@ -54,13 +93,20 @@ public:
 		return mulex::RPCGenericType::FromData(reinterpret_cast<std::uint8_t*>(retval) + sizeof(std::uint64_t), size);
 	}
 
-	inline void bypassInterruptSignal(bool value)
+	inline void internalStartCallback(std::uint64_t no)
 	{
-		bypassIntHandler(value);
+		_start_func(no);
+	}
+
+	inline void internalStopCallback(std::uint64_t no)
+	{
+		_stop_func(no);
 	}
 
 private:
 	CMxBackendRpcCallbackFunc _rpc_func = nullptr;
+	CMxBackendRunStartStopCallbackFunc _start_func = nullptr;
+	CMxBackendRunStartStopCallbackFunc _stop_func = nullptr;
 };
 
 inline static CEmulatedBackend* CMxGetBackendPointer(CMxContext* ctx)
@@ -158,10 +204,26 @@ C_LINKAGE void CMxBackendRpcRegister(CMxContext* ctx, CMxBackendRpcCallbackFunc 
 }
 
 // Emulate start/stop
-C_LINKAGE void CMxBackendRunRegisterStartStop(CMxContext* ctx, CMxBackendRunStartStopCallbackFunc start, CMxBackendRunStartStopCallbackFunc stop);
+// NOTE: (César) The python GIL needs to be acquired when calling python functions
+// 				 The start/stop functions run inside the _io loop thread
+C_LINKAGE void CMxBackendRunRegisterStartStop(CMxContext* ctx, CMxBackendRunStartStopCallbackFunc start, CMxBackendRunStartStopCallbackFunc stop)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		bck->publicStartStopRegister(start, stop);
+	}
+}
 
 // Emulate setStatus
-C_LINKAGE void CMxBackendStatusSet(CMxContext* ctx, const char* status, const char* color);
+C_LINKAGE void CMxBackendStatusSet(CMxContext* ctx, const char* status, const char* color)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		bck->publicStatusSet(status, color);
+	}
+}
 
 // Emulate registerDependency
 // TODO: (César)
@@ -170,7 +232,14 @@ C_LINKAGE void CMxBackendStatusSet(CMxContext* ctx, const char* status, const ch
 // TODO: (César)
 
 // Emulate writting to run log
-C_LINKAGE void CMxBackendRunLogWriteFile(CMxContext* ctx, const char* alias, const std::uint8_t* buffer, std::uint64_t size);
+C_LINKAGE void CMxBackendRunLogWriteFile(CMxContext* ctx, const char* alias, const std::uint8_t* buffer, std::uint64_t size)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		bck->publicRunLogWriteFile(alias, buffer, size);
+	}
+}
 
 // TODO: (César) Check if it makes sense to emulate execution deferral
 
