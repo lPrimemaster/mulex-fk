@@ -300,6 +300,14 @@ namespace mulex
 		std::string _key;
 	};
 
+	template<>
+	inline RdbProxyValue::operator RPCGenericType()
+	{
+		readEntry();
+		return _genvalue;
+	}
+
+
 	class RdbAccess
 	{
 	public:
