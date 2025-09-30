@@ -8,7 +8,7 @@
 class CEmulatedBackend : public mulex::MxBackend
 {
 public:
-	CEmulatedBackend(int argc, char* argv[]) : mulex::MxBackend(argc, argv)
+	CEmulatedBackend(int argc, char* argv[]) : mulex::MxBackend(argc, argv), plog(log), prdb(rdb)
 	{
 	}
 
@@ -115,16 +115,20 @@ private:
 	CMxBackendRpcCallbackFunc _rpc_func = nullptr;
 	CMxBackendRunStartStopCallbackFunc _start_func = nullptr;
 	CMxBackendRunStartStopCallbackFunc _stop_func = nullptr;
+
+public:
+	mulex::MsgEmitter& plog;
+	mulex::RdbAccess& prdb;
 };
 
 inline static CEmulatedBackend* CMxGetBackendPointer(CMxContext* ctx)
 {
-	return reinterpret_cast<CEmulatedBackend*>(ctx);
+	return reinterpret_cast<CEmulatedBackend*>(ctx->_backend);
 }
 
 static bool CMxCheckContext(CMxContext* ctx)
 {
-	if(ctx == nullptr)
+	if(ctx == nullptr || ctx->_backend == nullptr)
 	{
 		mulex::LogError("[mxcapi] Invalid context. Aborting...");
 		return false;
@@ -148,25 +152,54 @@ static CMxRpcReturn CMxRpcReturnAllocateFromCall(std::uint8_t status, mulex::RPC
 	return output;
 }
 
+C_LINKAGE CMxContext* CMxContextCreate()
+{
+	CMxContext* ctx = new CMxContext();
+
+	if(ctx == nullptr)
+	{
+		mulex::LogError("[mxcapi] Failed to allocate CMxContext.");
+		return nullptr;
+	}
+
+	mulex::LogTrace("[mxcapi] CMxContextCreate() OK.");
+	return ctx;
+}
+
+C_LINKAGE void CMxContextDestroy(CMxContext** ctx)
+{
+	if(ctx && *ctx)
+	{
+		delete *ctx;
+		mulex::LogTrace("[mxcapi] CMxContextDestroy() OK.");
+	}
+}
+
 C_LINKAGE void CMxBinaryOverrideName(const char* name)
 {
 	mulex::SysOverrideBinaryName(name);
 }
 
-C_LINKAGE CMxContext* CMxBackendCreate(int argc, char* argv[])
+C_LINKAGE void CMxBackendCreate(CMxContext* ctx, int argc, char* argv[])
 {
 	CEmulatedBackend* bck = new CEmulatedBackend(argc, argv);
 	if(!bck)
 	{
-		return nullptr;
+		mulex::LogError("[mxcapi] CMxBackendCreate: Failed to allocate.");
+		ctx->_backend = nullptr;
+		return;
 	}
 
 	if(!bck->checkStatus())
 	{
-		return nullptr;
+		mulex::LogError("[mxcapi] CMxBackendCreate: Bad backend status.");
+		ctx->_backend = nullptr;
+		delete bck;
+		return;
 	}
 
-	return reinterpret_cast<CMxContext*>(bck);
+	mulex::LogTrace("[mxcapi] CMxBackendCreate() OK.");
+	ctx->_backend = bck;
 }
 
 C_LINKAGE void CMxBackendDestroy(CMxContext* ctx)
@@ -175,8 +208,13 @@ C_LINKAGE void CMxBackendDestroy(CMxContext* ctx)
 	{
 		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
 
-		// NOTE: (César) C++ dtor cleans up after itself
-		delete bck;
+		if(bck)
+		{
+			// NOTE: (César) C++ dtor cleans up after itself
+			delete bck;
+			ctx->_backend = nullptr;
+			mulex::LogTrace("[mxcapi] CMxBackendDestroy() OK.");
+		}
 	}
 }
 
@@ -308,4 +346,154 @@ C_LINKAGE bool CMxBackendInit(CMxContext* ctx)
 	}
 
 	return false;
+}
+
+C_LINKAGE void CMxMsgEmitterLogError(CMxContext* ctx, const char* msg)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		if(bck)
+		{
+			bck->plog.error(msg);
+		}
+	}
+}
+
+C_LINKAGE void CMxMsgEmitterLogWarning(CMxContext* ctx, const char* msg)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		if(bck)
+		{
+			bck->plog.warn(msg);
+		}
+	}
+}
+
+C_LINKAGE void CMxMsgEmitterLogInfo(CMxContext* ctx, const char* msg)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		if(bck)
+		{
+			bck->plog.info(msg);
+		}
+	}
+}
+
+C_LINKAGE void CMxMsgEmitterAttachLogger(CMxContext* ctx, bool attach)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		if(bck)
+		{
+			bck->plog.attachLogger(attach);
+		}
+	}
+}
+
+C_LINKAGE bool CMxRdbCreate(CMxContext* ctx, const char* key, std::uint8_t type, const std::uint8_t* data, std::uint64_t size)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		return bck->prdb[key].create(static_cast<mulex::RdbValueType>(type), mulex::RPCGenericType::FromData(data, size));
+	}
+	return false;
+}
+
+C_LINKAGE bool CMxRdbDelete(CMxContext* ctx, const char* key)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		return bck->prdb[key].erase();
+	}
+	return false;
+}
+
+C_LINKAGE bool CMxRdbExists(CMxContext* ctx, const char* key)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		return bck->prdb[key].exists();
+	}
+	return false;
+}
+
+C_LINKAGE bool CMxRdbRead(CMxContext* ctx, const char* key, std::uint8_t* data, std::uint64_t* rsize)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		mulex::RPCGenericType rgt = bck->prdb[key];
+		if(!rsize || *rsize == 0)
+		{
+			mulex::LogError("[mxcapi] CMxRdbRead: Failed to read key. Must provide a valid buffer size.");
+			return false;
+		}
+
+		if(!data)
+		{
+			mulex::LogError("[mxcapi] CMxRdbRead: Failed to read key. Must provide a valid buffer.");
+			return false;
+		}
+
+		if(*rsize < rgt.getSize())
+		{
+			mulex::LogError("[mxcapi] CMxRdbRead: Failed to read key. Provided buffer is too small.");
+			return false;
+		}
+
+		std::memcpy(data, rgt.getData(), rgt.getSize());
+		*rsize = rgt.getSize();
+		return true;
+	}
+	return false;
+}
+
+C_LINKAGE bool CMxRdbWrite(CMxContext* ctx, const char* key, const std::uint8_t* data, std::uint64_t size)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		bck->prdb[key] = mulex::RPCGenericType::FromData(data, size);
+		return true;
+	}
+	return false;
+}
+
+C_LINKAGE void CMxRdbWatch(CMxContext* ctx, const char* key, CMxRdbWatchCallback func)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		bck->prdb[key].watch([func](const mulex::RdbKeyName& key, const mulex::RPCGenericType& value) {
+			func(key.c_str(), value._data.data());
+		});
+	}
+}
+
+C_LINKAGE void CMxRdbUnwatch(CMxContext* ctx, const char* key)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		bck->prdb[key].unwatch();
+	}
+}
+
+C_LINKAGE std::uint8_t CMxRdbKeyType(CMxContext* ctx, const char* key)
+{
+	if(CMxCheckContext(ctx))
+	{
+		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
+		return static_cast<std::uint8_t>(bck->prdb[key].type());
+	}
+	return 0;
 }
