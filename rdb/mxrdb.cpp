@@ -1059,7 +1059,7 @@ namespace mulex
 		}
 	}
 
-	bool RdbProxyValue::exists()
+	bool RdbProxyValue::exists() const
 	{
 		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
@@ -1132,5 +1132,16 @@ namespace mulex
 			return false;
 		}
 		return exp.value()->_rpc_client->call<bool>(RPC_CALL_MULEX_RDBTOGGLEHISTORY, RdbKeyName(_key), status);
+	}
+
+	RdbValueType RdbProxyValue::type() const
+	{
+		ZoneScoped;
+		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
+		if(exp.has_value())
+		{
+			return static_cast<RdbValueType>(exp.value()->_rpc_client->call<std::uint8_t>(RPC_CALL_MULEX_RDBGETKEYTYPE, RdbKeyName(_key)));
+		}
+		return static_cast<RdbValueType>(0);
 	}
 }
