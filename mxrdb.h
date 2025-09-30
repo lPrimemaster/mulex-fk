@@ -284,12 +284,13 @@ namespace mulex
 			writeEntry();
 		}
 
-		bool exists();
+		bool exists() const;
 		bool create(RdbValueType type, RPCGenericType value, std::uint64_t count = 0);
 		bool erase();
 		void watch(std::function<void(const RdbKeyName& key, const RPCGenericType& value)> callback);
 		void unwatch();
 		bool history(bool status);
+		RdbValueType type() const;
 
 	private:
 		void writeEntry();
