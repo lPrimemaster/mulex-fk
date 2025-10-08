@@ -5,4 +5,4 @@
 import logging
 
 logger = logging.getLogger(__name__)
-logger.addHandler(logging.NullHanler())
+logger.addHandler(logging.NullHandler())

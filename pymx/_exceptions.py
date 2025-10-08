@@ -5,3 +5,8 @@
 class UnsupportedSystemError(Exception):
     """To raise when a the current system is not supported."""
     pass
+
+
+class InvalidKey(Exception):
+    """To raise when an rdb key is invalid."""
+    pass
