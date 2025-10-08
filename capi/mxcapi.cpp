@@ -474,7 +474,7 @@ C_LINKAGE void CMxRdbWatch(CMxContext* ctx, const char* key, CMxRdbWatchCallback
 	{
 		CEmulatedBackend* bck = CMxGetBackendPointer(ctx);
 		bck->prdb[key].watch([func](const mulex::RdbKeyName& key, const mulex::RPCGenericType& value) {
-			func(key.c_str(), value._data.data());
+			func(key.c_str(), value._data.data(), value.getSize());
 		});
 	}
 }

@@ -81,7 +81,7 @@ C_LINKAGE MX_API void CMxMsgEmitterAttachLogger(CMxContext* ctx, bool attach);
 // ==========
 // RdbAccess
 // ==========
-typedef void (*CMxRdbWatchCallback)(const char* key, const std::uint8_t* value);
+typedef void (*CMxRdbWatchCallback)(const char* key, const std::uint8_t* value, std::uint64_t size);
 
 C_LINKAGE MX_API bool CMxRdbCreate(CMxContext* ctx, const char* key, std::uint8_t type, const std::uint8_t* data, std::uint64_t size);
 C_LINKAGE MX_API bool CMxRdbDelete(CMxContext* ctx, const char* key);
