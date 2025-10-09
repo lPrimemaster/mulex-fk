@@ -22,6 +22,11 @@ for multiple backends and frontends. As long as your machines have ethernet conn
 - Electronic logbook
 - Run file logging
 
+## Natively Supported Backend APIs
+- C++
+- C
+- Python3
+
 ## Getting Started
 To get started using the mx system checkout [the docs](https://lprimemaster.github.io/mulex-fk/).
 
