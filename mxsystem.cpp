@@ -1552,9 +1552,9 @@ namespace mulex
 		}
 
 		// Erase file and write PID
-		::ftruncate(_sys_lock_handle, 0);
+		static_cast<void>(::ftruncate(_sys_lock_handle, 0));
 		std::string pid = std::to_string(::getpid());
-		::write(_sys_lock_handle, pid.c_str(), pid.size() + 1);
+		static_cast<void>(::write(_sys_lock_handle, pid.c_str(), pid.size() + 1));
 #else
 		_sys_lock_handle = CreateFileA(
 			proc_lock_file.c_str(),
