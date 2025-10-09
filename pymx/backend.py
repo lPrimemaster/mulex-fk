@@ -4,7 +4,7 @@
 
 from ._platform import get_lib_location
 from ._logger import logger
-from ._exceptions import InvalidKey
+from ._exceptions import InvalidKey, RpcCallFailed
 import ctypes as ct
 import os
 import sys
@@ -120,6 +120,7 @@ class Backend(ABC):
         )
 
         self._rdb_watches = {}
+        self._sub_events = {}
 
         self._lib.CMxBackendRunRegisterStartStop(
             self._ctx,
@@ -262,6 +263,38 @@ class Backend(ABC):
             ct.c_uint64(len(data))
         )
 
+    def subscribe(
+        self,
+        name: str,
+        callback: Callable[[bytes], None]
+    ) -> None:
+        def cb_entry(data, len, udata):
+            callback(
+                bytes(data[:ct.c_uint64(len).value])
+            )
+
+        self._sub_events[name] = self._cb_register(
+            ct.CFUNCTYPE(
+                None,
+                ct.POINTER(ct.c_uint8),
+                ct.c_uint64,
+                ct.POINTER(ct.c_uint8)
+            ),
+            cb_entry
+        )
+
+        self._lib.CMxBackendEventSubscribe(
+            self._ctx,
+            name.encode('utf-8'),
+            self._sub_events[name]
+        )
+
+    def unsubscribe(self, name: str) -> None:
+        self._lib.CMxBackendEventUnsubscribe(
+            self._ctx,
+            name.encode('utf-8')
+        )
+
     def call(
         self,
         target: str,
@@ -293,14 +326,19 @@ class Backend(ABC):
                     'No return format specified. '
                     'Returning raw bytes.'
                 )
+                self._lib.CMxBackendRpcFreeReturn(ret)
                 return bytes(ret.data[:ret.size])
             else:
+                self._lib.CMxBackendRpcFreeReturn(ret)
                 return struct.unpack(fmt, bytes(ret.data[:ret.size]))[0]
         else:
             logger.error('Failed to call user function.')
             logger.error(f'Error: {ret.status}')
-
-        self._lib.CMxBackendRpcFreeReturn(ret)
+            status = ret.status
+            self._lib.CMxBackendRpcFreeReturn(ret)
+            raise RpcCallFailed(
+                f"Failed to call RPC from: {target} (error: {status})"
+            )
 
     def read(self, key: str) -> Any:
         sz = ct.c_uint64(1024)
@@ -345,11 +383,12 @@ class Backend(ABC):
 
     def watch(self, key: str, callback: Callable[[str, Any], None]) -> None:
         def cb_entry(key, value, size):
+            decoded_key = ct.string_at(key).decode('utf-8')
             callback(
-                ct.string_at(key).decode('utf-8'),
+                decoded_key,
                 self._deserialize_key_value(
-                    key,
-                    bytes(value.value[:size.value])
+                    decoded_key,
+                    bytes(value[:ct.c_uint64(size).value])
                 )
             )
 

@@ -10,3 +10,8 @@ class UnsupportedSystemError(Exception):
 class InvalidKey(Exception):
     """To raise when an rdb key is invalid."""
     pass
+
+
+class RpcCallFailed(Exception):
+    """To raise when an rpc call fails."""
+    pass
