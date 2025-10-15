@@ -38,10 +38,14 @@ namespace mulex
 		void unsubscribeEvent(const std::string& evt);
 
 		// User RPC
-		template<std::derived_from<MxBackend> D>
-		void registerUserRpc(RPCGenericType (D::* func)(const std::vector<std::uint8_t>&))
+		template<std::derived_from<MxBackend> D, typename... Args>
+		void registerUserRpc(RPCGenericType (D::* func)(const Args&...))
 		{
-			_user_rpc = static_cast<RPCGenericType(MxBackend::*)(const std::vector<std::uint8_t>&)>(func);
+			_user_rpc = [this, func](const std::vector<std::uint8_t>& data) -> RPCGenericType {
+				return std::apply([&](auto&&... unpacked_args) -> RPCGenericType {
+					return (*static_cast<D*>(this).*func)(std::forward<decltype(unpacked_args)>(unpacked_args)...);
+				}, SysUnpackArguments<Args...>(data));
+			};
 		}
 
 		// Start/stop
@@ -135,7 +139,8 @@ namespace mulex
 		SysAsyncEventLoop _io;
 
 		// User rpc function
-		RPCGenericType (MxBackend::* _user_rpc)(const std::vector<std::uint8_t>&) = nullptr;
+		std::function<RPCGenericType(const std::vector<std::uint8_t>&)> _user_rpc;
+		// RPCGenericType (MxBackend::*_user_rpc)(const std::vector<std::uint8_t>&) = nullptr;
 
 		// User start/stop
 		void (MxBackend::* _user_run_start)(std::uint64_t) = nullptr;

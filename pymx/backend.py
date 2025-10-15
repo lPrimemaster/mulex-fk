@@ -10,7 +10,7 @@ import os
 import sys
 from abc import ABC  # , abstractmethod
 import struct
-from typing import Union, Callable, Any
+from typing import Union, Callable, Any, List
 from enum import Enum
 
 
@@ -164,7 +164,7 @@ class Backend(ABC):
         elif isinstance(data, str):
             return data.encode('utf-8')
         elif isinstance(data, bool):
-            return struct.pack('<?', data.value)
+            return struct.pack('<?', data)
         elif isinstance(data, ct.c_uint8):
             return struct.pack('<B', data.value)
         elif isinstance(data, ct.c_uint16):
@@ -190,6 +190,42 @@ class Backend(ABC):
         else:
             raise TypeError(f'Unsupported type: {type(data)}')
 
+    def _deserialize_user_data(self, data, dtype):
+        if dtype is int:
+            return struct.unpack('<i', data[:4])[0], 4
+        elif dtype is float:
+            return struct.unpack('<d', data[:8])[0], 8
+        elif dtype is bytes:
+            return struct.unpack(f'<{len(data)}s', data)[0], len(data)
+        elif dtype is str:
+            return data.decode('utf-8'), len(data)
+        elif dtype is bool:
+            return struct.unpack('<?', data[:1])[0], 1
+        elif dtype is ct.c_uint8:
+            return struct.unpack('<B', data[:1])[0], 1
+        elif dtype is ct.c_uint16:
+            return struct.unpack('<H', data[:2])[0], 2
+        elif dtype is ct.c_uint32:
+            return struct.unpack('<L', data[:4])[0], 4
+        elif dtype is ct.c_uint64:
+            return struct.unpack('<Q', data[:8])[0], 8
+        elif dtype is ct.c_int8:
+            return struct.unpack('<b', data[:1])[0], 1
+        elif dtype is ct.c_int16:
+            return struct.unpack('<h', data[:2])[0], 2
+        elif dtype is ct.c_int32:
+            return struct.unpack('<l', data[:4])[0], 4
+        elif dtype is ct.c_int64:
+            return struct.unpack('<q', data[:8])[0], 8
+        elif dtype is ct.c_float:
+            return struct.unpack('<f', data[:4])[0], 4
+        elif dtype is ct.c_double:
+            return struct.unpack('<d', data[:8])[0], 8
+        elif dtype is ct.c_bool:
+            return struct.unpack('<?', data[:1])[0], 1
+        else:
+            raise TypeError(f'Unsupported type: {dtype}')
+
     def _serialize_generic(self, buffer: bytes):
         data = struct.pack('<Q', len(buffer)) + buffer
         self._shared_buff.value = data
@@ -204,11 +240,33 @@ class Backend(ABC):
     def _run_stop_entry(self, no):
         self.run_stop(no)
 
+    def _user_rpc_unpack(self, data) -> List[Any]:
+        params = list(self.rpc.__annotations__.items())
+        args = []
+        offset = 0
+
+        for pname, ptype in params:
+            if pname == 'return':
+                continue
+
+            value, noff = self._deserialize_user_data(
+                data[offset:],
+                ptype
+            )
+            offset += noff
+            args.append(value)
+        return args
+
     def _user_rpc_entry(self, data, size):
         try:
+            if not self.rpc:
+                logger.error('Failed to call user rpc. Not defined.')
+                raise RpcCallFailed('Local rpc function is not defined.')
+
+            args = self._user_rpc_unpack(data[:size])
             return self._serialize_generic(
                 self._serialize_user_data(
-                    self.rpc(data[:size], size)
+                    self.rpc(*args)
                 )
             )
         except TypeError as e:
@@ -248,9 +306,9 @@ class Backend(ABC):
     # @abstractmethod
     def run_stop(self, no: int) -> None:
         pass
-
-    def rpc(self, data: bytes, size: int) -> RpcReturn:
-        pass
+    #
+    # def rpc(self, data: bytes, size: int) -> RpcReturn:
+    #     pass
 
     def register(self, name: str) -> None:
         self._lib.CMxBackendEventRegister(self._ctx, name.encode('utf-8'))
@@ -298,9 +356,9 @@ class Backend(ABC):
     def call(
         self,
         target: str,
+        *args: RpcReturn,
         timeout: int = 1000,
-        fmt: str = None,
-        *args: RpcReturn
+        fmt: str = None
     ) -> Any:
         parts = []
         for arg in args:
@@ -326,11 +384,13 @@ class Backend(ABC):
                     'No return format specified. '
                     'Returning raw bytes.'
                 )
+                data = bytes(ret.data[:ret.size])
                 self._lib.CMxBackendRpcFreeReturn(ret)
-                return bytes(ret.data[:ret.size])
+                return data
             else:
+                data = struct.unpack(fmt, bytes(ret.data[:ret.size]))[0]
                 self._lib.CMxBackendRpcFreeReturn(ret)
-                return struct.unpack(fmt, bytes(ret.data[:ret.size]))[0]
+                return data
         else:
             logger.error('Failed to call user function.')
             logger.error(f'Error: {ret.status}')

@@ -101,22 +101,43 @@ namespace mulex
 	template<typename T, typename ...Args>
 	inline std::tuple<T, Args...> SysUnpackArguments(const std::uint8_t* data, std::uint64_t size)
 	{
-		if constexpr(sizeof...(Args) > 0)
+		static_assert(
+			std::is_same_v<T, mulex::RPCGenericType> ||
+			(std::is_trivially_copyable_v<T> && std::is_default_constructible_v<T>) ||
+			(std::is_same_v<T, std::vector<std::uint8_t>> && sizeof...(Args) == 0),
+			"SysUnpackArguments requires trivially copyable and default constructible arguments or a single binary buffer."
+		);
+
+		if constexpr(std::is_same_v<T, mulex::RPCGenericType>)
 		{
-			return std::tuple_cat(SysUnpackArguments<T>(data, size), SysUnpackArguments<Args...>(data + sizeof(T), size - sizeof(T)));
+			const std::uint64_t rgt_size = *reinterpret_cast<const std::uint64_t*>(data);
+			if constexpr(sizeof...(Args) > 0)
+			{
+				return std::tuple_cat(SysUnpackArguments<T>(data, size), SysUnpackArguments<Args...>(data + rgt_size, size - rgt_size));
+			}
+			else
+			{
+				return std::make_tuple(T::FromData(data + sizeof(std::uint64_t), rgt_size));
+			}
+		}
+		else if constexpr(std::is_same_v<T, std::vector<std::uint8_t>>)
+		{
+			return std::make_tuple(std::vector<std::uint8_t>(data, data + size));
 		}
 		else
 		{
-			static_assert(
-				std::is_trivially_copyable_v<T> && std::is_default_constructible_v<T>,
-				"SysUnpackArguments requires trivially copyable and default constructible types."
-			);
-
-			if(size < sizeof(T))
+			if constexpr(sizeof...(Args) > 0)
 			{
-				return std::make_tuple(T());
+				return std::tuple_cat(SysUnpackArguments<T>(data, size), SysUnpackArguments<Args...>(data + sizeof(T), size - sizeof(T)));
 			}
-			return std::make_tuple(*reinterpret_cast<const T*>(data));
+			else
+			{
+				if(size < sizeof(T))
+				{
+					return std::make_tuple(T());
+				}
+				return std::make_tuple(*reinterpret_cast<const T*>(data));
+			}
 		}
 	}
 

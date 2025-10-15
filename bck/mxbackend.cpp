@@ -170,7 +170,7 @@ namespace mulex
 		{
 			std::vector<std::uint8_t> vdata(data, data + len);
 			_io.schedule([this, vdata]() {
-				RPCGenericType response = (*this.*_user_rpc)(vdata);
+				RPCGenericType response = _user_rpc(vdata);
 				emitRpcResponse(response);
 			});
 		}

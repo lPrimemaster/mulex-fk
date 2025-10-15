@@ -2,6 +2,7 @@
 #include "../mxbackend.h"
 #include "../mxlogger.h"
 #include "../mxsystem.h"
+#include <cstdint>
 #include <thread>
 
 using namespace mulex;
@@ -30,10 +31,11 @@ public:
 
 		registerRunStartStop(&TestBackend::onRunStart, &TestBackend::onRunStop);
 
-		auto [status, ret] = callUserRpc<std::int32_t, std::int32_t>(
-			"test.py",
+		auto [status, ret] = callUserRpc<float>(
+			"backend.py",
 			CallTimeout(1000),
-			std::int32_t(2)
+			std::int32_t(2),
+			77.7f
 		);
 		std::cout << static_cast<int>(status) << " -> " << ret << std::endl;
 		// registerDependency("pmc8742.exe").required(true).onFail(RexDependencyManager::LOG_ERROR);
@@ -56,10 +58,11 @@ public:
 		logRunWriteFile("somefile_bx_stop.txt", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
 	}
 
-	RPCGenericType userRpc(const std::vector<std::uint8_t>& data)
+	RPCGenericType userRpc(const std::int32_t& data, const float& ft)
 	{
 		log.info("User RPC called!");
-		log.info("Data size: %llu", data.size());
+		log.info("P0: %d", data);
+		log.info("P1: %f", ft);
 
 		// std::uint8_t forty_two = *data.data();
 		// mulex::LogDebug("forty_two: %d", forty_two);
