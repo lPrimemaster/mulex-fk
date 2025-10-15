@@ -259,9 +259,10 @@ class Backend(ABC):
 
     def _user_rpc_entry(self, data, size):
         try:
-            if not self.rpc:
+            if not hasattr(self, 'rpc'):
                 logger.error('Failed to call user rpc. Not defined.')
-                raise RpcCallFailed('Local rpc function is not defined.')
+                logger.error('Please define a local rpc function.')
+                return
 
             args = self._user_rpc_unpack(data[:size])
             return self._serialize_generic(
