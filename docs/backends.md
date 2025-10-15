@@ -218,11 +218,23 @@ MyBackend::MyBackend(int argc, char* argv[]) : mulex::MxBackend(argc, argv)
     registerUserRpc(&MyBackend::my_rpc);
 }
 
-// This signature is required
+// This signature is required if you want access to the entire arguments buffer
 mulex::RPCGenericType MyBackend::my_rpc(const std::vector<std::uint8_t>& data)
 {
     log.info("User RPC called with data len: %llu.", data.size());
-    log.info("Got: %d.", reinterpret_cast<std::int32_t*>(data.data()));
+    log.info("Got: %d.", *reinterpret_cast<std::int32_t*>(data.data()));
+    log.info("Got: %f.", *reinterpret_cast<float*>(data.data() + sizeof(std::int32_t)));
+    return 3.1415f;
+    // return {}; if no return is required
+}
+
+// This signature is required if you know the arguments in advance
+// This is preferred and much cleaner of an approach
+mulex::RPCGenericType MyBackend::my_rpc(const std::int32_t& p0, const float& p1)
+{
+    log.info("User RPC called with data len: %llu.", data.size());
+    log.info("Got: %d.", p0);
+    log.info("Got: %f.", p1);
     return 3.1415f;
     // return {}; if no return is required
 }
@@ -242,7 +254,7 @@ mulex::RPCGenericType MyBackend::my_rpc(const std::vector<std::uint8_t>& data)
 void MyBackend::any_function()
 {
     // Calling above 'my_rpc' function as example
-    auto [status, ret] = callUserRpc<double>("backend_name", CallTimeout(1000), std::int32_t(42));
+    auto [status, ret] = callUserRpc<double>("backend_name", CallTimeout(1000), std::int32_t(42), 42.0f);
     // status is BckUserRpcStatus::OK if call succeeded
     if(status == BckUserRpcStatus::OK)
     {
