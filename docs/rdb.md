@@ -168,3 +168,35 @@ const rdb = new MxRdb();
 //...
 rdb.unwatch('/user/mykey');
 ```
+
+### From Python
+This is similar to C++, but instead of an object we have access to the
+following methods.
+
+```py
+# Create
+ktype = 0  # This follows the RdbValueType enum
+self.create('/user/mykey', ktype)
+
+# Delete
+self.delete('/user/mykey')
+
+# Read
+try:
+    value = self.read('/user/mykey')  # Value is auto converted
+except InvalidKey as e:
+    pass
+
+# Write
+key_value = ct.c_int32(42)
+self.write('/user/mykey', key_value)
+
+# Watch
+self.watch(
+    '/user/mykey',
+    lambda k, v: print(k, v)
+)
+
+# Unwatch
+self.unwatch('/user/mykey')
+```

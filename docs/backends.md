@@ -25,10 +25,11 @@ any type of logic the user pretends.
 
 ## Using Backends
 
-A backend is a C++ object that derives from the `mulex::MxBackend` class.
+A backend is a C++/C/Python object that derives from the `mulex::MxBackend` class.
 
 Here is the minimum required boilerplate code to create a user backend.
 
+#### C++
 ```cpp
 #include <mxbackend.h>
 
@@ -51,6 +52,33 @@ int main(int argc, char* argv[])
 }
 ```
 
+#### Python
+```py
+from pymx.backend import Backend
+import time
+import logging  # If you want to enable messages from pymx
+
+
+class TestBackend(Backend):
+    def __init__(self):
+        logging.basicConfig(level=logging.DEBUG)
+        super().__init__(__file__)  # Required
+
+        # User init goes here same as for C++
+
+# Python does not have an init() and spin() method
+# To make it work simply:
+
+with TestBackend() as bck:
+
+    # Emulate spin()
+    while True:
+        try:
+            time.sleep(0.1)
+        except KeyboardInterrupt:
+            break
+```
+
 This backend would compile and connect to the `mxmain` server. However it
 wouldn't do much.
 We can run this backend via `./MyBackend --server <mxmain_ip>`.
@@ -71,8 +99,7 @@ Logging not only displays the message on backend's host console, but also
 on the frontend. Messages are also stored under the PDB so the user can
 access any log at any time.
 
-#### Logging example
-
+#### C++
 ```cpp
 MyBackend::MyBackend(int argc, char* argv[]) : mulex::MxBackend(argc, argv)
 {
@@ -80,6 +107,16 @@ MyBackend::MyBackend(int argc, char* argv[]) : mulex::MxBackend(argc, argv)
     info.warn("Sending a warning to the mxsystem.");
     info.error("Sending an error to the mxsystem.");
 }
+```
+
+#### Python
+```py
+def __init__(self):
+    # ...
+    self.log(Backend.LogType.INFO, 'Info from my backend.')
+    self.log(Backend.LogType.WARN, 'Warning from my backend.')
+    self.log(Backend.LogType.ERROR, 'Error from my backend.')
+
 ```
 
 ### Registering user functions
@@ -108,6 +145,9 @@ require data locking (as long as the data is only used within this context
 ), as the functions all run on the same thread.
 
 Here is an example registering/deffering functions:
+
+> Note for Python users: Execution deferal might be simply made using any
+python built-in features (for example with asyncio).
 
 ```cpp
 
@@ -211,7 +251,7 @@ runtime. This function is called whenever any context (backend or plugin)
 calls the `BckCallUserRpc` for this given backend. Here is a very simple
 example including frontend code that calls the user RPC:
 
-### Backend
+#### C++
 ```cpp
 MyBackend::MyBackend(int argc, char* argv[]) : mulex::MxBackend(argc, argv)
 {
@@ -240,16 +280,33 @@ mulex::RPCGenericType MyBackend::my_rpc(const std::int32_t& p0, const float& p1)
 }
 ```
 
+#### Python
+```py
+class TestBackend(Backend):
+    # ...
+    # Simply define a function called rpc
+    # Binary args like in C++
+    def rpc(self, data: bytes):
+        # ...
+        pass
+
+    # Or knowing the arguments in advance
+    # Usually this uses ctypes to allow for interop with C/C++
+    # But python types are also supported
+    def rpc(self, p0: ct.c_int32, p1: ct.c_float):
+        # ...
+        return ct.c_float(3.1415)
+```
+
 > :warning: Each backend can only have **one** user RPC function.
 
 > :warning: You can, however, implement custom logic to branch to multiple other functions.
 
-### Frontend
-:warning: The frontend cannot register user RPC functions.
+> :warning: The frontend cannot register user RPC functions.
 
 ## Calling the user RPC function
 
-### Backend
+#### C++
 ```cpp
 void MyBackend::any_function()
 {
@@ -272,7 +329,7 @@ need to be trivially copyable and default constructible (alternatively wrap them
 `CallTimeout` specifies the time to wait (in milliseconds) for a response from the other backend. Assign this according
 to your needs.
 
-### Frontend
+#### Typescript
 ```ts
 const rpc = MxRpc.Create();
 rpc.then(async (handle) => {
@@ -286,17 +343,6 @@ rpc.then(async (handle) => {
     // status - status of the call
     // retval - 3.1415
 });
-```
-
-The call status is based on the following enum:
-```cpp
-enum class BckUserRpcStatus : std::uint8_t
-{
-    OK,
-    EMIT_FAILED,
-    RESPONSE_TIMEOUT,
-    NO_SUCH_BACKEND
-};
 ```
 
 If no return type is needed it is recommended to return an empty `MxGenericType` (i.e. `return {};`).
@@ -320,9 +366,30 @@ rpc.then((handle) => {
     //...
 });
 ```
+
+#### Python
+```py
+try:
+    # fmt is the return type (according to python's 'struct' module)
+    result = self.call('my_backend', ct.c_int32(42), ct.c_float(42), fmt='f')
+except Exception as e:
+    self.log(f'Failed to call rpc from my_backend. Reason: {e}')
+```
+
+The call status is based on the following enum:
+```cpp
+enum class BckUserRpcStatus : std::uint8_t
+{
+    OK,
+    EMIT_FAILED,
+    RESPONSE_TIMEOUT,
+    NO_SUCH_BACKEND
+};
+```
+
 Of course proper data handling must take place at the backend user function.
 
-The plugin containing this code will call the backend user rpc function
+The plugin/backend containing this code will call the backend user rpc function
 as long as it is connected to the mx system.
 
 ## Setting dependencies
@@ -332,6 +399,7 @@ that this backend relies on some other to properly function. This also can come 
 handy if one would want to write a startup script, it could be done via a "composer"
 backend that orchestrates the startup of the system's critical elements.
 
+#### C++
 ```cpp
 MyBackend::MyBackend(int argc, char* argv[]) //...
 {
@@ -350,12 +418,16 @@ MyBackend::MyBackend(int argc, char* argv[]) //...
 the backend still runs its i/o loop for at least once before terminate is called.
 Do not rely on this feature to terminate the backend consistently.
 
+#### Python
+This feature is currently not implemented.
+
 ## Writing run files
 If you want to make a file produced from a backend available (registered to the run log),
 you can upload files to the server. As long as a run is in the `RUNNING` state anywhere
 from a backend. This file becomes available in the Run Panel page on the frontend.
 You may also call this function from the backend registered run start and stop functions.
 
+#### C++
 ```cpp
 void MyBackend::some_method()
 {
@@ -365,6 +437,12 @@ void MyBackend::some_method()
 }
 ```
 
+#### Python
+```py
+data = b'some data'
+self.write_file('my_run_file.txt', data)
+```
+
 ## Setting custom arguments
 Let's say you want to add some custom argument as to where some config
 file is and don't want to use the RDB/PDB for that. The backend
@@ -372,6 +450,7 @@ executable accepts custom arguments. They can be added via the
 `SysAddArgument` function. It must be called before the constructor of
 `MxBackend`. Here's an example:
 
+#### C++
 ```cpp
 int main(int argc, char* argv[])
 {
@@ -384,11 +463,16 @@ int main(int argc, char* argv[])
 }
 ```
 
+#### Python
+This feature is not supported. To make your own custom arguments, make use of
+python's builtin argparse module.
+
 ## Setting custom status
 The `MxBackend` interface allows you to set a custom status that
 will appear on the project's frontend page. This is usefull to
 quickly the state of a backend to the user. Here's how to do it:
 
+#### C++
 ```cpp
 void MyBackend::some_method()
 {
@@ -397,4 +481,10 @@ void MyBackend::some_method()
     setStatus("MyCustomStatus", "#ff0000");
 }
 ```
+
+#### Python
+```py
+self.set_status('MyCustomStatus', '#ff0000')
+```
+
 The custom status is reset upon backend disconnect / exit.

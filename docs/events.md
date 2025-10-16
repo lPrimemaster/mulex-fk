@@ -103,3 +103,25 @@ Get the current event registered name.
 #### Note on unsubscribing
 Unsubscribing on the frontend is automatically managed once the `MxEvent` object goes out of scope
 and gets handled by javascript's garbage collector.
+
+
+### From Python
+Again this is similar to the C++ backend.
+
+```py
+# Register
+self.register('my_event')
+
+# Dispatch
+data = b'\xCA\xFE'
+self.dispatch('my_event', data)
+
+# Subscribe
+self.subscribe(
+    'my_event',
+    lambda data: print(data)  # data is bytes here
+)
+
+# Unsubscribe
+self.unsubscribe('my_event')
+```

@@ -1,10 +1,11 @@
-from pymx import backend
+# from pymx import backend
+from pymx.backend import Backend
 import logging
 import time
 import ctypes as ct
 
 
-class TestBackend(backend.Backend):
+class TestBackend(Backend):
     def __init__(self):
         logging.basicConfig(level=logging.DEBUG)
         super().__init__(__file__)
@@ -46,6 +47,8 @@ class TestBackend(backend.Backend):
             }')
         except Exception as e:
             print(e)
+
+        time.sleep(1)
 
         self.unsubscribe('TestBackend::dummy')
 
