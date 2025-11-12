@@ -11,6 +11,12 @@
 #include <ranges>
 #include <thread>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#else
+#define ZoneScoped
+#endif
+
 static mulex::Socket _server_socket;
 static std::unique_ptr<std::thread> _server_thread;
 static std::atomic<bool> _server_run;
@@ -19,6 +25,7 @@ namespace mulex
 {
 	bool PlugFSInitialize()
 	{
+		ZoneScoped;
 		_server_socket = SocketInit();
 		SocketBindListen(_server_socket, FXFER_PORT);
 		if(!SocketSetNonBlocking(_server_socket))
@@ -33,11 +40,13 @@ namespace mulex
 
 	static void PlugFSSendData(const Socket& socket, const std::vector<std::uint8_t>& data)
 	{
+		ZoneScoped;
 		SocketSendBytes(socket, const_cast<std::uint8_t*>(data.data()), data.size());
 	}
 
 	static std::optional<std::vector<std::uint8_t>> PlugFSRecvTimeout(const Socket& client, std::uint64_t size)
 	{
+		ZoneScoped;
 		std::vector<std::uint8_t> buffer(size);
 		std::uint64_t rlen, tsize = 0;
 		const std::int64_t ms = SysGetCurrentTime();
@@ -65,6 +74,7 @@ namespace mulex
 
 	static std::optional<std::string> PlugFSReceiveExperimentName(const Socket& client)
 	{
+		ZoneScoped;
 		auto expname_buffer = PlugFSRecvTimeout(client, sizeof(mxstring<512>));
 		if(!expname_buffer.has_value())
 		{
@@ -78,6 +88,7 @@ namespace mulex
 
 	static bool PlugFSCheckExperimentExists(const std::string& exp)
 	{
+		ZoneScoped;
 		const std::string exp_dir = std::string(SysGetCacheDir()) + "/" + exp;
 		if(!std::filesystem::is_directory(exp_dir))
 		{
@@ -98,11 +109,13 @@ namespace mulex
 
 	static std::string PlugFSGetExperimentPluginsDir(const std::string& exp)
 	{
+		ZoneScoped;
 		return std::string(SysGetCacheDir()) + "/" + exp + "/plugins";
 	}
 
 	static std::optional<PlugFSHeader> PlugFSReceiveHeader(const Socket& client)
 	{
+		ZoneScoped;
 		PlugFSHeader header;
 		auto xfer_size = PlugFSRecvTimeout(client, sizeof(std::uint64_t));
 		if(!xfer_size.has_value())
@@ -134,6 +147,7 @@ namespace mulex
 
 	static std::pair<std::vector<PlugFSFileMeta>, std::vector<PlugFSFileData>> PlugFSCreateMetadataAndData(const std::string& dir)
 	{
+		ZoneScoped;
 		std::vector<PlugFSFileMeta> meta;
 		std::vector<PlugFSFileData> data;
 
@@ -173,6 +187,7 @@ namespace mulex
 	// TODO: Use a checksum on the entire file to check integrity
 	static std::optional<std::vector<PlugFSFileData>> PlugFSReceiveFiles(const Socket& client, const PlugFSHeader& header)
 	{
+		ZoneScoped;
 		std::uint64_t total_xfer_size = std::accumulate(
 			header._filemeta.begin(),
 			header._filemeta.end(),
@@ -203,6 +218,7 @@ namespace mulex
 
 	static void PlugFSWriteFileWithMetadata(const PlugFSFileData& file, const PlugFSFileMeta& meta, const std::string& dir)
 	{
+		ZoneScoped;
 		// We write at the given experiment location
 		const std::string file_path = dir + "/" + meta._filename.c_str();
 		LogDebug("[mxplugfs] Writting file <%s>.", file_path.c_str());
@@ -223,6 +239,7 @@ namespace mulex
 
 	static PlugFSFileMeta PlugFSMakeDirs(const PlugFSFileMeta& meta, const std::string& dir)
 	{
+		ZoneScoped;
 		std::string filename = meta._filename.c_str();
 
 		// In case the file came from Windows we might have backslashes instead
@@ -249,6 +266,7 @@ namespace mulex
 
 	static void PlugFSWriteFiles(const std::vector<PlugFSFileData>& files, const std::vector<PlugFSFileMeta>& meta, const std::string& expname)
 	{
+		ZoneScoped;
 		const std::string plug_dir = PlugFSGetExperimentPluginsDir(expname);
 
 		// Ranges views zip is only C++23 =[
@@ -261,6 +279,7 @@ namespace mulex
 
 	void PlugFSLoop()
 	{
+		ZoneScoped;
 		bool would_block;
 		Socket client = SocketAccept(_server_socket, &would_block);
 		if(would_block)
@@ -301,11 +320,13 @@ namespace mulex
 
 	void PlugFSClose()
 	{
+		ZoneScoped;
 		SocketClose(_server_socket);
 	}
 
 	void PlugFSInitServerThread()
 	{
+		ZoneScoped;
 		_server_run.store(true);
 		_server_thread = std::make_unique<std::thread>([]() {
 
@@ -331,6 +352,7 @@ namespace mulex
 
 	void PlugFSShutdownServerThread()
 	{
+		ZoneScoped;
 		_server_run.store(false);
 		if(_server_thread->joinable())
 		{
@@ -340,6 +362,7 @@ namespace mulex
 
 	Socket PlugFSConnectToServer(const std::string& host)
 	{
+		ZoneScoped;
 		Socket socket = SocketInit();
 		SocketConnect(socket, host, FXFER_PORT, FXFER_TIMEOUT); // NOTE: (Cesar) Timeout after 5 seconds
 
@@ -353,6 +376,7 @@ namespace mulex
 
 	bool PlugFSCheckExperimentRemote(const Socket& socket, const std::string& experiment)
 	{
+		ZoneScoped;
 		if(socket._error)
 		{
 			return false;
@@ -371,6 +395,7 @@ namespace mulex
 
 	bool PlugFSTransfer(const Socket& socket, const std::string& dir)
 	{
+		ZoneScoped;
 		auto [metadata, contents] = PlugFSCreateMetadataAndData(dir);
 
 		std::uint64_t xfer_size = metadata.size() * sizeof(PlugFSFileMeta);
@@ -403,6 +428,7 @@ namespace mulex
 
 	void PlugFSDisconnectFromServer(Socket& socket)
 	{
+		ZoneScoped;
 		if(!socket._error)
 		{
 			SocketClose(socket);

@@ -1,10 +1,17 @@
 #include "../mxlbk.h"
 #include <string>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#else
+#define ZoneScoped
+#endif
+
 namespace mulex
 {
 	static void LbkInitTables()
 	{
+		ZoneScoped;
 		const std::string posts =
 		"CREATE TABLE IF NOT EXISTS posts ("
 			"id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -66,15 +73,18 @@ namespace mulex
 
 	void LbkInit()
 	{
+		ZoneScoped;
 		LbkInitTables();
 	}
 
 	void LbkClose()
 	{
+		ZoneScoped;
 	}
 
 	bool LbkPostCreate(mulex::PdbString title, mulex::RPCGenericType body, mulex::RPCGenericType meta)
 	{
+		ZoneScoped;
 		std::string current_user = GetCurrentCallerUser();
 		if(current_user.empty())
 		{
@@ -137,6 +147,7 @@ namespace mulex
 
 	mulex::RPCGenericType LbkPostRead(std::int32_t id)
 	{
+		ZoneScoped;
 		static PdbAccessLocal accessor;
 		static auto reader = accessor.getReader<std::string>("posts", {"mdbody"});
 		auto mdbody = reader("WHERE id = " + std::to_string(id));
@@ -154,6 +165,7 @@ namespace mulex
 
 	mulex::RPCGenericType LbkGetEntriesPageSearch(mulex::PdbString query, std::uint64_t limit, std::uint64_t page)
 	{
+		ZoneScoped;
 		std::string fquery = 
 		"SELECT posts.id, users.username, posts.title, posts.created_at, posts.metadata FROM posts_fts "
 		"JOIN posts ON posts_fts.rowid = posts.id "
@@ -177,6 +189,7 @@ namespace mulex
 
 	mulex::RPCGenericType LbkGetEntriesPage(std::uint64_t limit, std::uint64_t page)
 	{
+		ZoneScoped;
 		static const std::vector<PdbValueType> types = {
 			PdbValueType::INT32,
 			PdbValueType::STRING,
@@ -197,6 +210,7 @@ namespace mulex
 
 	std::int64_t LbkGetNumEntriesWithCondition(mulex::PdbString query)
 	{
+		ZoneScoped;
 		std::string squery = query.c_str();
 		if(squery.empty())
 		{
@@ -217,6 +231,7 @@ namespace mulex
 
 	mulex::RPCGenericType LbkGetComments(std::int32_t postid, std::uint64_t limit, std::uint64_t page)
 	{
+		ZoneScoped;
 		static const std::vector<PdbValueType> types = {
 			PdbValueType::STRING,
 			PdbValueType::CSTRING,
@@ -237,6 +252,7 @@ namespace mulex
 
 	std::int64_t LbkGetNumComments(std::int32_t postid)
 	{
+		ZoneScoped;
 		std::string query = "SELECT COUNT(*) FROM comments WHERE post_id = " + std::to_string(postid) + ";";
 		const auto data = PdbReadTable(query, std::vector<PdbValueType>{ PdbValueType::INT64 });
 		return data;
@@ -244,6 +260,7 @@ namespace mulex
 
 	bool LbkCommentCreate(std::int32_t postid, mulex::RPCGenericType body)
 	{
+		ZoneScoped;
 		std::string current_user = GetCurrentCallerUser();
 		if(current_user.empty())
 		{
