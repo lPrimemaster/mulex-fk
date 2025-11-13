@@ -9,18 +9,17 @@
 #include <stack>
 #include <queue>
 #include <mutex>
-// #include <shared_mutex>
 #include <functional>
-#include "network/socket.h"
 #include "mxtypes.h"
-// #include "network/rpc.h"
 
-#ifdef __linux__
-#else
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #endif
 
 namespace mulex
 {
+	struct Socket;
 	struct RPCGenericType;
 	class RPCClientThread;
 	class EvtClientThread;

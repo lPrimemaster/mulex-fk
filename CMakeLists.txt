@@ -89,21 +89,38 @@ FetchContent_MakeAvailable(tracy)
 set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
 set(RPC_PERM_KEYWORD "MX_PERMISSION")
 add_definitions(-D${RPC_CALL_KEYWORD}=)
-add_definitions(-include ${CMAKE_SOURCE_DIR}/network/rpc_macros.h)
 set(RPC_SPEC_FILE rpcspec.inl)
 set(USER_DB_SETUP user_database.sql)
 set(PERM_SPEC_FILE dbperms.inl)
 
 # Set global warnings all
-add_compile_options(
-	-Wall										# All warnings!
-	-Wextra										# More warnings!
-	-Wno-unused-parameter						# Unused parameters are common on some scenarios (implicit constructor deductions etc)
-												# So I don't need to be using [[maybe_unused]] every single time I do that (but really should)
-	-Wno-implicit-fallthrough					# I like implicit fallthroughs
-	$<$<COMPILE_LANGUAGE:CXX>:-Wno-reorder>     # Usually I don't use this and when I do, stuff don't depend on one another (this could mean bugs tho...)
-	-Wno-unused-function 						# RPC Generation might be usefull on some compilation units in the future
-)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	add_definitions(-include ${CMAKE_SOURCE_DIR}/network/rpc_macros.h)
+	add_compile_options(
+		-Wall										# All warnings!
+		-Wextra										# More warnings!
+		-Wno-unused-parameter						# Unused parameters are common on some scenarios (implicit constructor deductions etc)
+													# So I don't need to be using [[maybe_unused]] every single time I do that (but really should)
+		-Wno-implicit-fallthrough					# I like implicit fallthroughs
+		$<$<COMPILE_LANGUAGE:CXX>:-Wno-reorder>     # Usually I don't use this and when I do, stuff don't depend on one another (this could mean bugs tho...)
+		-Wno-unused-function 						# RPC Generation might be usefull on some compilation units in the future
+	)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+	add_definitions(/FI"${CMAKE_SOURCE_DIR}/network/rpc_macros.h")
+	add_compile_options(
+		/W4                                 # Enable most warnings (closest to -Wall -Wextra)
+		/wd4100                             # Disable “unreferenced formal parameter” (unused parameter)
+		/wd4065                             # Disable “switch statement contains 'default' but no 'case' labels” (closest to -Wno-implicit-fallthrough)
+		/wd4127                             # Disable “conditional expression is constant” (common in static_asserts/macros)
+		/wd4505                             # Disable “unreferenced local function has been removed” (unused function)
+		/wd26451                            # Disable code analysis: arithmetic overflow warning (optional, noisy)
+		/wd26812                            # Disable “enum type is unscoped” (common with plain enums)
+		/wd4996								# Ignore the pesky deprecation on MSVC CRT legacy functions
+		/wd4200								# Ignore zero-sized array auto ctor / copy / move warning
+		/wd4458								# Class member hiding
+		/wd4702								# Unreachable code (this is usefull for hidding code on tracing)
+	)
+endif()
 
 # We only support GCC anyways
 # Disable CMake's default -O3 on release and other flags on debug

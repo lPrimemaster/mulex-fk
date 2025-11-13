@@ -1,7 +1,11 @@
 #include <cstdint>
 #include "../mxtypes.h"
-#include "../network/socket.h"
 #include <vector>
+
+namespace mulex
+{
+	struct Socket;
+};
 
 namespace mulex
 {

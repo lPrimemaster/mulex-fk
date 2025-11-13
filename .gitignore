@@ -6,3 +6,6 @@ build_win/
 
 # Clangd cache
 .cache/
+
+# vcpkg cache
+vcpkg_installed/

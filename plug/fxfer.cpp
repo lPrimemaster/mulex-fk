@@ -1,5 +1,4 @@
 #include "plug.h"
-#include "../network/socket.h"
 #include "../mxlogger.h"
 #include "../mxsystem.h"
 #include <chrono>
@@ -10,6 +9,8 @@
 #include <filesystem>
 #include <ranges>
 #include <thread>
+
+#include "../network/socket.h"
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -191,8 +192,8 @@ namespace mulex
 		std::uint64_t total_xfer_size = std::accumulate(
 			header._filemeta.begin(),
 			header._filemeta.end(),
-			0,
-			[&](const auto& sum, const auto& v) -> std::uint64_t {
+			0ULL,
+			[](const auto& sum, const auto& v) -> std::uint64_t {
 				return sum + v._size;
 		});
 
@@ -407,7 +408,7 @@ namespace mulex
 		// Metadata
 		PlugFSSendData(socket, buffer);
 
-		std::uint64_t total_data = std::accumulate(contents.begin(), contents.end(), 0, [](std::uint64_t sum, const auto& v) -> std::uint64_t {
+		std::uint64_t total_data = std::accumulate(contents.begin(), contents.end(), 0ULL, [](std::uint64_t sum, const auto& v) -> std::uint64_t {
 			return sum + v.size();
 		});
 

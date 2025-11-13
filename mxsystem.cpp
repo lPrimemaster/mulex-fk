@@ -310,7 +310,7 @@ namespace mulex
 
 		SysAddArgument("name", 'n', true, [](const std::string& expname){ _sys_expname = expname; }, "Set the current experiment name.");
 		SysAddArgument("loopback", 'l', false, [&](const std::string&){ loopback = true; }, "Set the http server on loopback mode only.");
-		SysAddArgument("port", 'p', true, [&](const std::string& portstr){ port = ::atoi(portstr.c_str()); }, "Set the http server listen port.");
+		SysAddArgument("port", 'p', true, [&](const std::string& portstr){ port = static_cast<std::uint16_t>(::atoi(portstr.c_str())); }, "Set the http server listen port.");
 
 		if(!SysParseArguments(argc, argv))
 		{
@@ -1179,7 +1179,7 @@ namespace mulex
 
 	std::uint64_t SysStringHash64(const std::string& key)
 	{
-		return mmh64a(key.c_str(), key.size());
+		return mmh64a(key.c_str(), static_cast<int>(key.size()));
 	}
 
 	std::uint64_t SysGetClientId()
@@ -1190,7 +1190,7 @@ namespace mulex
 			std::string hname = std::string(SysGetHostname());
 			std::string tname = bname + "@" + hname;
 			// int size = tname.size() > 128 ? 128 : static_cast<int>(tname.size());
-			int size = tname.size();
+			int size = static_cast<int>(tname.size());
 			_sys_cid = mmh64a(tname.c_str(), size);
 		}
 		return _sys_cid;
@@ -1586,7 +1586,7 @@ namespace mulex
 		std::string pid = std::to_string(GetCurrentProcessId());
 		// SetFilePointer(_sys_lock_handle, 0, NULL, FILE_BEGIN);
 		DWORD written;
-		WriteFile(_sys_lock_handle, pid.c_str(), pid.size(), &written, NULL);
+		WriteFile(_sys_lock_handle, pid.c_str(), static_cast<DWORD>(pid.size()), &written, NULL);
 		// SetEndOfFile(_sys_lock_handle);
 #endif
 		return true;
