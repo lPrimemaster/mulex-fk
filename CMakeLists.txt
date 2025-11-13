@@ -13,7 +13,6 @@ option(PROFILE "Enable/Disable profiling with tracy." OFF)
 option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." OFF)
 option(BUILD_TESTS "Build tests." OFF)
 option(BUILD_EXAMPLES "Build examples." OFF)
-option(BUILD_CTARGETS "Build extra targets." OFF)
 option(GH_ACTION_MODE "Signals this configure is running in a github action." OFF)
 
 # Version configuration
@@ -194,10 +193,6 @@ add_subdirectory(plug)
 add_subdirectory(rexs)
 add_subdirectory(lbk)
 add_subdirectory(capi)
-
-if(BUILD_CTARGETS)
-	add_subdirectory(ctargets)
-endif()
 
 if(BUILD_EXAMPLES)
 	add_subdirectory(examples)

@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <unordered_map>
 
+#include "../network/socket.h"
+
 using namespace mulex;
 
 enum class Mode

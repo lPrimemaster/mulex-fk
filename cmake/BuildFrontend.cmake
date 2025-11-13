@@ -4,6 +4,8 @@ macro(mx_resource_clear)
 	set(MXRES_MAP_ENTRIES "")
 endmacro()
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
 macro(mx_resource_append fileni)
 	set(extra_args ${ARGN})
 	list(LENGTH extra_args extra_count)
@@ -12,13 +14,21 @@ macro(mx_resource_append fileni)
 	file(READ ${fileni} filecontent HEX)
 	set(file_i_var ${fileni})
 	cmake_path(GET file_i_var FILENAME filename)
+
+	execute_process(
+		COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/ctgen/filehex2array.py ${filecontent}
+		OUTPUT_VARIABLE CPP_ARRAY
+	)
+
 	if(${extra_count} GREATER 0)
 		list(GET extra_args 0 namespace_arg)
 		message(STATUS "[mxres] Adding resource: ${fileni} | Alias: ${namespace_arg}::${filename}")
-		list(APPEND MXRES_MAP_ENTRIES "{ \"${namespace_arg}::${filename}\", ResParseResourceString(\"${filecontent}\") },")
+		# list(APPEND MXRES_MAP_ENTRIES "{ \"${namespace_arg}::${filename}\", ResParseResourceString(\"${filecontent}\") },")
+		list(APPEND MXRES_MAP_ENTRIES "{ \"${namespace_arg}::${filename}\", { ${CPP_ARRAY} } },")
 	else()
 		message(STATUS "[mxres] Adding resource: ${fileni} | Alias: ${filename}")
-		list(APPEND MXRES_MAP_ENTRIES "{ \"${filename}\", ResParseResourceString(\"${filecontent}\") },")
+		# list(APPEND MXRES_MAP_ENTRIES "{ \"${filename}\", ResParseResourceString(\"${filecontent}\") },")
+		list(APPEND MXRES_MAP_ENTRIES "{ \"${filename}\", { ${CPP_ARRAY} } },")
 	endif()
 endmacro()
 

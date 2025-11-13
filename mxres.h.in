@@ -8,27 +8,6 @@
 
 namespace mulex
 {
-	inline constexpr std::uint8_t ResHexToValue(char c)
-	{
-		if(c >= '0' && c <= '9') return c - '0';
-		if(c >= 'a' && c <= 'f') return c - 'a' + 10;
-		if(c >= 'A' && c <= 'F') return c - 'A' + 10;
-		return 0;
-	}
-
-	template<std::uint64_t S>
-	inline constexpr std::vector<std::uint8_t> ResParseResourceString(const char (&data)[S])
-	{
-		static_assert(S % 2 == 1);
-		std::vector<std::uint8_t> output;
-		output.resize(S / 2);
-		for(std::uint64_t i = 0; i < S / 2; i++)
-		{
-			output[i] = (ResHexToValue(data[2 * i]) << 4) | ResHexToValue(data[2 * i + 1]);
-		}
-		return output;
-	}
-
 	inline const std::unordered_map<std::string, std::vector<std::uint8_t>>& ResGetAll()
 	{
 		static std::unordered_map<std::string, std::vector<std::uint8_t>> _mx_resources = {
