@@ -2,12 +2,11 @@ import sys
 
 
 def produce_hex_array(input):
-    output = ''
-    for i in range(len(input) // 2):
-        output += '0x'
-        output += input[2 * i] + input[2 * i + 1]
-        output += ', '
-    return output
+    with open(input, 'rb') as f:
+        data = f.read()
+
+    hex_array = [f'0x{b:02X}' for b in data]
+    return ', '.join(hex_array)
 
 
 if __name__ == '__main__':

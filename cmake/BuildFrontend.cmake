@@ -11,12 +11,13 @@ macro(mx_resource_append fileni)
 	list(LENGTH extra_args extra_count)
 	set(namespace_arg "")
 
-	file(READ ${fileni} filecontent HEX)
+	# file(READ ${fileni} filecontent HEX)
 	set(file_i_var ${fileni})
 	cmake_path(GET file_i_var FILENAME filename)
 
+	set(CPP_ARRAY "")
 	execute_process(
-		COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/ctgen/filehex2array.py ${filecontent}
+		COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/ctgen/filehex2array.py" "${fileni}"
 		OUTPUT_VARIABLE CPP_ARRAY
 	)
 
