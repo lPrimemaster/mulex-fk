@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
-#include <array>
+#include <zlib.h>
 #include "@CMAKE_SOURCE_DIR@/mxlogger.h"
 
 namespace mulex
@@ -26,6 +26,18 @@ namespace mulex
 			return {};
 		}
 
-		return res->second;
+		// Max ratio of 10:1
+		std::uint64_t decompsize = 10 * res->second.size();
+		std::vector<std::uint8_t> decomp(decompsize);
+
+		if(uncompress(decomp.data(), &decompsize, res->second.data(), res->second.size()) != Z_OK)
+		{
+			LogError("[mxres] Failed to decompress resource: <%s>.", resname.c_str());
+			return {};
+		}
+
+		decomp.resize(decompsize);
+
+		return decomp;
 	}
 } // namespace mulex
