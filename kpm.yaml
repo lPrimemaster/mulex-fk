@@ -1,0 +1,21 @@
+metadata:
+  name: mulex-fk
+  description: The mulex-fk framework runtime and libraries.
+  # version: $CMAKE:CMAKE_PROJECT_VERSION
+
+dist:
+  # Can be a directory or a url or a github repo
+  endpoint: lPrimemaster/mulex-fk
+  tag: latest
+  packages:
+    - windows_amd64: windows_amd64.tar.gz
+    - linux_amd64: linux_amd64.tar.gz
+    - source: source.tar.gz
+
+  # This gets triggered when our package gets deployed
+  deploy-unix: <script.sh> or any command really (runs on bash/zsh/etc...)
+  deploy-win: <script.ps> or any command really (runs on poweshell)
+
+  # This gets triggered when our package gets deployed (and build from source is triggered)
+  build-unix: <script.sh> or any command really (runs on bash/zsh/etc...)
+  build-win: <script.ps> or any command really (runs on poweshell)
