@@ -1,8 +1,8 @@
+#include "../mxrdb.h"
 #include <numeric>
 
 #include <rpcspec.inl>
 #include <sqlite3.h>
-#include "../mxrdb.h"
 #include "mxres.h"
 
 #include <tracy/Tracy.hpp>
@@ -137,7 +137,7 @@ namespace mulex
 
 			case PdbValueType::FLOAT32:
 			{
-				const float f = sqlite3_column_double(stmt, col);
+				const float f = static_cast<const float>(sqlite3_column_double(stmt, col));
 				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&f), PdbTypeSize(type), buffer);
 				break;
 			}
@@ -239,7 +239,7 @@ namespace mulex
 				// Increment here where we know the size of the data
 				const std::uint64_t size = *reinterpret_cast<const std::uint64_t*>(ptr);
 				offset += size;
-				return sqlite3_bind_blob(stmt, col, ptr + sizeof(std::uint64_t), size, SQLITE_STATIC) == SQLITE_OK;
+				return sqlite3_bind_blob(stmt, col, ptr + sizeof(std::uint64_t), static_cast<const int>(size), SQLITE_STATIC) == SQLITE_OK;
 			}
 			case PdbValueType::NIL:
 				return sqlite3_bind_null(stmt, col) == SQLITE_OK;
@@ -301,7 +301,7 @@ namespace mulex
 	{
 		ZoneScoped;
 		std::vector<std::uint8_t> data;
-		std::uint64_t tsize = std::accumulate(list.begin(), list.end(), 0, [](std::uint64_t s, const std::vector<std::uint8_t>& v) { return s + v.size(); });
+		std::uint64_t tsize = std::accumulate(list.begin(), list.end(), 0ULL, [](std::uint64_t s, const std::vector<std::uint8_t>& v) { return s + v.size(); });
 		data.reserve(tsize);
 
 		for(const auto& v : list)

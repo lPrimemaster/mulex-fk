@@ -3,9 +3,9 @@
 #ifdef __linux__
 #include <termios.h>
 #include <fcntl.h>
+#include <unistd.h>
 #endif
 #include <string.h>
-#include <unistd.h>
 #include <thread>
 
 #include "../mxlogger.h"
@@ -156,7 +156,7 @@ namespace mulex
 			LogDebug("Failed to automatically detect params for DCB, using hint values");
 		}
 
-		if(tty.BaudRate != args.baud)
+		if(tty.BaudRate != static_cast<DWORD>(args.baud))
 		{
 			LogWarning("Specified baud %u does not match port baud of %u", args.baud, tty.BaudRate);
 			LogWarning("Using specified value");
@@ -210,7 +210,7 @@ namespace mulex
 		return DrvSerialResult::WRITE_OK;
 #else
 		DWORD nw = 0;
-		BOOL status = ::WriteFile(serial._handle, reinterpret_cast<const char*>(buffer), len, &nw, NULL);
+		BOOL status = ::WriteFile(serial._handle, reinterpret_cast<const char*>(buffer), static_cast<DWORD>(len), &nw, NULL);
 		if(status == FALSE)
 		{
 			LogError("Failed to write bytes to serial handle: %d", serial._handle);

@@ -769,7 +769,6 @@ namespace mulex
 		// in case some of the files were accidentaly modified by the user (e.g. during plugins creation/copy)
 		std::string serveDir = SysGetExperimentHome();
 
-		ResGetAll();
 		for(const auto& [name, data] : ResGetAll())
 		{
 			LogDebug("[mxhttp] Writing <%s>...", name.c_str());

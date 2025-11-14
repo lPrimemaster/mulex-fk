@@ -118,6 +118,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 		/wd4200								# Ignore zero-sized array auto ctor / copy / move warning
 		/wd4458								# Class member hiding
 		/wd4702								# Unreachable code (this is usefull for hidding code on tracing)
+		/wd4815								# Zero sized arrays
 	)
 endif()
 
@@ -205,7 +206,7 @@ if(WIN32)
 	target_link_libraries(mxmain PRIVATE ${WINDOWS_GLIBS})
 
 	# Statically link against C runtime (assuming we use mingw)
-	target_link_options(mxmain PRIVATE -static-libstdc++ -static-libgcc)
+	# target_link_options(mxmain PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 target_compile_definitions(mxmain PUBLIC L2FILE)

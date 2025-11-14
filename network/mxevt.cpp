@@ -18,6 +18,12 @@
 #include "socket.h"
 #include <rpcspec.inl>
 
+#ifdef _WIN32
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include <ws2tcpip.h>
+#include <winsock2.h>
+#endif
+
 static std::atomic<std::uint64_t> _client_msg_id = 0;
 
 // NOTE: (Cesar) In theory this could be thread unsafe
@@ -42,7 +48,7 @@ static std::map<int, std::uint64_t> _evt_client_socket_pair;
 static std::map<SOCKET, std::uint64_t> _evt_client_socket_pair;
 #endif
 static std::map<std::uint64_t, mulex::Socket> _evt_client_socket_pair_rev;
-static std::set<std::uint16_t> _evt_client_ghost;
+static std::set<std::uint64_t> _evt_client_ghost;
 
 // TODO: (Cesar) Update this map value type as required
 static std::map<std::uint64_t, std::atomic<std::uint64_t>> _evt_client_stats;
@@ -428,7 +434,7 @@ namespace mulex
 		SetRdbClientConnectionStatus(cid, true);
 	}
 
-	static bool ClientIsGhost(std::uint16_t cid)
+	static bool ClientIsGhost(std::uint64_t cid)
 	{
 		return (_evt_client_ghost.find(cid) != _evt_client_ghost.end());
 	}
@@ -984,7 +990,7 @@ namespace mulex
 	{
 		for(std::uint64_t i = 0; i < _evt_event_stats._len; i++)
 		{
-			EvtDeleteStatsEntry(i + 1, clientid);
+			EvtDeleteStatsEntry(static_cast<std::uint16_t>(i + 1), clientid);
 		}
 	}
 
@@ -999,12 +1005,12 @@ namespace mulex
 		size += std::accumulate(
 			_evt_event_stats_buffer._clients.begin(),
 			_evt_event_stats_buffer._clients.end(),
-			0, [](auto sum, const auto& c){ return sum + c.size(); }
+			0ULL, [](auto sum, const auto& c){ return sum + c.size(); }
 		) * sizeof(std::uint64_t);
 		size += std::accumulate(
 			_evt_event_stats_buffer._frames.begin(),
 			_evt_event_stats_buffer._frames.end(),
-			0, [](auto sum, const auto& c){ return sum + c.size(); }
+			0ULL, [](auto sum, const auto& c){ return sum + c.size(); }
 		) * sizeof(std::uint64_t);
 		return size;
 	}

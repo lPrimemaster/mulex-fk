@@ -497,7 +497,7 @@ class RPCGenerator:
             self._write_indented(1, '{\n')
             self._write_indented(2, 'static const std::unordered_map<std::string, std::uint16_t> _map = {\n')
             for mname, _, id in idt:
-                self._write_indented(3, f'{{\"{mname.fullname}\", {id}}},\n')
+                self._write_indented(3, f'{{\"{mname.fullname}\", static_cast<std::uint16_t>({id})}},\n')
             self._write_indented(2, '};\n')
             self._write_indented(2, 'auto it = _map.find(name);\n')
             self._write_indented(2, 'if(it != _map.end())\n')

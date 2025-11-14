@@ -398,7 +398,8 @@ namespace mulex
 
 		auto readName = [&rdb](const std::string& key) -> std::string {
 			std::string nkey = key.substr(0, key.find_last_of('/')) + "/name";
-			return static_cast<mulex::mxstring<512>>(rdb[nkey]).c_str();
+			mulex::mxstring<512> output = rdb[nkey];
+			return output.c_str();
 		};
 
 		if(_dep_cid)
@@ -423,7 +424,8 @@ namespace mulex
 			std::vector<RdbKeyName> keys = exp.value()->_rpc_client->call<RPCGenericType>(RPC_CALL_MULEX_RDBLISTSUBKEYS, RdbKeyName("/system/backends/*/name"));
 			for(const RdbKeyName& key : keys)
 			{
-				std::string name = static_cast<mulex::mxstring<512>>(rdb[key.c_str()]).c_str();
+				mulex::mxstring<512> kname = rdb[key.c_str()];
+				std::string name = kname.c_str();
 				
 				if(name == _dep_name)
 				{

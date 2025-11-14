@@ -3,8 +3,8 @@
 // Brief  : Common functions for setting up sockets on Windows and Linux
 
 #include "socket.h"
-#include <cerrno>
 
+#include <cerrno>
 #ifdef __unix__
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -17,6 +17,7 @@
 #include <ws2tcpip.h>
 #include <winsock2.h>
 #endif
+
 
 #include "../mxlogger.h"
 

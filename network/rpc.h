@@ -10,6 +10,11 @@
 #include "../mxtypes.h"
 #include "../mxlogger.h"
 #include "../mxsystem.h"
+#ifdef _WIN32
+// #include <winsock2.h>
+// #include <windows.h>
+#undef ERROR
+#endif
 
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>

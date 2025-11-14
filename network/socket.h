@@ -4,7 +4,8 @@
 #include <string>
 
 #ifdef _WIN32
-#include <winsock2.h>
+// #include <winsock2.h>
+// #include <windows.h>
 #undef ERROR
 #endif
 
@@ -19,6 +20,7 @@ namespace mulex
 		char _addr[32];
 	};
 #else
+	typedef int SOCKET;
 	struct Socket
 	{
 		SOCKET _handle;

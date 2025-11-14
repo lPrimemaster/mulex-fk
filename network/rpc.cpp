@@ -278,17 +278,17 @@ namespace mulex
 
 			RPCReturnValue response;
 			response.status = RPCResult::OK;
-			response.payloadsize = ret.size();
+			response.payloadsize = static_cast<std::uint32_t>(ret.size());
 
 			// Is there a return type
 			if(response.payloadsize > 0)
 			{
-				std::vector<std::uint8_t> buffer(ret.size() + sizeof(RPCReturnValue));
-				std::memcpy(buffer.data(), &response, sizeof(RPCReturnValue));
-				std::memcpy(buffer.data() + sizeof(RPCReturnValue), ret.data(), response.payloadsize);
+				std::vector<std::uint8_t> rbuffer(ret.size() + sizeof(RPCReturnValue));
+				std::memcpy(rbuffer.data(), &response, sizeof(RPCReturnValue));
+				std::memcpy(rbuffer.data() + sizeof(RPCReturnValue), ret.data(), response.payloadsize);
 				SocketSendBytes(
 					socket,
-					buffer.data(),
+					rbuffer.data(),
 					response.payloadsize + sizeof(RPCReturnValue)
 				);
 			}

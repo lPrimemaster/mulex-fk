@@ -10,7 +10,7 @@ if(WIN32)
 	target_link_libraries(mxrexs PRIVATE pdh advapi32)
 
 	# Statically link against C runtime (assuming we use mingw)
-	target_link_options(mxrexs PRIVATE -static-libstdc++ -static-libgcc)
+	# target_link_options(mxrexs PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 # For config

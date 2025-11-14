@@ -1,10 +1,10 @@
 #pragma once
+#include "network/rpc.h"
 #include "mxtypes.h"
 #include "mxlogger.h"
 #include <shared_mutex>
 #include <tuple>
 #include <utility>
-#include "network/rpc.h"
 
 namespace mulex
 {

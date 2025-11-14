@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
-#include <zlib.h>
 #include "@CMAKE_SOURCE_DIR@/mxlogger.h"
 
 #ifdef _WIN32
@@ -13,7 +12,44 @@
 
 namespace mulex
 {
-#ifdef __linux__
+
+#ifdef _WIN32
+	inline std::string ResWin32NameResolution(const std::string& resname)
+	{
+		static std::unordered_map<std::string, std::string> _mx_win32_name_res = {
+			@MXRES_WIN32_NAME_RES@
+		};
+		auto res_name = _mx_win32_name_res.find(resname);
+		if(res_name == _mx_win32_name_res.end())
+		{
+			LogError("[mxres] Failed to fetch resource name resolution: <%s>.", resname.c_str());
+			return "";
+		}
+		return res_name->second;
+	}
+
+	inline std::vector<std::uint8_t> ResLoadWin32Resource(const std::string& resname)
+	{
+		HRSRC res = FindResource(nullptr, ResWin32NameResolution(resname).c_str(), RT_RCDATA);
+		if(!res)
+		{
+			LogError("[mxres] Failed to fetch resource: <%s>.", resname.c_str());
+			return {};
+		}
+
+		HGLOBAL handle = LoadResource(nullptr, res);
+		if(!handle)
+		{
+			LogError("[mxres] Failed to load resource: <%s>.", resname.c_str());
+			return {};
+		}
+
+		DWORD size = SizeofResource(nullptr, res);
+		const std::uint8_t* data = static_cast<const std::uint8_t*>(LockResource(handle));
+		return std::vector<std::uint8_t>(data, data + size);
+	}
+#endif
+
 	inline const std::unordered_map<std::string, std::vector<std::uint8_t>>& ResGetAll()
 	{
 		static std::unordered_map<std::string, std::vector<std::uint8_t>> _mx_resources = {
@@ -21,18 +57,10 @@ namespace mulex
 		};
 		return _mx_resources;
 	}
-#endif
 
-#ifdef _WIN32
-	inline std::vector<std::uint8_t> ResLoadWin32Resource(const std::string& name)
-	{
-		HRSRC res = FindResource(nullptr);
-	}
-#endif
-
-	inline std::vector<std::uint8_t> ResGetResource(const std::string& resname)
-	{
 #ifdef __linux__
+	inline std::vector<std::uint8_t> ResLoadLinuxResource(const std::string& resname)
+	{
 		static auto entries = ResGetAll();
 		auto res = entries.find(resname);
 		if(res == entries.end())
@@ -42,21 +70,16 @@ namespace mulex
 		}
 
 		return res->second;
-#else
+	}
 #endif
 
-		// // Max ratio of 10:1
-		// std::uint64_t decompsize = 10 * res->second.size();
-		// std::vector<std::uint8_t> decomp(decompsize);
-		//
-		// if(uncompress(decomp.data(), &decompsize, res->second.data(), res->second.size()) != Z_OK)
-		// {
-		// 	LogError("[mxres] Failed to decompress resource: <%s>.", resname.c_str());
-		// 	return {};
-		// }
-		//
-		// decomp.resize(decompsize);
-		//
-		// return decomp;
+
+	inline std::vector<std::uint8_t> ResGetResource(const std::string& resname)
+	{
+#ifdef __linux__
+		return ResLoadLinuxResource(resname);
+#else
+		return ResLoadWin32Resource(resname);
+#endif
 	}
 } // namespace mulex
