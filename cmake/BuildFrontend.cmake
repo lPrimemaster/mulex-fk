@@ -1,7 +1,16 @@
 set(MXRES_MAP_ENTRIES "")
 
+if(WIN32)
+	set(RC_FILE "${CMAKE_BINARY_DIR}/resources_tpl.rc")
+	file(REMOVE "${RC_FILE}")
+endif()
+
+
 macro(mx_resource_clear)
 	set(MXRES_MAP_ENTRIES "")
+	if(WIN32)
+		file(REMOVE "${RC_FILE}")
+	endif()
 endmacro()
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -16,10 +25,19 @@ macro(mx_resource_append fileni)
 	cmake_path(GET file_i_var FILENAME filename)
 
 	set(CPP_ARRAY "")
-	execute_process(
-		COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/ctgen/filehex2array.py" "${fileni}"
-		OUTPUT_VARIABLE CPP_ARRAY
-	)
+
+	if(WIN32)
+		# On Windows, cl.exe does not like big arrays
+		# We use the built-in resource support
+		list(LENGTH MXRES_MAP_ENTRIES MME_LEN)
+		file(APPEND ${RC_FILE} "IDR_${MME_LEN} RCDATA \"${fileni}\"\n")
+	else()
+		# On Linux generate resources by creating large arrays
+		execute_process(
+			COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/ctgen/filehex2array.py" "${fileni}"
+			OUTPUT_VARIABLE CPP_ARRAY
+		)
+	endif()
 
 	if(${extra_count} GREATER 0)
 		list(GET extra_args 0 namespace_arg)
@@ -33,10 +51,14 @@ macro(mx_resource_append fileni)
 	endif()
 endmacro()
 
-macro(mx_resource_gen)
+macro(mx_resource_gen target)
 	message(STATUS "[mxres] Generating resource header...")
 	string(REPLACE ";" "\n" MXRES_MAP_ENTRIES "${MXRES_MAP_ENTRIES}")
 	configure_file(${CMAKE_SOURCE_DIR}/mxres.h.in mxres.h @ONLY)
+	if(WIN32)
+		file(COPY_FILE "${RC_FILE}" "${CMAKE_CURRENT_BINARY_DIR}/resources.rc")
+		target_sources(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/resources.rc")
+	endif()
 endmacro()
 
 macro(build_frontend_yarn)

@@ -58,4 +58,4 @@ foreach(file ${MX_ASSET_FILES})
 	mx_resource_append(${file} assets)
 endforeach()
 
-mx_resource_gen()
+mx_resource_gen(mxplug)

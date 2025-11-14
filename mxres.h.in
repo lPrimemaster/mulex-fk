@@ -6,8 +6,14 @@
 #include <zlib.h>
 #include "@CMAKE_SOURCE_DIR@/mxlogger.h"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 namespace mulex
 {
+#ifdef __linux__
 	inline const std::unordered_map<std::string, std::vector<std::uint8_t>>& ResGetAll()
 	{
 		static std::unordered_map<std::string, std::vector<std::uint8_t>> _mx_resources = {
@@ -15,9 +21,18 @@ namespace mulex
 		};
 		return _mx_resources;
 	}
+#endif
+
+#ifdef _WIN32
+	inline std::vector<std::uint8_t> ResLoadWin32Resource(const std::string& name)
+	{
+		HRSRC res = FindResource(nullptr);
+	}
+#endif
 
 	inline std::vector<std::uint8_t> ResGetResource(const std::string& resname)
 	{
+#ifdef __linux__
 		static auto entries = ResGetAll();
 		auto res = entries.find(resname);
 		if(res == entries.end())
@@ -26,18 +41,22 @@ namespace mulex
 			return {};
 		}
 
-		// Max ratio of 10:1
-		std::uint64_t decompsize = 10 * res->second.size();
-		std::vector<std::uint8_t> decomp(decompsize);
+		return res->second;
+#else
+#endif
 
-		if(uncompress(decomp.data(), &decompsize, res->second.data(), res->second.size()) != Z_OK)
-		{
-			LogError("[mxres] Failed to decompress resource: <%s>.", resname.c_str());
-			return {};
-		}
-
-		decomp.resize(decompsize);
-
-		return decomp;
+		// // Max ratio of 10:1
+		// std::uint64_t decompsize = 10 * res->second.size();
+		// std::vector<std::uint8_t> decomp(decompsize);
+		//
+		// if(uncompress(decomp.data(), &decompsize, res->second.data(), res->second.size()) != Z_OK)
+		// {
+		// 	LogError("[mxres] Failed to decompress resource: <%s>.", resname.c_str());
+		// 	return {};
+		// }
+		//
+		// decomp.resize(decompsize);
+		//
+		// return decomp;
 	}
 } // namespace mulex

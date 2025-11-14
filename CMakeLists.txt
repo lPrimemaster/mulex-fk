@@ -225,7 +225,7 @@ endif()
 
 # Generate binary resources (last configure step)
 mx_resource_append(${CMAKE_BINARY_DIR}/${USER_DB_SETUP})
-mx_resource_gen()
+mx_resource_gen(mxmain)
 
 # Finally install everything for the user
 install_mulex()
