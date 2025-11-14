@@ -64,7 +64,7 @@ else()
 endif()
 
 # Tracy Profiler
-# NOTE: (Cesar) Always declare due to <tracy/TracyClient.hpp> dependencies
+# BUG: (Cesar) Always declare due to <tracy/TracyClient.hpp> dependencies
 if(PROFILE)
 	FetchContent_Declare(
 		tracy
@@ -117,27 +117,10 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 		/wd4996								# Ignore the pesky deprecation on MSVC CRT legacy functions
 		/wd4200								# Ignore zero-sized array auto ctor / copy / move warning
 		/wd4458								# Class member hiding
-		/wd4702								# Unreachable code (this is usefull for hidding code on tracing)
+		/wd4702								# Unreachable code (this is usefull for hiding code on tracing)
 		/wd4815								# Zero sized arrays
 	)
 endif()
-
-# We only support GCC anyways
-# Disable CMake's default -O3 on release and other flags on debug
-# set(CMAKE_CXX_FLAGS_DEBUG "" CACHE STRING "" FORCE)
-# set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG" CACHE STRING "" FORCE)
-# if(GH_ACTION_MODE)
-# 	# NOTE: (Cesar) Keep at O3 for now
-# 	# TODO: (Cesar) One should profile v1.0 for optimizations
-# 	add_compile_options(-O3)
-# else()
-# 	add_compile_options(
-# 		$<$<CONFIG:DEBUG>:-Og>
-# 		$<$<CONFIG:DEBUG>:-g>
-# 		$<$<CONFIG:RELEASE>:-O3>
-# 		$<$<CONFIG:RELEASE>:-march=native>
-# 	)
-# endif()
 
 # Make sure tracy profiler is installed/linked system wide
 if(PROFILE)

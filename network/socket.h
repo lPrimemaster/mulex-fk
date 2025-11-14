@@ -4,10 +4,11 @@
 #include <string>
 
 #ifdef _WIN32
-// #include <winsock2.h>
-// #include <windows.h>
+#include <basetsd.h>
+typedef UINT_PTR SOCKET;
 #undef ERROR
 #endif
+
 
 namespace mulex
 {
@@ -20,7 +21,6 @@ namespace mulex
 		char _addr[32];
 	};
 #else
-	typedef int SOCKET;
 	struct Socket
 	{
 		SOCKET _handle;

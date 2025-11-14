@@ -1,6 +1,6 @@
 macro(check_network_connection)
 		message(STATUS "Checking network internet connection status...")
-	if(WIN32 AND NOT CROSS_COMP_WINDOWS)
+	if(WIN32)
 		execute_process(
 			COMMAND ping www.google.com -n 2
 			ERROR_QUIET
