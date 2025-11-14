@@ -4,6 +4,7 @@
 #include "PerMessageDeflate.h"
 #include "WebSocket.h"
 #include "rpc.h"
+#include <concepts>
 #include <rpcspec.inl>
 #include <dbperms.inl>
 
@@ -188,7 +189,7 @@ namespace mulex
 		return d;
 	}
 
-	template<typename T>
+	template<std::default_initializable T>
 	static T HttpTryGetEntry(const rapidjson::Document& d, const std::string& key, bool* error)
 	{
 		ZoneScoped;
@@ -259,7 +260,6 @@ namespace mulex
 			{
 				LogError("[mxhttp] HttpTryGetEntry: Could not TryGet type. This is an implementation issue.");
 				if(error) *error = true;
-				// HACK: (Cesar) Assume T() is valid
 				return T();
 			}
 		}

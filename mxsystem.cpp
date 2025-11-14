@@ -287,6 +287,8 @@ namespace mulex
 #else
 		// Do nothing on windows
 		// TODO: (Cesar) Implement a service or some other mechanism to mimic a daemon on windows
+		//				 This already works on mxrexs with '--start'
+		//				 One could just reimplement this for '-D'
 		return false;
 #endif
 	}

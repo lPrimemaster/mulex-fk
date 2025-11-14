@@ -16,7 +16,7 @@ option(BUILD_EXAMPLES "Build examples." OFF)
 option(GH_ACTION_MODE "Signals this configure is running in a github action." OFF)
 
 # Version configuration
-project(mulex-fk VERSION 1.0.3)
+project(mulex-fk VERSION 1.0.4)
 set(PROJECT_VNAME "Epsilon Eridani")
 
 set(CMAKE_CXX_STANDARD 20)

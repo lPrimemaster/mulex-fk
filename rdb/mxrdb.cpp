@@ -594,7 +594,6 @@ namespace mulex
 		// No space left
 		if(_rdb_offset + total_size > _rdb_size)
 		{
-			// TODO: (Cesar) Realloc the pool or add more chunks/blocks
 			if(!RdbGrow())
 			{
 				return nullptr;
