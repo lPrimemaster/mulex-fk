@@ -26,6 +26,8 @@ class TestBackend(Backend):
 
         time.sleep(1)
 
+        self.delete('/user/mykey')
+
         self.unwatch('/system/metrics/cpu_usage')
 
         print('Tesing event subscription...')
@@ -37,14 +39,13 @@ class TestBackend(Backend):
         time.sleep(1)
 
         try:
-            print(f'Result from RPC from test_bck: {
-                self.call(
-                    'test_bck',
+            result = self.call(
+                    'test_bck.exe',
                     ct.c_uint32(7),
                     ct.c_float(42),
                     fmt='f'
                 )
-            }')
+            print(f'Result from RPC from test_bck: {result}')
         except Exception as e:
             print(e)
 

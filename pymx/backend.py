@@ -70,12 +70,50 @@ class Backend(ABC):
             logger.error(f'Error: {e}.')
             return
 
-        self._lib.CMxBackendRpcCall.restype = Backend.RpcReturnData
-        self._lib.CMxRdbWrite.restype = ct.c_bool
-        self._lib.CMxRdbRead.restype = ct.c_bool
-        self._lib.CMxRdbCreate.restype = ct.c_bool
-        self._lib.CMxRdbDelete.restype = ct.c_bool
+        # Context
         self._lib.CMxContextCreate.restype = ct.c_void_p
+        self._lib.CMxContextDestroy.argtypes = [ct.POINTER(ct.c_void_p)]
+
+        # Binary name
+        self._lib.CMxBinaryOverrideName.argtypes = [ct.c_char_p]
+
+        # Backend
+        self._lib.CMxBackendCreate.argtypes = [ct.c_void_p, ct.c_int32, ct.POINTER(ct.c_char_p)]
+        self._lib.CMxBackendDestroy.argtypes = [ct.c_void_p]
+        self._lib.CMxBackendEventDispatch.argtypes = [ct.c_void_p, ct.c_char_p, ct.POINTER(ct.c_uint8), ct.c_uint64]
+        self._lib.CMxBackendEventRegister.argtypes = [ct.c_void_p, ct.c_char_p]
+        self._lib.CMxBackendEventSubscribe.argtypes = [ct.c_void_p, ct.c_char_p, ct.CFUNCTYPE(None, ct.POINTER(ct.c_uint8), ct.c_uint64, ct.POINTER(ct.c_uint8))]
+        self._lib.CMxBackendEventUnsubscribe.argtypes = [ct.c_void_p, ct.c_char_p]
+        self._lib.CMxBackendRpcRegister.argtypes = [ct.c_void_p, ct.CFUNCTYPE(ct.c_char_p, ct.POINTER(ct.c_char), ct.c_uint64)]
+        self._lib.CMxBackendRunRegisterStartStop.argtypes = [ct.c_void_p, ct.CFUNCTYPE(None, ct.c_uint64), ct.CFUNCTYPE(None, ct.c_uint64)]
+        self._lib.CMxBackendStatusSet.argtypes = [ct.c_void_p, ct.c_char_p, ct.c_char_p]
+        self._lib.CMxBackendRpcCall.argtypes = [ct.c_void_p, ct.c_char_p, ct.POINTER(ct.c_uint8), ct.c_uint64, ct.c_int64]
+        self._lib.CMxBackendRpcCall.restype = Backend.RpcReturnData
+        self._lib.CMxBackendRpcFreeReturn.argtypes = [Backend.RpcReturnData]
+        self._lib.CMxBackendRunLogWriteFile.argtypes = [ct.c_void_p, ct.c_char_p, ct.POINTER(ct.c_uint8), ct.c_uint64]
+        self._lib.CMxBackendInit.argtypes = [ct.c_void_p]
+
+        # Logger
+        self._lib.CMxMsgEmitterLogInfo.argtypes = [ct.c_void_p, ct.c_char_p]
+        self._lib.CMxMsgEmitterLogWarning.argtypes = [ct.c_void_p, ct.c_char_p]
+        self._lib.CMxMsgEmitterLogError.argtypes = [ct.c_void_p, ct.c_char_p]
+        self._lib.CMxMsgEmitterAttachLogger.argtypes = [ct.c_void_p, ct.c_bool]
+
+        # Rdb
+        self._lib.CMxRdbCreate.argtypes = [ct.c_void_p, ct.c_char_p, ct.c_uint8, ct.POINTER(ct.c_uint8), ct.c_uint64]
+        self._lib.CMxRdbCreate.restype = ct.c_bool
+        self._lib.CMxRdbDelete.argtypes = [ct.c_void_p, ct.c_char_p]
+        self._lib.CMxRdbDelete.restype = ct.c_bool
+        self._lib.CMxRdbExists.argtypes = [ct.c_void_p, ct.c_char_p]
+        self._lib.CMxRdbExists.restype = ct.c_bool
+        self._lib.CMxRdbRead.argtypes = [ct.c_void_p, ct.c_char_p, ct.POINTER(ct.c_uint8), ct.POINTER(ct.c_uint64)]
+        self._lib.CMxRdbRead.restype = ct.c_bool
+        self._lib.CMxRdbWrite.argtypes = [ct.c_void_p, ct.c_char_p, ct.POINTER(ct.c_uint8), ct.c_uint64]
+        self._lib.CMxRdbWrite.restype = ct.c_bool
+        self._lib.CMxRdbWatch.argtypes = [ct.c_void_p, ct.c_char_p, ct.CFUNCTYPE(None, ct.POINTER(ct.c_char), ct.POINTER(ct.c_uint8), ct.c_uint64)]
+        self._lib.CMxRdbUnwatch.argtypes = [ct.c_void_p, ct.c_char_p]
+        self._lib.CMxRdbKeyType.argtypes = [ct.c_void_p, ct.c_char_p]
+        self._lib.CMxRdbKeyType.restype = ct.c_uint8
 
         # NOTE: (César) Override the binary name
         #               This makes it so that the correct backend name
@@ -94,6 +132,9 @@ class Backend(ABC):
         nargs = len(sys.argv)
         cargv = (ct.c_char_p * nargs)()
         cargv[:] = [arg.encode('utf-8') for arg in sys.argv]
+        print(nargs)
+        print(cargv[:])
+        print(self._ctx)
         self._lib.CMxBackendCreate(
             self._ctx,
             ct.c_int32(nargs),
@@ -419,7 +460,8 @@ class Backend(ABC):
         return self._deserialize_key_value(key, bytes(buffer[:sz.value]))
 
     def write(self, key: str, value: Any) -> bool:
-        buffer = self._serialize_user_data(value)
+        ibuff = self._serialize_user_data(value)
+        buffer = (ct.c_uint8 * len(ibuff)).from_buffer_copy(ibuff)
         return self._lib.CMxRdbWrite(
             self._ctx,
             key.encode('utf-8'),
@@ -432,7 +474,7 @@ class Backend(ABC):
             self._ctx,
             key.encode('utf-8'),
             ct.c_uint8(ktype),
-            0x0,
+            None,
             0x0
         )
 
