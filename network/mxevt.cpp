@@ -981,8 +981,9 @@ namespace mulex
 		if(it != _evt_event_stats._clients[i].end())
 		{
 			LogTrace("[mxevt] Removing event stats entry for event - client pair [<%d>, <%llx>].", eventid, clientid);
+			std::uint64_t dist = std::distance(_evt_event_stats._clients[i].begin(), it);
 			_evt_event_stats._clients[i].erase(it);
-			_evt_event_stats._frames[i].erase(_evt_event_stats._frames[i].begin() + std::distance(_evt_event_stats._clients[i].begin(), it));
+			_evt_event_stats._frames[i].erase(_evt_event_stats._frames[i].begin() + dist);
 		}
 	}
 
