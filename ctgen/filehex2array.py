@@ -1,12 +1,11 @@
 import sys
-import zlib
 
 
 def produce_hex_array(input):
     with open(input, 'rb') as f:
         data = f.read()
 
-    hex_array = [f'0x{b:02X}' for b in zlib.compress(data, level=9)]
+    hex_array = [f'0x{b:02X}' for b in data]
     return ', '.join(hex_array)
 
 
