@@ -17,3 +17,8 @@ endif()
 target_include_directories(mxrexs PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
+
+add_custom_command(TARGET mxrexs POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:mxrexs> $<TARGET_FILE_DIR:mxrexs>
+	COMMAND_EXPAND_LIST
+)

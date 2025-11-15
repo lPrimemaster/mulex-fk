@@ -20,8 +20,8 @@ macro(install_mulex)
 	if(WIN32)
 		message(STATUS "Copying required dlls...")
 		install(FILES $<TARGET_RUNTIME_DLLS:mxmain> DESTINATION bin COMPONENT Runtime)
-		# HACK: (Cesar) This works on CI/CD but might break...
-		install(FILES "${CMAKE_BINARY_DIR}/libzlib1.dll" DESTINATION bin COMPONENT Runtime)
+		install(FILES $<TARGET_RUNTIME_DLLS:mxplug> DESTINATION bin COMPONENT Runtime)
+		install(FILES $<TARGET_RUNTIME_DLLS:mxrexs> DESTINATION bin COMPONENT Runtime)
 	endif()
 endmacro()
 

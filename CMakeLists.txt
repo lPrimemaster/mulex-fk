@@ -214,6 +214,11 @@ mx_resource_gen(mxmain)
 # Finally install everything for the user
 install_mulex()
 
+add_custom_command(TARGET mxmain POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:mxmain> $<TARGET_FILE_DIR:mxmain>
+	COMMAND_EXPAND_LIST
+)
+
 if(NOT WIN32)
 	# Generate debian package using CPack
 	include(InstallRequiredSystemLibraries)

@@ -19,6 +19,10 @@ target_include_directories(mxplug PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
+add_custom_command(TARGET mxplug POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:mxplug> $<TARGET_FILE_DIR:mxplug>
+	COMMAND_EXPAND_LIST
+)
 
 # Package libs
 mx_resource_append(${CMAKE_SOURCE_DIR}/frontend/src/lib/websocket.ts lib)
