@@ -4,6 +4,7 @@ include(cmake/InternetConnection.cmake)
 include(cmake/BuildManifest.cmake)
 include(cmake/BuildFrontend.cmake)
 include(cmake/InstallMulex.cmake)
+include(cmake/Configure.cmake)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -16,7 +17,7 @@ option(BUILD_EXAMPLES "Build examples." OFF)
 option(GH_ACTION_MODE "Signals this configure is running in a github action." OFF)
 
 # Version configuration
-project(mulex-fk VERSION 1.0.4)
+project(mulex-fk VERSION 1.0.5)
 set(PROJECT_VNAME "Epsilon Eridani")
 
 set(CMAKE_CXX_STANDARD 20)
@@ -45,34 +46,6 @@ endif()
 if(USB_SUPPORT)
 	add_definitions(-DUSB_SUPPORT)
 endif()
-
-# SQLite3
-FetchContent_Declare(
-	sqlite3
-	URL https://www.sqlite.org/2024/sqlite-amalgamation-3470000.zip
-	URL_HASH SHA3_256=e35ee48efc24fe58d0e9102034ac0a41e3904641a745e94ab11a841fe9d7355e
-	EXCLUDE_FROM_ALL
-)
-if (NOT sqlite3_POPULATED)
-	FetchContent_Populate(sqlite3)
-endif()
-
-if(PROFILE)
-	set(TRACY_ENABLE ON CACHE BOOL "Enable Tracy" FORCE)
-else()
-	set(TRACY_ENABLE OFF CACHE BOOL "Enable Tracy" FORCE)
-endif()
-
-# Tracy Profiler
-# NOTE: (Cesar) Always declare due to <tracy/TracyClient.hpp> dependencies
-FetchContent_Declare(
-	tracy
-	GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-	GIT_TAG v0.13.0
-	GIT_SHALLOW TRUE
-	EXCLUDE_FROM_ALL
-)
-FetchContent_MakeAvailable(tracy)
 
 # RPC related configuration
 set(RPC_CALL_KEYWORD "MX_RPC_METHOD")
@@ -112,74 +85,83 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 	)
 endif()
 
-# Make sure tracy profiler is installed/linked system wide
-link_libraries(TracyClient)
+# Fetch and build external dependencies
+fetch_dependencies()
+build_dependencies()
 
-# Always include tracy headers for noop definitions
-include_directories(${tracy_SOURCE_DIR}/public)
+generate_rpc_calls()
+
+add_library(mxapi
+	bck/mxbackend.cpp
+	drv/mxdrv.cpp
+	lbk/mxlbk.cpp
+
+	network/mxevt.cpp
+	network/mxhttp.cpp
+	network/mxmsg.cpp
+	network/rpc.cpp
+	network/socket.cpp
+
+	plug/fxfer.cpp
+
+	rdb/mxrdb.cpp
+	rdb/mxpdb.cpp
+	rdb/mxfdb.cpp
+
+	rexs/mxrexs.cpp
+
+	run/mxrun.cpp
+
+	mxsystem.cpp
+
+	${sqlite3_SOURCE_DIR}/sqlite3.c
+
+	$<TARGET_OBJECTS:uSockets>
+)
+
+# OS agnostic linking
+target_link_libraries(mxapi PUBLIC OpenSSL::SSL ZLIB::ZLIB)
+target_link_libraries(mxapi PRIVATE base64 TracyClient)
+
+if(WIN32)
+	# Win32 style linking
+	find_package(libuv CONFIG REQUIRED)
+	target_link_libraries(mxapi PUBLIC $<IF:$<TARGET_EXISTS:libuv::uv_a>,libuv::uv_a,libuv::uv> ZLIB::ZLIB)
+	target_link_libraries(mxapi PUBLIC wsock32 ws2_32 Shlwapi pdh)
+else()
+	# Linux style linking
+	target_link_libraries(mxapi PUBLIC uv ZLIB::ZLIB)
+endif()
+
+if(USB_SUPPORT)
+	target_link_libraries(mxapi PUBLIC ${LIBUSB_LIBRARY})
+	target_include_directories(mxapi PUBLIC ${LIBUSB_INCLUDE_DIR})
+endif()
+
+target_include_directories(mxapi PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>/uWebSockets/src
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>/uWebSockets/uSockets/src
+	${rapidjson_SOURCE_DIR}/include
+	${aklomp_base64_SOURCE_DIR}/include
+	${sqlite3_SOURCE_DIR}
+	${tracy_SOURCE_DIR}/public
+	${CMAKE_BINARY_DIR}/uWebSockets/uSockets/src
+)
+
+# Add mulex functionalities
+add_subdirectory(plug)
+add_subdirectory(rexs)
+# add_subdirectory(capi)
 
 add_executable(mxmain
 	main.cpp
 )
 
-# Generate the <mxconfig.h> file
-set(CONFIG_HEADER_FILE "${CMAKE_BINARY_DIR}/mxconfig.h")
-set_property(SOURCE ${CONFIG_HEADER_FILE} PROPERTY GENERATED TRUE)
-add_custom_target(generate_build_info ALL
-	COMMAND ${CMAKE_COMMAND}
-		-DCONFIG_HEADER_FILE=${CONFIG_HEADER_FILE}
-		-DPROJECT_VNAME=${PROJECT_VNAME}
-		-DPROJECT_VERSION=${CMAKE_PROJECT_VERSION}
-		-P ${CMAKE_SOURCE_DIR}/cmake/GenerateConfigInfo.cmake
-	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-	BYPRODUCTS ${CONFIG_HEADER_FILE}
-	COMMENT "Checking mxconfig.h"
-	VERBATIM
-)
-add_dependencies(mxmain generate_build_info)
-target_include_directories(mxmain PRIVATE
-	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
-)
-
-# Set global windows libs
-if(WIN32)
-	set(WINDOWS_GLIBS pdh)
-endif()
-
-# Create system object library
-find_package(OpenSSL REQUIRED)
-add_library(mxsys OBJECT mxsystem.cpp plug/fxfer.cpp)
-add_dependencies(mxsys generate_build_info)
-target_include_directories(mxsys PRIVATE
-	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
-)
-target_link_libraries(mxsys PRIVATE OpenSSL::SSL)
-
-# Add mulex functionalities
-add_subdirectory(network)
-add_subdirectory(rdb)
-add_subdirectory(drv)
-add_subdirectory(run)
-add_subdirectory(bck)
-add_subdirectory(plug)
-add_subdirectory(rexs)
-add_subdirectory(lbk)
-add_subdirectory(capi)
-
-if(BUILD_EXAMPLES)
-	add_subdirectory(examples)
-endif()
+generate_mxconfig()
 
 # Link main
-target_link_libraries(mxmain PRIVATE mxrpc mxrdb mxdrv mxhttp mxbck mxlbk)
-
-if(WIN32)
-	target_link_libraries(mxmain PRIVATE ${WINDOWS_GLIBS})
-
-	# Statically link against C runtime (assuming we use mingw)
-	# target_link_options(mxmain PRIVATE -static-libstdc++ -static-libgcc)
-endif()
-
+target_link_libraries(mxmain PRIVATE mxapi)
 target_compile_definitions(mxmain PUBLIC L2FILE)
 
 # Clear resources from 'plug'
@@ -200,71 +182,5 @@ mx_resource_append(${CMAKE_BINARY_DIR}/${USER_DB_SETUP})
 mx_resource_gen(mxmain)
 
 # Finally install everything for the user
+install_target(mxapi NONE)
 install_mulex()
-
-add_custom_command(TARGET mxmain POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:mxmain> $<TARGET_FILE_DIR:mxmain>
-	COMMAND_EXPAND_LISTS
-)
-
-if(NOT WIN32)
-	# Generate debian package using CPack
-	include(InstallRequiredSystemLibraries)
-
-	set(CPACK_DEBIAN_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
-	set(CPACK_PACKAGE_VENDOR "César Godinho")
-	set(CPACK_DEBIAN_PACKAGE_MAINTAINER "c.godinho@campus.fct.unl.pt")
-	set(CPACK_PACKAGE_VERSION_MAJOR "${CMAKE_PROJECT_VERSION_MAJOR}")
-	set(CPACK_PACKAGE_VERSION_MINOR "${CMAKE_PROJECT_VERSION_MINOR}")
-	set(CPACK_PACKAGE_VERSION_PATCH "${CMAKE_PROJECT_VERSION_PATCH}")
-
-	set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
-	set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-
-	set(CPACK_DEBIAN_PACKAGE_DEPENDS "libuv1-dev, zlib1g-dev, libssl-dev")
-
-	# TODO: (Cesar) This is dangerous and should be fixed
-	#				For now assuming that when we generate a cpack .deb package
-	#				the cmake install prefix is set to /usr/local (default)
-	set(CPACK_PACKAGING_INSTALL_PREFIX "/usr/local")
-	set(CPACK_GENERATOR "DEB")
-	set(CPACK_SOURCE_GENERATOR "DEB")
-else()
-	# Generate NSIS package using CPack
-	include(InstallRequiredSystemLibraries)
-
-	set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
-	set(CPACK_NSIS_DISPLAY_NAME "${CMAKE_PROJECT_NAME}")
-	set(CPACK_PACKAGE_VENDOR "César Godinho")
-	set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Mulex-fk Windows (x64) installer.")
-	set(CPACK_PACKAGE_VERSION_MAJOR "${CMAKE_PROJECT_VERSION_MAJOR}")
-	set(CPACK_PACKAGE_VERSION_MINOR "${CMAKE_PROJECT_VERSION_MINOR}")
-	set(CPACK_PACKAGE_VERSION_PATCH "${CMAKE_PROJECT_VERSION_PATCH}")
-
-	set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
-	set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-	set(CPACK_NSIS_LICENSE_FILE "${CMAKE_SOURCE_DIR}/LICENSE")
-
-	set(CPACK_PACKAGE_INSTALL_DIRECTORY "mulex-fk")
-	set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
-	set(CPACK_NSIS_MODIFY_PATH ON)
-
-	include(CPackComponent)
-	cpack_add_component(Runtime
-		DISPLAY_NAME "Runtime"
-		DESCRIPTION "Runtime elements of mulex: server, plugin builder and remote execution service."
-	)
-	cpack_add_component(Lib
-		DISPLAY_NAME "Libraries"
-		DESCRIPTION "Backend libraries and C++ header files for development."
-	)
-	cpack_add_component(Modules
-		DISPLAY_NAME "CMake Modules"
-		DESCRIPTION "Modules for easy integration with CMake."
-	)
-
-	set(CPACK_GENERATOR "NSIS")
-	set(CPACK_SOURCE_GENERATOR "NSIS")
-endif()
-include(CPack)
-

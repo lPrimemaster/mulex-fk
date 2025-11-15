@@ -5,23 +5,12 @@ add_executable(mxplug
 )
 
 # Link main
-target_link_libraries(mxplug PRIVATE mxrpc mxrdb mxdrv mxhttp mxbck mxlbk)
-
-if(WIN32)
-	target_link_libraries(mxplug PRIVATE pdh)
-
-	# Statically link against C runtime (assuming we use mingw)
-	# target_link_options(mxplug PRIVATE -static-libstdc++ -static-libgcc)
-endif()
+target_link_libraries(mxplug PRIVATE mxapi)
 
 # For the resources
 target_include_directories(mxplug PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
-)
-add_custom_command(TARGET mxplug POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:mxplug> $<TARGET_FILE_DIR:mxplug>
-	COMMAND_EXPAND_LISTS
 )
 
 # Package libs
