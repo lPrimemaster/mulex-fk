@@ -154,6 +154,25 @@ add_subdirectory(plug)
 add_subdirectory(rexs)
 # add_subdirectory(capi)
 
+# Configure C-API library
+add_library(mxcapi SHARED
+	capi/mxcapi.cpp
+)
+
+target_link_libraries(mxcapi PRIVATE mxapi)
+
+# Hide symbols by default
+# We don't want to export the whole tables of all
+# of the mx symbols
+set_target_properties(mxcapi PROPERTIES
+    C_VISIBILITY_PRESET hidden
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+)
+
+# Enforce c++20
+target_compile_features(mxcapi PUBLIC cxx_std_20)
+
 add_executable(mxmain
 	main.cpp
 )
