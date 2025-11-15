@@ -21,9 +21,9 @@ def _detect_lib_filename() -> str:
     system, arch = _detect_platform()
 
     if system == "windows":
-        return "MxCapi.dll"
+        return "mxcapi.dll"
     elif system == "linux":
-        return "libMxCapi.so"
+        return "libmxcapi.so"
 
     # macOS and others not supported
     raise UnsupportedSystemError(f"Unsupported platform {system}.{arch}")
