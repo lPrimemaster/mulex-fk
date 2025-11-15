@@ -21,7 +21,7 @@ target_include_directories(mxplug PRIVATE
 )
 add_custom_command(TARGET mxplug POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:mxplug> $<TARGET_FILE_DIR:mxplug>
-	COMMAND_EXPAND_LIST
+	COMMAND_EXPAND_LISTS
 )
 
 # Package libs

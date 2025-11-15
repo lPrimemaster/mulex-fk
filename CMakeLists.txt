@@ -64,24 +64,14 @@ else()
 endif()
 
 # Tracy Profiler
-# BUG: (Cesar) Always declare due to <tracy/TracyClient.hpp> dependencies
-if(PROFILE)
-	FetchContent_Declare(
-		tracy
-		GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-		GIT_TAG v0.13.0
-		GIT_SHALLOW TRUE
-		# EXCLUDE_FROM_ALL
-	)
-else()
-	FetchContent_Declare(
-		tracy
-		GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-		GIT_TAG v0.13.0
-		GIT_SHALLOW TRUE
-		EXCLUDE_FROM_ALL
-	)
-endif()
+# NOTE: (Cesar) Always declare due to <tracy/TracyClient.hpp> dependencies
+FetchContent_Declare(
+	tracy
+	GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+	GIT_TAG v0.13.0
+	GIT_SHALLOW TRUE
+	EXCLUDE_FROM_ALL
+)
 FetchContent_MakeAvailable(tracy)
 
 # RPC related configuration
@@ -123,9 +113,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 endif()
 
 # Make sure tracy profiler is installed/linked system wide
-if(PROFILE)
-	link_libraries(TracyClient)
-endif()
+link_libraries(TracyClient)
 
 # Always include tracy headers for noop definitions
 include_directories(${tracy_SOURCE_DIR}/public)
@@ -216,7 +204,7 @@ install_mulex()
 
 add_custom_command(TARGET mxmain POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:mxmain> $<TARGET_FILE_DIR:mxmain>
-	COMMAND_EXPAND_LIST
+	COMMAND_EXPAND_LISTS
 )
 
 if(NOT WIN32)
