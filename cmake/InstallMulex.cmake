@@ -15,6 +15,14 @@ macro(install_mulex)
 	file(GLOB COMMON_HEADERS ${CMAKE_SOURCE_DIR}/*.h)
 	install(FILES ${COMMON_HEADERS} DESTINATION include)
 
+	# Install python library
+	install(DIRECTORY ${CMAKE_SOURCE_DIR}/pymx/ DESTINATION pymx
+		PATTERN "__pycache__" EXCLUDE
+		PATTERN ".gitignore" EXCLUDE
+		PATTERN "test" EXCLUDE
+	)
+	install(TARGETS mxcapi DESTINATION pymx)
+
 	# Install required runtime dlls on windows
 	# vcpkg already puts the required dlls on the build tree
 	if(WIN32)

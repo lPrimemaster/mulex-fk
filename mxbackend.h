@@ -8,7 +8,6 @@
 #define MX_PERMISSION(...)
 #endif
 
-
 #include "mxevt.h"
 #include "mxrdb.h"
 #include "mxmsg.h"

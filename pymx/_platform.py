@@ -66,7 +66,15 @@ def get_lib_location() -> Union[str, None]:
         logger.error("Library file not found.")
         return None
 
-    # NOTE: (César) We are not on dev mode try and find the lib on PATH
+    # We are not on dev mode, try and find the lib here
+    candidate = Path(__file__).resolve().parent / filename
+
+    if candidate.exists():
+        logger.debug(f"Candidate {candidate} - FOUND")
+        return str(candidate)
+    logger.debug(f"Candidate {candidate} - NOT FOUND")
+
+    # If that fails, try the PATH
     system, _ = _detect_platform()
     try:
         if system == "linux":
@@ -85,11 +93,11 @@ def get_lib_location() -> Union[str, None]:
     for dir in penv:
         for candidate in candidates:
             path = Path(dir) / candidate / filename
-            logger.debug(f"Candidate {path} - ", end="")
             if path.exists():
+                logger.debug(f"Candidate {path} - FOUND")
                 logger.debug("FOUND")
                 return str(path)
-            logger.debug("NOT FOUND")
+            logger.debug(f"Candidate {path} - NOT FOUND")
 
     logger.error(f"Failed to find {filename}. Is it on PATH?")
     return None
