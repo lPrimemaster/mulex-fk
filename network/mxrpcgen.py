@@ -305,7 +305,7 @@ class RPCFileParser:
     def _find_def_lines(self, lines: List[str]) -> List[int]:
         lines_with_def = []
         for i, line in enumerate(lines):
-            if self.rpc_call_keyword in line and not line.strip().startswith('//'):
+            if self.rpc_call_keyword in line and not line.strip().startswith('//') and not line.strip().startswith('#'):
                 lines_with_def.append(i)
         return lines_with_def
 
