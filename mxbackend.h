@@ -1,4 +1,13 @@
 #pragma once
+
+// NOTE: (César): Guard against this header usage on install by the user
+//				  This is proper but keep in mind that it is not using RPC_CALL_KEYWORD nor RPC_PERM_KEYWORD
+//				  So one should be carefull if that would change (unlikely)
+#ifndef MX_RPC_METHOD
+#define MX_RPC_METHOD
+#define MX_PERMISSION(...)
+#endif
+
 #include "mxevt.h"
 #include "mxrdb.h"
 #include "mxmsg.h"

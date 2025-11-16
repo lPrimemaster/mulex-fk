@@ -749,6 +749,7 @@ class RPCGenerator:
             else:
                 self._write_indented(2, f'case {mid}: return perm.test({hi}, {lo});\n')
         self._write_indented(1, '}\n')
+        self._write_indented(1, 'return false;\n')  # If permission fail we default to false
         self._write_indented(0, '}\n')
 
     def _generate_perm_includes(self) -> None:

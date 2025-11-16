@@ -85,7 +85,7 @@ namespace mulex
 
 		// Remove all of the plugins and re-add user might have deleted files when mxmain was down
 		std::vector<RdbKeyName> prev_plugins = RdbListSubkeys("/system/http/plugins/");
-		for(const auto pplugin : prev_plugins)
+		for(const auto& pplugin : prev_plugins)
 		{
 			RdbDeleteValueDirect(pplugin);
 		}
@@ -1316,7 +1316,7 @@ namespace mulex
 		std::mt19937 rng(dev());
 		std::uniform_int_distribution<std::mt19937::result_type> dist(0, ALPHANUM.size() - 1);
 
-		for(int i = 0; i < PASS_LEN; i++)
+		for(auto i = 0ULL; i < PASS_LEN; i++)
 		{
 			output += ALPHANUM[dist(rng)];
 		}

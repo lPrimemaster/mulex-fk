@@ -71,7 +71,7 @@ macro(fetch_dependencies)
 		GIT_REPOSITORY https://github.com/wolfpld/tracy.git
 		GIT_TAG v0.13.0
 		GIT_SHALLOW TRUE
-		EXCLUDE_FROM_ALL
+		# EXCLUDE_FROM_ALL
 	)
 	FetchContent_MakeAvailable(tracy)
 	# install_target(TracyClient NONE)
@@ -87,7 +87,7 @@ macro(fetch_dependencies)
 
 	FetchContent_Declare(aklomp_base64
 		GIT_REPOSITORY https://github.com/aklomp/base64.git
-		EXCLUDE_FROM_ALL
+		# EXCLUDE_FROM_ALL
 	)
 
 	# Disable base64 unneeded settings

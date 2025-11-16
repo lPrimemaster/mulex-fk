@@ -8,8 +8,8 @@ find_dependency(Tracy REQUIRED)
 find_dependency(base64 REQUIRED)
 if(WIN32)
 	find_dependency(libuv REQUIRED CONFIG)
-else()
-	find_dependency(libuv REQUIRED)
+# else()
+# 	find_dependency(libuv REQUIRED)
 endif()
 
 

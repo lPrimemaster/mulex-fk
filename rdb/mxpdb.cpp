@@ -137,7 +137,7 @@ namespace mulex
 
 			case PdbValueType::FLOAT32:
 			{
-				const float f = static_cast<const float>(sqlite3_column_double(stmt, col));
+				const float f = static_cast<float>(sqlite3_column_double(stmt, col));
 				PdbPushBufferBytes(reinterpret_cast<const std::uint8_t*>(&f), PdbTypeSize(type), buffer);
 				break;
 			}
@@ -239,7 +239,7 @@ namespace mulex
 				// Increment here where we know the size of the data
 				const std::uint64_t size = *reinterpret_cast<const std::uint64_t*>(ptr);
 				offset += size;
-				return sqlite3_bind_blob(stmt, col, ptr + sizeof(std::uint64_t), static_cast<const int>(size), SQLITE_STATIC) == SQLITE_OK;
+				return sqlite3_bind_blob(stmt, col, ptr + sizeof(std::uint64_t), static_cast<int>(size), SQLITE_STATIC) == SQLITE_OK;
 			}
 			case PdbValueType::NIL:
 				return sqlite3_bind_null(stmt, col) == SQLITE_OK;
