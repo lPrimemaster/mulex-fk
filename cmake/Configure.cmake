@@ -9,7 +9,7 @@ macro(generate_rpc_calls)
 	execute_process(
 		COMMAND ${Python3_EXECUTABLE} mxrpcgen.py 
 			--dirs ${CMAKE_SOURCE_DIR}
-			--ignore ${CMAKE_BINARY_DIR} test .cache .git build build_win vcpkg_installed # Specify build and build_win commonly used to dev
+			--ignore ${CMAKE_BINARY_DIR} test .cache .git build vcpkg_installed
 			--recursive
 			--output-file ${RPC_SPEC_FILE}
 			--sql-output ${USER_DB_SETUP}

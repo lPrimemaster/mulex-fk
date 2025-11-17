@@ -10,12 +10,10 @@ dist:
   packages:
     - windows_amd64: windows_amd64.tar.gz
     - linux_amd64: linux_amd64.tar.gz
-    - source: source.tar.gz
+    # - source: source.tar.gz 
+
+    # Do not provide a source dist for now
+    # Force the user to clone and install from source directly
 
   # This gets triggered when our package gets deployed
-  deploy-unix: <script.sh> or any command really (runs on bash/zsh/etc...)
-  deploy-win: <script.ps> or any command really (runs on poweshell)
-
-  # This gets triggered when our package gets deployed (and build from source is triggered)
-  build-unix: <script.sh> or any command really (runs on bash/zsh/etc...)
-  build-win: <script.ps> or any command really (runs on poweshell)
+  deploy: on_install.py

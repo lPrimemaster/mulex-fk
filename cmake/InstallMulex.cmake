@@ -38,6 +38,14 @@ macro(install_mulex)
 	endif()
 endmacro()
 
+macro(package_mulex)
+	# Install deploy script so we package it
+	install(FILES install/on_install.py DESTINATION .)
+
+	# Run package script
+	install(SCRIPT ${CMAKE_SOURCE_DIR}/cmake/PackageMulex.cmake)
+endmacro()
+
 macro(install_target target header)
 	include(CMakePackageConfigHelpers)
 

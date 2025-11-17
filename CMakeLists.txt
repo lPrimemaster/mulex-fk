@@ -15,6 +15,7 @@ option(USB_SUPPORT "Enable/Disable bulk USB transfer support with libusb." OFF)
 option(BUILD_TESTS "Build tests." OFF)
 option(BUILD_EXAMPLES "Build examples." OFF)
 option(GH_ACTION_MODE "Signals this configure is running in a github action." OFF)
+option(CREATE_PACKAGE "Create a tar package for this install target. Package for kpm." OFF)
 
 # Version configuration
 project(mulex-fk VERSION 1.0.5)
@@ -26,6 +27,22 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # We need PIC to be able to compile mxcapi
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# If we are creating a package
+# Make the install dir local to build
+if(CREATE_PACKAGE)
+	# Store original prefix
+	if(NOT DEFINED ORIGINAL_INSTALL_PREFIX)
+		set(ORIGINAL_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}" CACHE INTERNAL "Original install prefix")
+	endif()
+
+	# Overwrite prefix
+	set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/package_deploy/" CACHE PATH "Install prefix" FORCE)
+elseif(ORIGINAL_INSTALL_PREFIX)
+	# Reset to original
+    set(CMAKE_INSTALL_PREFIX "${ORIGINAL_INSTALL_PREFIX}" CACHE PATH "Install prefix" FORCE)
+	unset(ORIGINAL_INSTALL_PREFIX CACHE)
+endif()
 
 # Disable fetch content network check for gh actions
 if(NOT GH_ACTION_MODE)
@@ -152,7 +169,6 @@ target_include_directories(mxapi PRIVATE
 # Add mulex functionalities
 add_subdirectory(plug)
 add_subdirectory(rexs)
-# add_subdirectory(capi)
 
 # Configure C-API library
 add_library(mxcapi SHARED
@@ -200,6 +216,11 @@ endif()
 mx_resource_append(${CMAKE_BINARY_DIR}/${USER_DB_SETUP})
 mx_resource_gen(mxmain)
 
-# Finally install everything for the user
+# Install everything for the user
 install_target(mxapi NONE)
 install_mulex()
+
+# Package for kpm
+if(CREATE_PACKAGE)
+	package_mulex()
+endif()
