@@ -97,8 +97,8 @@ jobs:
       contents: write # Allow write for automated releases
 
     needs:
-      - dist-linux
-      - dist-windows
+      - build-deb
+      - build-win
 
     steps:
       - name: Checkout
