@@ -5,8 +5,7 @@ metadata:
 
 dist:
   # Can be a directory or a url or a github repo
-  # endpoint: lPrimemaster/mulex-fk
-  endpoint: http://localhost:9000
+  endpoint: lPrimemaster/mulex-fk
   tag: latest
   packages:
     - windows_amd64: windows_amd64.tar.gz
