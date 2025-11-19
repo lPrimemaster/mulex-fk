@@ -5,6 +5,7 @@ metadata:
 
 dist:
   # Can be a directory or a url or a github repo
+  # endpoint: http://localhost:9000 ! Testing
   endpoint: lPrimemaster/mulex-fk
   tag: latest
   packages:
@@ -15,5 +16,13 @@ dist:
     # Do not provide a source dist for now
     # Force the user to clone and install from source directly
 
-  # This gets triggered when our package gets deployed
-  deploy: on_install.py
+  # This gets triggered when our package gets installed
+  post_install:
+    - exec: !linux
+        cmd: python3 -c "import site;print(site.getusersitepackages())"
+        output: PY_USITE
+    - exec: !win32
+        cmd: python -c "import site;print(site.getusersitepackages())"
+        output: PY_USITE
+    - mkdir: "!PY_USITE"
+    - move : pymx/ !PY_USITE/pymx/
