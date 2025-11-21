@@ -41,7 +41,7 @@ The history page allows you to look at one/multiple RDB entry/entries and log it
 
 ## Creating Backends
 
-When installing all of the `Mx<Lib>.a` files will be installed alongside with their header files. Cmake's `find_package` is able to retrieve include directories and library paths automatically. It becomes trivial to create a backend project with CMake when mulex is installed in the compiling system.
+When installing, the mx development library (`libmxapi.a`/`mxapi.lib`) files will be installed alongside with their header files. Cmake's `find_package` is able to retrieve include directories and library paths automatically. It becomes trivial to create a backend project with CMake when mulex is installed in the compiling system.
 
 ### Sample `CMakeLists.txt` for a backend project
 
@@ -53,8 +53,8 @@ add_executable(MyBackend
     main.cpp
 )
 
-find_package(MxBackend REQUIRED)
-target_link_libraries(MyBackend PRIVATE Mx::MxBackend)
+find_package(mxapi REQUIRED)
+target_link_libraries(MyBackend PRIVATE Mx::mxapi)
 ```
 
 That simple!
