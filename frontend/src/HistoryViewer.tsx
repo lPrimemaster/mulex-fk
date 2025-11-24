@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip
 import { Checkbox } from './components/ui/checkbox';
 import { MxRdb } from './lib/rdb';
 import { DynamicTitle } from './components/DynamicTitle';
+import { MxUserMetadata } from './lib/usermeta';
 
 interface DisplayOptions {
 	color: string;
@@ -36,17 +37,12 @@ const [rdbKeyTypes, rdbKeyTypesAction] = createMapStore<string, number>(new Map<
 
 function saveEntries() : void {
 	// console.log('Saving entries...');
-	localStorage.setItem('hpm_keys', JSON.stringify(Array.from(displays.data.entries())));
-	// const hpm_keys = localStorage.getItem('hpm_keys');
-	// if(hpm_keys) {
-	// 	const dict = new Map<string, Array<DisplayOptions>>(JSON.parse(hpm_keys));
-	// 	console.log(dict);
-	// }
+	MxUserMetadata.Set('hpm_keys', Array.from(displays.data.entries()));
 }
 
-function loadEntries() : void {
+async function loadEntries() {
 	// console.log('Loading entries...');
-	const hpm_keys = localStorage.getItem('hpm_keys');
+	const hpm_keys = await MxUserMetadata.Get('hpm_keys');
 	if(hpm_keys) {
 
 		MxWebsocket.instance.rpc_call('mulex::RdbListKeys', [], 'generic').then((data) => {
@@ -60,7 +56,7 @@ function loadEntries() : void {
 					rdbKeyTypesAction.add(rdbkeys[i], rdbkeytypes[i]);
 				}
 
-				const dict = new Map<string, Array<DisplayOptions>>(JSON.parse(hpm_keys));
+				const dict = new Map<string, Array<DisplayOptions>>(hpm_keys);
 				// console.log(dict);
 
 				// // Skip if empty
@@ -418,7 +414,7 @@ const HistoryPlot : Component<{name: string, options: Array<DisplayOptions>}> = 
 export const HistoryViewer : Component = () => {
 	const [mountSkip, setMountSkip] = createSignal<boolean>(true);
 
-	// Save the page current displays to localStorage on change
+	// Save the page current displays to usermeta on change
 	createEffect(on(() => displays.data, () => {
 		if(mountSkip()) {
 			setMountSkip(false);
@@ -427,9 +423,9 @@ export const HistoryViewer : Component = () => {
 		saveEntries();
 	}));
 
-	// Load the page displays from localStorage
-	onMount(() => {
-		loadEntries();
+	// Load the page displays from usermeta
+	onMount(async () => {
+		await loadEntries();
 	});
 
 	return (

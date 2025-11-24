@@ -5,6 +5,7 @@
 #include <sqlite3.h>
 #include "mxres.h"
 
+#include <string>
 #include <tracy/Tracy.hpp>
 
 static sqlite3* _pdb_handle = nullptr;
@@ -36,6 +37,22 @@ namespace mulex
 		return pdb_loc;
 	}
 
+	static void PdbUserMetadataInitTable()
+	{
+		const std::string query = 
+		"CREATE TABLE IF NOT EXISTS usermeta ("
+			"id INTEGER PRIMARY KEY,"
+			"value BLOB"
+		");";
+
+		if(!PdbExecuteQuery(query))
+		{
+			LogError("[pdb] Failed to initialize user metadata table.");
+		}
+
+		LogDebug("[pdb] PdbUserMetadataInitTable() OK.");
+	}
+
 	void PdbInit()
 	{
 		ZoneScoped;
@@ -62,6 +79,8 @@ namespace mulex
 
 		// Turn on WAL mode if not on already
 		PdbExecuteQuery("PRAGMA journal_mode = WAL;");
+
+		PdbUserMetadataInitTable();
 
 		LogDebug("[pdb] Init() OK.");
 	}
@@ -850,5 +869,59 @@ namespace mulex
 	{
 		static const std::vector<PdbValueType> types = { PdbValueType::STRING, PdbValueType::INT32 };
 		return PdbReadTable("SELECT username, role_id FROM users;", types);
+	}
+
+	void PdbUserMetadataSet(mulex::RPCGenericType data)
+	{
+		ZoneScoped;
+		std::string user = GetCurrentCallerUser();
+		if(user.empty())
+		{
+			LogError("[pdb] Only a user can get the current user role.");
+			return;
+		}
+
+		std::int32_t uid = PdbGetUserId(user);
+		if(uid == -1)
+		{
+			return;
+		}
+
+		static const std::vector<PdbValueType> types = { PdbValueType::INT32, PdbValueType::BINARY };
+		std::vector<std::uint8_t> buffer = SysPackArguments(uid, data);
+		PdbWriteTable(
+			"INSERT INTO usermeta (id, value) VALUES (?, ?) ON CONFLICT (id) DO UPDATE SET value = excluded.value;",
+			types,
+			buffer
+		);
+	}
+
+	mulex::RPCGenericType PdbUserMetadataGet()
+	{
+		ZoneScoped;
+		std::string user = GetCurrentCallerUser();
+		if(user.empty())
+		{
+			LogError("[pdb] Only a user can get the current user role.");
+			return {};
+		}
+
+		std::int32_t uid = PdbGetUserId(user);
+		if(uid == -1)
+		{
+			return {};
+		}
+
+		static const std::vector<PdbValueType> types = { PdbValueType::BINARY };
+
+		std::vector<std::uint8_t> data = PdbReadTable("SELECT value FROM usermeta WHERE id = " + std::to_string(uid) + ";", types);
+		
+		if(data.empty())
+		{
+			LogError("[pdb] Failed to fetch user metadata or is empty.");
+			return {};
+		}
+
+		return data;
 	}
 } // namespace mulex
