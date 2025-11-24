@@ -86,7 +86,7 @@ const LogBookContextProvider : Component<{ children?: JSXElement }> = (props) =>
 		const extensions = new Array<string>();
 		for(const file of metadataObject.items) {
 			const filename = file.localName as string;
-			const ext = filename.split('.').pop();
+			const ext = fetchExtension(filename);
 
 			if(ext) {
 				extensions.push(ext);
@@ -240,6 +240,12 @@ function modifyBody(text: string, files: LogBookFileHandlerArray) {
 	return body;
 }
 
+function fetchExtension(name: string) {
+	const idx = name.indexOf('.');
+	if(idx === -1) return '';
+	return name.slice(idx + 1);
+}
+
 const LogBookWritePost : Component = () => {
 	const { setNewPostPage } = useContext(LogBookContext) as LogBookContextType;
 	const [avatarUrl, setAvatarUrl] = createSignal<string>('');
@@ -266,12 +272,6 @@ const LogBookWritePost : Component = () => {
 		}
 		filesActions("items", items => items.filter(item => item.id !== id));
 		triggerDraftSaveAttachments(files);
-	}
-
-	function fetchExtension(name: string) {
-		const idx = name.indexOf('.');
-		if(idx === -1) return '';
-		return name.slice(idx + 1);
 	}
 
 	async function uploadFile(id: number) {
