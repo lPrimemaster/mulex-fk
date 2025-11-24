@@ -109,6 +109,16 @@ export const BackendViewer: Component = () => {
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
 				<div class="w-full">
+					<Show when={Object.keys(backends).length === 0}>
+						<div class="w-full flex">
+							<div
+								class="items-center w-full border-4 border-dashed rounded-md h-20 m-2 place-content-center gap-2 text-gray-400 bg-white"
+							>
+								<div class="text-center">No backends found.</div>
+								<div class="text-center">Connect one to display here.</div>
+							</div>
+						</div>
+					</Show>
 					<For each={Object.keys(backends)}>{(clientid: string) => {
 						return (
 							<Card title="">
