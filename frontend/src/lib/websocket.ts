@@ -3,7 +3,7 @@ import { MxGenericType } from './convert';
 export class MxWebsocket {
 	private socket: WebSocket;
 	private messageid: number;
-	private deferred_p: Map<number, [Function, string]>;
+	private deferred_p: Map<number, [Function, Function, string]>;
 	private isready: boolean;
 	private waiting_p: Array<Function>;
 	private static s_instance: MxWebsocket;
@@ -16,7 +16,7 @@ export class MxWebsocket {
 			// Reset fields
 			this.on_change.forEach(x => x(false));
 			this.messageid = 0;
-			this.deferred_p = new Map<number, [Function, string]>();
+			this.deferred_p = new Map<number, [Function, Function, string]>();
 			this.isready = false;
 			this.waiting_p = new Array<Function>();
 
@@ -40,12 +40,13 @@ export class MxWebsocket {
 
 		this.socket.onmessage = async (message: MessageEvent) => {
 			const data = JSON.parse(await message.data.text());
+			let fail = false;
 
 			if(data.type === "rpc")	{
 				if(data.status != "OK") {
 					console.log(`MxWebsocket did not execute call.`);
 					console.log('Reason: ', data.status);
-					return;
+					fail = true;
 				}
 
 				// Push to rpc return value queue
@@ -57,7 +58,12 @@ export class MxWebsocket {
 				else {
 					const resolve = this.deferred_p.get(data.messageid);
 					if(resolve) {
-						resolve[0](this.make_rpc_response(data, resolve[1]));
+						if(!fail) {
+							resolve[0](this.make_rpc_response(data, resolve[2]));
+						}
+						else {
+							resolve[1]("No permissions to execute.");
+						}
 					}
 					this.deferred_p.delete(data.messageid);
 				}
@@ -127,12 +133,12 @@ export class MxWebsocket {
 		if(!this.isready) {
 			await this.when_ready();
 		}
-		return new Promise<MxGenericType>((resolve) => {
+		return new Promise<MxGenericType>((resolve, reject) => {
 			// Send the data via websocket
 			this.socket.send(data);
 
 			// Defer the response
-			this.deferred_p.set(id, [resolve, response]);
+			this.deferred_p.set(id, [resolve, reject, response]);
 			// if(response !== 'none') {
 			// 	// Defer the response
 			// }

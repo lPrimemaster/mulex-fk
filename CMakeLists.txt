@@ -18,7 +18,7 @@ option(GH_ACTION_MODE "Signals this configure is running in a github action." OF
 option(CREATE_PACKAGE "Create a tar package for this install target. Package for kpm." OFF)
 
 # Version configuration
-project(mulex-fk VERSION 1.0.6)
+project(mulex-fk VERSION 1.0.7)
 set(PROJECT_VNAME "Epsilon Eridani")
 
 set(CMAKE_CXX_STANDARD 20)
@@ -62,6 +62,10 @@ endif()
 
 if(USB_SUPPORT)
 	add_definitions(-DUSB_SUPPORT)
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+	add_definitions(-DCREATE_DEV_USER)
 endif()
 
 # RPC related configuration
@@ -165,6 +169,9 @@ target_include_directories(mxapi PRIVATE
 	${tracy_SOURCE_DIR}/public
 	${CMAKE_BINARY_DIR}/uWebSockets/uSockets/src
 )
+
+# Make sqlite3 support FTS5
+target_compile_definitions(mxapi PRIVATE SQLITE_ENABLE_FTS5)
 
 # Add mulex functionalities
 add_subdirectory(plug)

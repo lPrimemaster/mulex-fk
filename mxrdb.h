@@ -166,6 +166,7 @@ namespace mulex
 	std::string PdbGenerateSQLQueryCreate(const std::string& table, const std::initializer_list<std::string>& specs);
 	std::string PdbGenerateSQLQueryInsert(const std::string& table, const std::initializer_list<std::string>& names);
 	std::string PdbGenerateSQLQuerySelect(const std::string& table, const std::initializer_list<std::string>& names);
+	std::string PdbGenerateSQLQueryDelete(const std::string& table);
 
 	bool PdbTableExists(const std::string& table);
 	void PdbSetupUserDatabase();
@@ -399,6 +400,14 @@ namespace mulex
 			const std::vector<PdbValueType> types = { getValueType<Vs>()... };
 			return [this, query, types](const std::string& conditions) -> std::vector<std::tuple<Vs...>> {
 				return executeSelectRemote<Vs...>(query, conditions, types);
+			};
+		}
+
+		std::function<bool(const std::string&)> getDeleter(const std::string& table)
+		{
+			const std::string query = PdbGenerateSQLQueryDelete(table);
+			return [this, query](const std::string& conditions) -> bool {
+				return Policy::executeQueryRemote(query + " " + conditions + ";");
 			};
 		}
 

@@ -22,6 +22,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "./components/ui/avatar";
 import { MarkdownDisplay } from "./components/MarkdownEditor";
 import { MxColorBadge } from "./components/Badges";
 import { MxGenericType } from "./lib/convert";
+import { showToast } from "./components/ui/toast";
+import { MxPopup } from "./components/Popup";
 
 const POSTS_PER_PAGE = 25;
 const COMMENTS_PER_PAGE = 10;
@@ -30,6 +32,7 @@ interface LogBookContextType {
 	pagePosts: LogBookPostArray;
 	setPagePosts: SetStoreFunction<LogBookPostArray>;
 	addPost: (id: number, user: string, title: string, date: string, meta: string) => void;
+	deletePost: (id: number) => void;
 	clearPosts: () => void;
 	newPostPage: Accessor<LogBookPageType>;
 	setNewPostPage: Setter<LogBookPageType>;
@@ -100,11 +103,16 @@ const LogBookContextProvider : Component<{ children?: JSXElement }> = (props) =>
 		}]);
 	}
 
+	function deletePost(id: number) {
+		setPagePosts("items", (posts) => posts.filter(p => p.id !== id));
+	}
+
 	return (
 		<LogBookContext.Provider value={{
 			pagePosts,
 			setPagePosts,
 			addPost,
+			deletePost,
 			clearPosts,
 
 			newPostPage,
@@ -835,9 +843,96 @@ const LogBookTable : Component<{ page: number }> = (props) => {
 	);
 };
 
+const LogBookDeleteCheck : Component<{ open: boolean, ndel: number, changer: Function, deleter: Function }> = (props) => {
+	const [open, setOpen] = createSignal<boolean>(false);
+
+	createEffect(() => {
+		setOpen(props.open);
+	});
+
+	return (
+		<MxPopup title="Delete Post(s)" open={open()}>
+			<div class="place-items-center">
+				<div class="place-content-center justify-center font-semibold text-md">
+					You are about to delete {props.ndel} post(s).
+				</div>
+				<div class="flex place-intems-center justify right my-5 w-1/2 gap-2">
+					<MxButton 
+						type="error"
+						class="w-1/2 h-10 mt-2"
+						onClick={() => { setOpen(false); props.changer(false); props.deleter(); }}
+					>
+						Delete
+					</MxButton>
+					<MxButton 
+						class="w-1/2 h-10 mt-2"
+						onClick={() => { setOpen(false); props.changer(false); }}
+					>
+						Cancel
+					</MxButton>
+				</div>
+			</div>
+		</MxPopup>
+	);
+};
+
 const LogBookControls : Component = () => {
 	const [selection, setSelection] = createSignal<boolean>(false);
-	const { setNewPostPage, setNumPosts, setQuery } = useContext(LogBookContext) as LogBookContextType;
+	const [selectedIds, setSelectedIds] = createSignal<Array<number>>([]);
+	const [delPost, setDelPost] = createSignal<boolean>(false);
+	const { pagePosts, deletePost, setNewPostPage, setNumPosts, setQuery } = useContext(LogBookContext) as LogBookContextType;
+
+	createEffect(() => {
+		const selected = pagePosts.items.filter(item => item.selected).map(item => item.id);
+		setSelection(selected.length > 0);
+		setSelectedIds(selected);
+	});
+
+	async function deletePosts() {
+		const fdeletions = [];
+		let errorMsg = "";
+		let numDel = 0;
+		for(const id of selectedIds()) {
+			try {
+				const res = await MxWebsocket.instance.rpc_call('mulex::LbkPostDelete', [
+					MxGenericType.int32(id)
+				]);
+
+				if(!res.astype('bool')) {
+					fdeletions.push(id);
+				}
+				else {
+					deletePost(id);
+					numDel++;
+				}
+			}
+			catch(err) {
+				console.log(err);
+				fdeletions.push(id);
+				errorMsg = "No permission.";
+			}
+		}
+
+		setSelectedIds(fdeletions);
+		setSelection(fdeletions.length > 0);
+
+		console.log(fdeletions);
+		
+		if(fdeletions.length > 0) {
+			// Failed to delete post
+			showToast({
+				title: 'Failed to delete post(s).',
+				description: errorMsg,
+				variant: 'error'
+			});
+		}
+		else {
+			showToast({
+				title: 'Deleted ' + numDel + ' posts.',
+				variant: 'success'
+			});
+		}
+	}
 
 	return (
 		<div class="mb-5">
@@ -860,7 +955,7 @@ const LogBookControls : Component = () => {
 						<AddIcon class="size-5"/>
 						<div class="text-xs font-semibold">New Post</div>
 					</MxButton>
-					<MxButton onClick={() => {}} class="place-items-center flex gap-1 py-1" type="error" disabled={!selection()}>
+					<MxButton onClick={() => setDelPost(true)} class="place-items-center flex gap-1 py-1" type="error" disabled={!selection()}>
 						<Show when={selection()}>
 							{/* @ts-ignore */}
 							<RemoveIconW class="size-5"/>
@@ -872,6 +967,7 @@ const LogBookControls : Component = () => {
 						<div class="text-xs font-semibold">Delete Post(s)</div>
 					</MxButton>
 				</div>
+				<LogBookDeleteCheck open={delPost()} changer={setDelPost} deleter={deletePosts} ndel={selectedIds().length}/>
 			</Card>
 		</div>
 	);
@@ -930,11 +1026,10 @@ const LogBookPage : Component = () => {
 export const LogBook : Component = () => {
 
 	// TODO: (Cesar)
-	// - Reply/comments/discussion on message
-	// - Delete posts
-	// - Modify posts
-	// - Mentions
+	// - Message Draft
 	// - Links to rdb variables / log them at the time of writing
+	// - Modify posts ?
+	// - Mentions ?
 
 	return (
 		<div>

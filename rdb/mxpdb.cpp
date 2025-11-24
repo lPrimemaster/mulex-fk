@@ -558,6 +558,12 @@ namespace mulex
 		return query;
 	}
 
+	std::string PdbGenerateSQLQueryDelete(const std::string& table)
+	{
+		ZoneScoped;
+		return "DELETE FROM " + table;
+	}
+
 	bool PdbAccessPolicyRemote::executeQueryRemote(const std::string& query)
 	{
 		ZoneScoped;

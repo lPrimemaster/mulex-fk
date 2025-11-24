@@ -145,6 +145,30 @@ namespace mulex
 		return true;
 	}
 
+	bool LbkPostDelete(std::int32_t id)
+	{
+		ZoneScoped;
+		static PdbAccessLocal accessor;
+		static auto deleter = accessor.getDeleter("posts");
+		static auto reader = accessor.getReader<std::int32_t>("posts", {"id"});
+
+		auto postid = reader("WHERE id = " + std::to_string(id));
+		if(postid.empty())
+		{
+			LogError("[lbk] Failed to find and delete post with id <%d>.", id);
+			return false;
+		}
+
+		if(deleter("WHERE id = " + std::to_string(id)))
+		{
+			LogDebug("[lbk] Deleted post <%d>.", id);
+			return true;
+		}
+		
+		LogError("[lbk] Failed to delete post <%d>.", id);
+		return false;
+	}
+
 	mulex::RPCGenericType LbkPostRead(std::int32_t id)
 	{
 		ZoneScoped;
