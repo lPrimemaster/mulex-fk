@@ -24,6 +24,7 @@ import { MxColorBadge } from "./components/Badges";
 import { MxGenericType } from "./lib/convert";
 import { showToast } from "./components/ui/toast";
 import { MxPopup } from "./components/Popup";
+import { MxRdb } from './lib/rdb';
 
 const POSTS_PER_PAGE = 25;
 const COMMENTS_PER_PAGE = 10;
@@ -193,7 +194,7 @@ interface LogBookFileHandlerArray {
 	items: Array<LogBookFileHandler>;
 };
 
-function modifyBody(text: string, files: LogBookFileHandlerArray) {
+function modifyBodyFilePaths(text: string, files: LogBookFileHandlerArray) {
 	let modifiedBody = text;
 	// Replace all file references on text for our uploaded handles.
 	for(const file of files.items) {
@@ -201,8 +202,42 @@ function modifyBody(text: string, files: LogBookFileHandlerArray) {
 			modifiedBody = modifiedBody.replaceAll(file.localName, file.serverPath);
 		}
 	}
+	return modifiedBody;
+}
+
+function findMarkdownRdbLinks(text: string) {
+	const regex = /rdb:\/[^ ]+/g;
+	const matches = [];
+	for (const match of text.matchAll(regex)) {
+		matches.push(match[0]);
+	}
+	return [...new Set(matches)];
+}
+
+async function modifyBodyRdbVariables(text: string) {
+	let modifiedBody = text;
+	const rdbVars = findMarkdownRdbLinks(text);
+
+	if(rdbVars.length == 0) return modifiedBody;
+
+	const handle = new MxRdb();
+	for(const rdbv of rdbVars) {
+		let strValue = '';
+		let key = rdbv.split(':')[1];
+		if(await handle.exists(key)) {
+			let value = await handle.read(key);
+			strValue = value.toString();
+			modifiedBody = modifiedBody.replaceAll(rdbv, strValue);
+		}
+	}
 
 	return modifiedBody;
+}
+
+function modifyBody(text: string, files: LogBookFileHandlerArray) {
+	let body = text;
+	body = modifyBodyFilePaths(body, files);
+	return body;
 }
 
 const LogBookWritePost : Component = () => {
@@ -437,6 +472,10 @@ const LogBookWritePost : Component = () => {
 		triggerDraftSaveTitle(title());
 	});
 
+	createEffect(async () => {
+		setBody(await modifyBodyRdbVariables(body()));
+	});
+
 	return (
 		<Card title="New Post">
 			<div class="flex border inset-shadow-sm rounded-md my-5 place-content-between items-center">
@@ -479,7 +518,11 @@ const LogBookWritePost : Component = () => {
 							value={body()}
 							onKeyDown={postTabHandle}
 							style="white-space: pre; tab-size: 4;" // 4 space tabs
-							placeholder={`Start typing HTML, Markdown or LaTeX...\nYou can also drag files here...`}
+							placeholder={
+								`Start typing HTML, Markdown or LaTeX...\n` +
+								`You can also drag files here...\n` +
+								`Or auto copy RDB variables via typing 'rdb:/user/myvar'...`
+							}
 							onDragOver={onDragOver}
 							onDragLeave={onDragLeave}
 							onDrop={onDrop}
@@ -1026,8 +1069,6 @@ const LogBookPage : Component = () => {
 export const LogBook : Component = () => {
 
 	// TODO: (Cesar)
-	// - Message Draft
-	// - Links to rdb variables / log them at the time of writing
 	// - Modify posts ?
 	// - Mentions ?
 

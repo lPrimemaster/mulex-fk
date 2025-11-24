@@ -24,6 +24,12 @@ export class MxRdb {
 		this.types = new Map<string, string>();
 	}
 
+	public async exists(key: string) : bool {
+		const tkey = this.root + key;
+		const exists = await MxWebsocket.instance.rpc_call('mulex::RdbValueExists', [MxGenericType.str512(tkey)]);
+		return exists.astype('bool');
+	}
+
 	public async read(key: string) : Promise<any> {
 		const tkey = this.root + key;
 		const type = await this.getKeyType(tkey);
