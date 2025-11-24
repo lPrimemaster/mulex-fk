@@ -250,7 +250,7 @@ namespace mulex
 		}
 
 		LogWarning("[fdb] Failed to infer file extension for mime type <%s>.", mimetype.c_str());
-		LogWarning("[fdb] Using <.bin> as extension.");
+		LogWarning("[fdb] Using built-in value or <.bin> as extension.");
 		return "bin";
 	}
 
@@ -355,12 +355,15 @@ namespace mulex
 		FdbInitTables();
 	}
 
-	inline static FdbHandle FdbWriteFile(const std::vector<std::uint8_t>& buffer, string32& mimetype)
+	inline static FdbHandle FdbWriteFile(const std::vector<std::uint8_t>& buffer, const string32& mimetype, const string32& extension)
 	{
 		FdbHandle handle = FdbGenerateUniqueHandle();
 		const std::string bucket = FdbGetCurrentBucket();
 		const std::string file_root = FdbGetBucketFullPath(bucket);
-		const std::string file_ext = FdbGetExtFromMime(mimetype.c_str());
+		std::string file_ext = FdbGetExtFromMime(mimetype.c_str());
+		if(file_ext == "bin" && (strlen(extension.c_str()) > 0)) {
+			file_ext = extension.c_str();
+		}
 		const std::string file_key = std::string(handle.c_str()) + "." + file_ext;
 		const std::string full_sys_path = file_root + "/" + file_key;
 		const std::string username = GetCurrentCallerUser();
@@ -389,10 +392,10 @@ namespace mulex
 		SysAppendBinFile(path.c_str(), buffer);
 	}
 
-	FdbHandle FdbChunkedUploadStart(mulex::string32 mimetype)
+	FdbHandle FdbChunkedUploadStart(mulex::string32 mimetype, mulex::string32 extension)
 	{
 		// NOTE: (Cesar) Touch the file
-		FdbHandle handle = FdbWriteFile({}, mimetype);
+		FdbHandle handle = FdbWriteFile({}, mimetype, extension);
 		FdbCacheTransferInit(handle, 0);
 		return handle;
 	}

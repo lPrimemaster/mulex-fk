@@ -25,6 +25,15 @@ export const MarkdownDisplay : Component<{ content: string }> = (props) => {
 		}
 	}).use(mk);
 
+	const defaultRenderer = mdit.renderer.rules.link_open || function(t, i, o, e, s) { return s.renderToken(t, i, o); };
+
+	mdit.renderer.rules.link_open = function(tokens, idx, options, env, self) {
+		const token = tokens[idx];
+		token.attrSet('target', '_blank');
+		token.attrSet('rel', 'noopener');
+		return defaultRenderer(tokens, idx, options, env, self);
+	};
+
 	return (
 		<div class="p-5 prose prose-slate max-w-none w-full bg-white rounded-md shadow-md" innerHTML={mdit.render(props.content)}/>
 	);

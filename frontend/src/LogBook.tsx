@@ -268,12 +268,22 @@ const LogBookWritePost : Component = () => {
 		triggerDraftSaveAttachments(files);
 	}
 
+	function fetchExtension(name: string) {
+		const idx = name.indexOf('.');
+		if(idx === -1) return '';
+		return name.slice(idx + 1);
+	}
+
 	async function uploadFile(id: number) {
 		const file = files.items.find(i => i.id === id);
 		if(!file) return;
 
+		const filename = file.localName as string;
+		const ext = fetchExtension(filename);
+
 		const res = await MxWebsocket.instance.rpc_call('mulex::FdbChunkedUploadStart', [
-			MxGenericType.str32(file.file.type)
+			MxGenericType.str32(file.file.type),
+			MxGenericType.str32(ext)
 		]);
 		const handle = res.astype('string');
 		const fileData = new Uint8Array(await file.file.arrayBuffer());

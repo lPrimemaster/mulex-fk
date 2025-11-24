@@ -200,7 +200,7 @@ namespace mulex
 
 	// Chunked upload is preferred for big files (>10MB)
 	// This avoids the need to have huge data buffers allocated
-	MX_RPC_METHOD MX_PERMISSION("upload_files") mulex::FdbHandle FdbChunkedUploadStart(mulex::string32 mimetype);
+	MX_RPC_METHOD MX_PERMISSION("upload_files") mulex::FdbHandle FdbChunkedUploadStart(mulex::string32 mimetype, mulex::string32 extension);
 	MX_RPC_METHOD MX_PERMISSION("upload_files") bool FdbChunkedUploadSend(mulex::PdbString handle, mulex::RPCGenericType chunk);
 	MX_RPC_METHOD MX_PERMISSION("upload_files") bool FdbChunkedUploadEnd(mulex::PdbString handle);
 
