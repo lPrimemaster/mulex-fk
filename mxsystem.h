@@ -302,6 +302,7 @@ namespace mulex
 #endif
 	void SysRegisterSigintAction(SysSigintActionFunc f);
 	const std::atomic<bool>* SysSetupExitSignal();
+	void SysKillProcess(const std::string& message);
 
 	bool SysDaemonize();
 	bool SysInitializeExperiment(int argc, char* argv[]);
@@ -365,4 +366,13 @@ namespace mulex
 
 	void SysMarkUptimeNow();
 	MX_RPC_METHOD std::int64_t SysGetUptimeMark();
+
+	struct SysHandshakeHeader
+	{
+		string32 _mx_version;
+		std::uint32_t _mx_rpc_version;
+		// std::uint8_t _padding[28];
+	};
+
+	 SysHandshakeHeader SysGetHandshakeHeader();
 } // namespace mulex

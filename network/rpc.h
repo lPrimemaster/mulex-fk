@@ -210,8 +210,11 @@ namespace mulex
 
 		inline void callRaw(std::uint16_t procedureid, const std::vector<std::uint8_t>& data, std::vector<std::uint8_t>* retdata);
 
+		bool isValid() const;
+
 	private:
 		void clientThread(const Socket& socket);
+		bool handshake();
 
 	private:
 		Socket _rpc_socket;
@@ -223,6 +226,7 @@ namespace mulex
 		bool _rpc_has_custom_id = false;
 		std::uint64_t _rpc_custom_id;
 		std::string _rpc_username;
+		bool _rpc_init_ok = false;
 	};
 
 	class RPCServerThread
@@ -235,6 +239,7 @@ namespace mulex
 	private:
 		void serverConnAcceptThread();
 		void serverThread(const Socket& socket);
+		bool handshake(const Socket& client);
 
 	private:
 		Socket _server_socket;

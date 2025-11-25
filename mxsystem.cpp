@@ -34,6 +34,7 @@
 
 #include <tracy/Tracy.hpp>
 #include <mxconfig.h>
+#include <rpcspec.inl>
 
 #include <openssl/sha.h>
 #include <openssl/rand.h>
@@ -454,6 +455,12 @@ namespace mulex
 	{
 		_sys_experiment_connected = true;
 		_sys_experiment._rpc_client = std::make_unique<RPCClientThread>(hostname, RPC_PORT);
+		if(!_sys_experiment._rpc_client->isValid())
+		{
+			_sys_experiment_connected = false;
+			return false;
+		}
+
 		_sys_experiment._evt_client = std::make_unique<EvtClientThread>(hostname, nullptr, EVT_PORT);
 		return true;
 	}
@@ -504,6 +511,13 @@ namespace mulex
 		});
 #endif
 		return &signal_flag;
+	}
+
+	void SysKillProcess(const std::string& message)
+	{
+		LogError("SysKillProcess: Execution aborted.");
+		LogError("Reason: %s", message.c_str());
+		::exit(-1);
 	}
 
 	SysRecvThread::SysRecvThread(const Socket& socket, std::uint64_t ssize, std::uint64_t sheadersize, std::uint64_t sheaderoffset)
@@ -1734,5 +1748,13 @@ namespace mulex
 	std::int64_t SysGetUptimeMark()
 	{
 		return _sys_uptime_mark;
+	}
+
+	SysHandshakeHeader SysGetHandshakeHeader()
+	{
+		SysHandshakeHeader header;
+		header._mx_rpc_version = MX_RPC_PROTOCOL_VERSION;
+		header._mx_version = MX_HASH "-" MX_BRANCH;
+		return header;
 	}
 } // namespace mulex

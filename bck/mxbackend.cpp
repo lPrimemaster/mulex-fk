@@ -83,6 +83,7 @@ namespace mulex
 		if(!SysInitializeBackend(argc, argv))
 		{
 			LogError("[mxbackend] Failed to initialize the backend.");
+			SysKillProcess("Failed to initialize backend.");
 			return;
 		}
 

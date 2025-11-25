@@ -12,6 +12,7 @@
 #include <rpcspec.inl>
 
 #include "../mxlogger.h"
+#include "socket.h"
 
 static std::atomic<std::uint64_t> _client_msg_id = 0;
 
@@ -116,6 +117,16 @@ namespace mulex
 
 		_rpc_socket = SocketInit();
 		SocketConnect(_rpc_socket, hostname, rpcport);
+
+		// Handshake
+		if(!handshake())
+		{
+			_rpc_init_ok = false;
+			SocketClose(_rpc_socket);
+			return;
+		}
+
+		_rpc_init_ok = true;
 		_rpc_thread_running.store(true);
 		_rpc_thread = std::make_unique<std::thread>(
 			std::bind(&RPCClientThread::clientThread, this, _rpc_socket)
@@ -131,10 +142,54 @@ namespace mulex
 		{
 			RpcPurgeUserFromCid(_rpc_custom_id);
 		}
-		_rpc_thread_running.store(false);
-		_rpc_stream->requestUnblock();
-		SocketClose(_rpc_socket);
-		_rpc_thread->join();
+		
+		// Early out. We don't need to cleanup, we didn't initialize
+		if(isValid())
+		{
+			_rpc_thread_running.store(false);
+			_rpc_stream->requestUnblock();
+			SocketClose(_rpc_socket);
+			_rpc_thread->join();
+		}
+	}
+
+	bool RPCClientThread::handshake()
+	{
+		// Send current protocol version
+		SysHandshakeHeader header = SysGetHandshakeHeader();
+		SocketSendBytes(_rpc_socket, reinterpret_cast<std::uint8_t*>(&header), sizeof(header));
+
+		// Server replies status
+		std::uint8_t status = 0;
+		std::uint64_t recvl = 0;
+
+		while(recvl < 1)
+		{
+			SocketResult res = SocketRecvBytes(_rpc_socket, &status, 1 - recvl, &recvl);
+			if(res == SocketResult::ERROR || res == SocketResult::DISCONNECT)
+			{
+				LogError("[rpcclient] Could not process handshake.");
+				return false;
+			}
+
+			std::this_thread::sleep_for(std::chrono::microseconds(50));
+		}
+
+		if(status == 0)
+		{
+			LogError("[rpcclient] RPC Handshake failed. Protocol version mismatch.");
+			return false;
+		}
+		else
+		{
+			LogDebug("[rpcclient] RPC Handshake OK!");
+			return true;
+		}
+	}
+
+	bool RPCClientThread::isValid() const
+	{
+		return _rpc_init_ok;
 	}
 
 	void RPCClientThread::clientThread(const Socket& socket)
@@ -181,6 +236,48 @@ namespace mulex
 		return _rpc_thread_ready.load();
 	}
 
+	bool RPCServerThread::handshake(const Socket& client)
+	{
+		// Receive current protocol version
+		SysHandshakeHeader server_header = SysGetHandshakeHeader();
+		SysHandshakeHeader client_header;
+
+		static std::uint8_t buffer[sizeof(SysHandshakeHeader)];
+		std::uint64_t rlen, tsize = 0;
+		while(tsize < sizeof(SysHandshakeHeader))
+		{
+			SocketResult res = SocketRecvBytes(client, &buffer[tsize], sizeof(SysHandshakeHeader) - tsize, &rlen);
+			tsize += rlen;
+
+			if(res == SocketResult::ERROR || res == SocketResult::DISCONNECT)
+			{
+				LogError("[rpcserver] Could not process handshake.");
+				return false;
+			}
+
+			std::this_thread::sleep_for(std::chrono::microseconds(50));
+		}
+
+		std::memcpy(&client_header, buffer, sizeof(SysHandshakeHeader));
+
+		bool rpc_protocol_compat = (client_header._mx_rpc_version == server_header._mx_rpc_version);
+		std::uint8_t status = rpc_protocol_compat ? 1 : 0;
+		if(!rpc_protocol_compat)
+		{
+			LogError("[rpcserver] RPC Handshake failed. Protocol version mismatch.");
+			LogError("[rpcserver] Server version: 0x%x", server_header._mx_rpc_version);
+			LogError("[rpcserver] Client version: 0x%x", client_header._mx_rpc_version);
+			SocketSendBytes(client, &status, 1);
+			return false;
+		}
+
+		SocketSendBytes(client, &status, 1);
+		LogDebug("[rpcserver] RPC Handshake OK!");
+		LogTrace("[rpcserver] Server version: 0x%x", server_header._mx_rpc_version);
+		LogTrace("[rpcserver] Client version: 0x%x", client_header._mx_rpc_version);
+		return true;
+	}
+
 	void RPCServerThread::serverConnAcceptThread()
 	{
 		ZoneScoped;
@@ -208,6 +305,13 @@ namespace mulex
 
 			if(!client._error)
 			{
+				// Handshake
+				if(!handshake(client))
+				{
+					SocketClose(client);
+					continue;
+				}
+
 				// Push a new client and start a thread for it
 				std::lock_guard<std::mutex> lock(_connections_mutex);
 				_rpc_thread.emplace(

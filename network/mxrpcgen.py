@@ -13,6 +13,7 @@ import argparse
 import io
 import sys
 import json
+import hashlib
 
 
 class RPCMethodType:
@@ -686,6 +687,21 @@ class RPCGenerator:
         self._write_indented(0, '// ####################\n')
         self._write_newline()
 
+    def _generate_rpc_protocol_hash_placeholder(self) -> None:
+        self._write_indented(0, '#define MX_RPC_PROTOCOL_VERSION $RPC_PV$\n')
+        self._write_newline()
+
+    def _replace_buffer(self, old: str, new: str) -> None:
+        data = self.buffer.getvalue().replace(old, new)
+        self.buffer.seek(0)
+        self.buffer.truncate(0)
+        self.buffer.write(data)
+
+    def _calculate_rpc_protocol_hash(self) -> None:
+        rpcproto = hashlib.sha256(self.buffer.getvalue().encode('utf-8')).hexdigest()[:8]
+        print(f'[mxrpcgen] RPC Protocol: 0x{rpcproto}')
+        self._replace_buffer('$RPC_PV$', f'0x{rpcproto}')
+
     def _generate_perm_definitions(self, permissions: List[RPCMethodPermission]) -> Dict[str, int]:
         output = {}
         for i, perm in enumerate(permissions):
@@ -734,7 +750,7 @@ class RPCGenerator:
         self._write_indented(1, 'return mulex::PdbPermissions(0, 0);\n')
         self._write_indented(0, '}\n')
         self._write_newline()
-        
+
         self._write_indented(0, 'inline bool PdbCheckMethodPermissions(std::uint16_t pid, const mulex::PdbPermissions& perm)\n')
         self._write_indented(0, '{\n')
         self._write_indented(1, 'if(perm.test(0)) return true; // SUPER always has permissions\n\n')
@@ -771,10 +787,12 @@ class RPCGenerator:
         self._reset_buffer()
         self._generate_message()
         self._generate_includes()
+        self._generate_rpc_protocol_hash_placeholder()
         self.ids = self._generate_ids()
         self._generate_name_lookup(self.ids)
         self._generate_name_list(self.ids)
         self._generate_call_lookup(self.ids)
+        self._calculate_rpc_protocol_hash()
         self._write_file(filename)
 
     def generate_perm_header(self, filename: str, role_generator: RPCRoleGenerator) -> None:
@@ -784,6 +802,7 @@ class RPCGenerator:
         permap = self._generate_perm_definitions(role_generator.get_permissions())
         self._generate_perm_lookup(role_generator.get_roles(), permap, self.ids)
         self._write_file(filename)
+
 
 def get_files(args: argparse.Namespace) -> List[str]:
     files_to_parse = []
