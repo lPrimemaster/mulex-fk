@@ -29,7 +29,7 @@ class TestBackend(Backend):
 
         self.delete('/user/mykey')
 
-        self.unwatch('/system/metrics/cpu_usage')
+        # self.unwatch('/system/metrics/cpu_usage')
 
         print('Tesing event subscription...')
 
