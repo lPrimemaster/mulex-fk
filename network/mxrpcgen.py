@@ -688,7 +688,8 @@ class RPCGenerator:
         self._write_newline()
 
     def _generate_rpc_protocol_hash_placeholder(self) -> None:
-        self._write_indented(0, '#define MX_RPC_PROTOCOL_VERSION $RPC_PV$\n')
+        self._rpc_proto_version = '#define MX_RPC_PROTOCOL_VERSION $RPC_PV$'
+        self._write_indented(0, self._rpc_proto_version + '\n')
         self._write_newline()
 
     def _replace_buffer(self, old: str, new: str) -> None:
@@ -698,7 +699,9 @@ class RPCGenerator:
         self.buffer.write(data)
 
     def _calculate_rpc_protocol_hash(self) -> None:
-        rpcproto = hashlib.sha256(self.buffer.getvalue().encode('utf-8')).hexdigest()[:8]
+        lines = self.buffer.getvalue().splitlines()
+        offset = [i for i, line in enumerate(lines) if line == self._rpc_proto_version][0]
+        rpcproto = hashlib.sha256('\n'.join(lines[offset:]).encode('utf-8')).hexdigest()[:8]
         print(f'[mxrpcgen] RPC Protocol: 0x{rpcproto}')
         self._replace_buffer('$RPC_PV$', f'0x{rpcproto}')
 
