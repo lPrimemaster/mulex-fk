@@ -132,9 +132,6 @@ class Backend(ABC):
         nargs = len(sys.argv)
         cargv = (ct.c_char_p * nargs)()
         cargv[:] = [arg.encode('utf-8') for arg in sys.argv]
-        print(nargs)
-        print(cargv[:])
-        print(self._ctx)
         self._lib.CMxBackendCreate(
             self._ctx,
             ct.c_int32(nargs),

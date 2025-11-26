@@ -1130,7 +1130,7 @@ namespace mulex
 		_sys_fullcmdline = std::string(binnamebuf, nread - 1);
 		return _sys_fullcmdline;
 #else
-		_sys_fullbinname = GetCommandLineA();
+		_sys_fullcmdline = GetCommandLineA();
 		return _sys_fullcmdline;
 #endif
 	}
