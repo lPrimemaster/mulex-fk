@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <memory>
 #include <mutex>
+#include <regex>
 #include <signal.h>
 #include "mxlogger.h"
 #include "network/rpc.h"
@@ -47,6 +48,7 @@ static std::string _mxcacheprivdir;
 static std::string _sys_expname;
 static std::string _sys_binname;
 static std::string _sys_fullbinname;
+static std::string _sys_fullcmdline;
 static std::string _sys_hostname;
 static std::unique_ptr<mulex::RPCServerThread> _sys_rpc_thread;
 static std::unique_ptr<mulex::EvtServerThread> _sys_evt_thread;
@@ -396,15 +398,17 @@ namespace mulex
 		SysUnlockCurrentProcess();
 	}
 
-	static void SysWriteRexClientInfo(const std::string& hostname)
+	static void SysWriteRexClientInfo()
 	{
 		const std::uint64_t cid = SysGetClientId();
 		const std::string cwd = std::filesystem::current_path().string();
+		const std::string bname(SysGetBinaryName());
 		const std::string bpath(SysGetBinaryFullName());
+		const std::string bcommand(SysGetBinaryFullCommandLineArguments());
 
-		if(!RexUpdateClientInfo(cid, cwd, bpath, hostname))
+		if(!RexUpdateClientInfo(cid, cwd, bpath, bcommand, bname))
 		{
-			if(!RexCreateClientInfo(cid, cwd, bpath, hostname))
+			if(!RexCreateClientInfo(cid, cwd, bpath, bcommand, bname))
 			{
 				LogError("SysWriteRexClientInfo: Failed to create/update rex client info.");
 			}
@@ -433,7 +437,7 @@ namespace mulex
 		}
 
 		// Setup Rex
-		SysWriteRexClientInfo(server_name);
+		SysWriteRexClientInfo();
 
 		// Now try to connect
 		if(!SysConnectToExperiment(server_name.c_str()))
@@ -1098,6 +1102,39 @@ namespace mulex
 		return _sys_binname;
 	}
 
+	std::string_view SysGetBinaryFullCommandLineArguments()
+	{
+		if(!_sys_fullcmdline.empty())
+		{
+			return _sys_fullcmdline;
+		}
+
+#ifdef __linux__
+		char binnamebuf[4096];
+		FILE* f = ::fopen("/proc/self/cmdline", "r");
+		if(!f)
+		{
+			LogError("SysGetBinaryFullCommandLineArguments: Failed to fetch the current process' command line.");
+			return "";
+		}
+
+		std::size_t nread = ::fread(binnamebuf, 1, sizeof(binnamebuf) - 1, f);
+		binnamebuf[nread] = 0;
+		fclose(f);
+
+		for(std::size_t i = 0; i < nread - 1; i++) // Skip last null separator
+		{
+			if(binnamebuf[i] == 0) binnamebuf[i] = ' ';
+		}
+
+		_sys_fullcmdline = std::string(binnamebuf, nread - 1);
+		return _sys_fullcmdline;
+#else
+		_sys_fullbinname = GetCommandLineA();
+		return _sys_fullcmdline;
+#endif
+	}
+
 	std::string_view SysGetBinaryFullName()
 	{
 		if(!_sys_fullbinname.empty())
@@ -1147,6 +1184,31 @@ namespace mulex
 #endif
 		_sys_hostname = hostname;
 		return _sys_hostname;
+	}
+
+	std::vector<std::string> SysStringSplitOnTokenSkipCommas(const std::string& input, char token)
+	{
+		bool skipping = false;
+		std::int64_t lindex = -1;
+		std::vector<std::string> output;
+
+		for(std::uint64_t i = 0; i < input.size(); i++)
+		{
+			if(input[i] == '"')
+			{
+				skipping = !skipping;
+			}
+			if(skipping) continue;
+
+			if(input[i] == token)
+			{
+				output.push_back(input.substr(lindex + 1, i - lindex - 1));
+				lindex = static_cast<std::int64_t>(i);
+			}
+		}
+
+		output.push_back(input.substr(lindex + 1));
+		return output;
 	}
 
 	static std::uint64_t mmh64a(const char* key, int len)
@@ -1414,6 +1476,7 @@ namespace mulex
 
 			LogDebug("Details:");
 			LogDebug("\tName: %s", filename.c_str());
+			LogDebug("\tBinary: %s", binary.c_str());
 			LogDebug("\tArgs: %s", ss.str().c_str());
 			LogDebug("\tWorkdir: %s", workdir.c_str());
 

@@ -49,10 +49,11 @@ namespace mulex
 
 	struct RexClientInfo
 	{
-		std::uint64_t _cid;
-		std::string   _bwd;
-		std::string   _bin_path;
-		std::string   _srv_host;
+		std::uint64_t 			 _cid;
+		std::string   			 _bwd;
+		std::string   			 _bin_command;
+		std::vector<std::string> _bin_arguments;
+		std::string   			 _bin_name;
 	};
 
 	RexLockHandle RexAcquireLock();
@@ -70,8 +71,8 @@ namespace mulex
 	std::optional<std::string> RexFindBackendHost(std::uint64_t cid);
 
 	bool RexCreateClientListFile();
-	bool RexCreateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& srvaddr);
-	bool RexUpdateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& srvaddr);
+	bool RexCreateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& cmdline, const std::string& bname);
+	bool RexUpdateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& cmdline, const std::string& bname);
 	bool RexDeleteClientInfo(std::uint64_t cid);
 	std::optional<RexClientInfo> RexGetClientInfo(std::uint64_t cid);
 

@@ -349,11 +349,11 @@ namespace mulex
 		return rex_path;
 	}
 
-	static std::string RexCreateEntryString(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& srvaddr)
+	static std::string RexCreateEntryString(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& bin, const std::string& bname)
 	{
 		std::ostringstream ss;
 		// NOTE: (Cesar) Cids, workdirs and server addresses cannot contain '|' (good spacer here)
-		ss << SysI64ToHexString(cid) << "|" << absbwd << "|" << binpath << "|" << srvaddr << "\n";
+		ss << SysI64ToHexString(cid) << "|" << absbwd << "|" << binpath << "|" << bname << "|" << bin << "\n";
 		return ss.str();
 	}
 	
@@ -550,7 +550,7 @@ namespace mulex
 		return true;
 	}
 
-	bool RexCreateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& srvaddr)
+	bool RexCreateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& cmdline, const std::string& bname)
 	{
 		RexLockGuard lock;
 		std::string path = RexGetClientListFilePath();
@@ -562,12 +562,12 @@ namespace mulex
 			return false;
 		}
 
-		file << RexCreateEntryString(cid, absbwd, binpath, srvaddr);
+		file << RexCreateEntryString(cid, absbwd, cmdline, binpath, bname);
 		file << std::flush;
 		return true;
 	}
 
-	bool RexUpdateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& srvaddr)
+	bool RexUpdateClientInfo(std::uint64_t cid, const std::string& absbwd, const std::string& binpath, const std::string& cmdline, const std::string& bname)
 	{
 		RexLockGuard lock;
 		std::string path = RexGetClientListFilePath();
@@ -587,7 +587,7 @@ namespace mulex
 		{
 			if(RexLineHasCid(cid, line))
 			{
-				ss << RexCreateEntryString(cid, absbwd, binpath, srvaddr);
+				ss << RexCreateEntryString(cid, absbwd, cmdline, binpath, bname);
 				found = true;
 			}
 			else
@@ -658,10 +658,16 @@ namespace mulex
 		cinfo._bwd = token;
 
 		std::getline(ss, token, '|');
-		cinfo._bin_path = token;
+		std::vector<std::string> command = SysStringSplitOnTokenSkipCommas(token, ' ');
+		command.erase(command.begin());
+
+		cinfo._bin_arguments = command;
 		
 		std::getline(ss, token, '|');
-		cinfo._srv_host = token;
+		cinfo._bin_name = token;
+
+		std::getline(ss, token, '|');
+		cinfo._bin_command = token;
 
 		return cinfo;
 	}
@@ -692,12 +698,7 @@ namespace mulex
 
 	RexCommandStatus RexStartBackend(const RexClientInfo& cinfo)
 	{
-		std::vector<std::string> args;
-
-		args.push_back("--server");
-		args.push_back(cinfo._srv_host);
-
-		if(!SysSpawnProcess(cinfo._bin_path, cinfo._bwd, args))
+		if(!SysSpawnProcess(cinfo._bin_command, cinfo._bwd, cinfo._bin_arguments))
 		{
 			return RexCommandStatus::BACKEND_START_FAILED;
 		}
@@ -721,7 +722,7 @@ namespace mulex
 	RexCommandStatus RexStopBackend(const RexClientInfo& cinfo)
 	{
 		// Check if the backend is running on this system
-		std::string bname = cinfo._bin_path.substr(cinfo._bin_path.find_last_of("/\\") + 1);
+		std::string bname = cinfo._bin_name;
 		std::string lockfile = std::string(SysGetCacheLockDir()) + "/" + bname + ".lock";
 		if(!std::filesystem::exists(lockfile))
 		{
@@ -755,7 +756,7 @@ namespace mulex
 			pname.resize(pos);
 		}
 #endif
-		if(pname == cinfo._bin_path)
+		if(pname == cinfo._bin_command)
 		{
 			if(!SysInterruptProcess(handle.value()))
 			{

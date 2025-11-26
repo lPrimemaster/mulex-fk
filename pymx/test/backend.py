@@ -1,3 +1,4 @@
+#!/bin/python3.12
 # from pymx import backend
 from pymx.backend import Backend
 import logging
@@ -32,7 +33,7 @@ class TestBackend(Backend):
 
         print('Tesing event subscription...')
 
-        self.subscribe('TestBackend::dummy', lambda data: print(data))
+        # self.subscribe('TestBackend::dummy', lambda data: print(data))
 
         self.log(TestBackend.LogType.INFO, 'Getting events from test_bck...')
 
@@ -51,7 +52,7 @@ class TestBackend(Backend):
 
         time.sleep(1)
 
-        self.unsubscribe('TestBackend::dummy')
+        # self.unsubscribe('TestBackend::dummy')
 
     def rpc(self, p0: ct.c_int32, p1: ct.c_float):
         print(f'Called RPC function with data: {p0} {p1}')

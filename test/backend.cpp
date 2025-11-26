@@ -38,18 +38,19 @@ public:
 			77.7f
 		);
 		std::cout << static_cast<int>(status) << " -> " << ret << std::endl;
-		// registerDependency("pmc8742.exe").required(true).onFail(RexDependencyManager::LOG_ERROR);
+		// registerDependency("pmc8742.exe").required(true).onFail(MxRexDependencyManager::LOG_ERROR);
+		// registerDependency("backend.py").required(true).onFail(MxRexDependencyManager::TERMINATE);
 	}
 
 	void onRunStart(std::uint64_t runno)
 	{
 		std::string data = "Bing Xiling";
-		logRunWriteFile("somefile_bx.txt", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+		logRunWriteFile("somefile_bx.txt.random", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
 
 		std::this_thread::sleep_for(std::chrono::seconds(2));
 
 		data = "Bing Xiling 2";
-		logRunWriteFile("somefile_bx.txt", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+		logRunWriteFile("somefile_bx.txt.random", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
 	}
 
 	void onRunStop(std::uint64_t runno)

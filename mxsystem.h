@@ -319,6 +319,7 @@ namespace mulex
 	MX_RPC_METHOD mulex::mxstring<512> SysGetExperimentName();
 	void SysOverrideBinaryName(const std::string& name);
 	std::string_view SysGetBinaryName();
+	std::string_view SysGetBinaryFullCommandLineArguments();
 	std::string_view SysGetBinaryFullName();
 	std::string_view SysGetHostname();
 	std::uint64_t SysGetClientId();
@@ -334,6 +335,7 @@ namespace mulex
 	std::string SysBufferToHex(const std::uint8_t* buffer, std::uint64_t size);
 	std::string SysGenerateSecureRandom256Hex();
 
+	std::vector<std::string> SysStringSplitOnTokenSkipCommas(const std::string& input, char token);
 	std::uint64_t SysStringHash64(const std::string& key);
 	bool SysMatchPattern(const std::string& pattern, const std::string& target);
 
