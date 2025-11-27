@@ -463,6 +463,9 @@ int main(int argc, char* argv[])
 }
 ```
 
+If you wish to pass the argument to the backend constructor, it must be passed
+by reference, const-reference or have global storage.
+
 #### Python
 This feature is not supported. To make your own custom arguments, make use of
 python's builtin argparse module.

@@ -99,12 +99,17 @@
 # add_test(test_evt test_evt)
 
 add_executable(test_bck backend.cpp)
-
 target_link_libraries(test_bck mxapi)
-
 target_include_directories(test_bck PRIVATE
 	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
 )
+
+add_executable(test_stress stress.cpp)
+target_link_libraries(test_stress mxapi)
+target_include_directories(test_stress PRIVATE
+	$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
+)
+
 # add_test(test_bck test_bck)
 
 # add_executable(test_ksmatch ksmatch.cpp)
