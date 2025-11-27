@@ -92,7 +92,7 @@ export class MxWebsocket {
 		}
 		this.socket = new WebSocket(`${this.address}`);
 		this.messageid = 0;
-		this.deferred_p = new Map<number, [Function, string]>();
+		this.deferred_p = new Map<number, [Function, Function, string]>();
 		this.isready = false;
 		this.waiting_p = new Array<Function>();
 		this.on_change = new Array<Function>();

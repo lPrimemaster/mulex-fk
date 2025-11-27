@@ -51,12 +51,7 @@ const Home: Component = () => {
 							<MxButton
 								class="col-span-2 row-span-2 m-1"
 								onClick={() => {
-									MxWebsocket.instance.rpc_call('mulex::RunStart').then((res: MxGenericType) => {
-										const run_ok = res.astype('bool');
-										if(run_ok) {
-											// Nothing todo for now
-										}
-									});
+									MxWebsocket.instance.rpc_call('mulex::RunStart');
 								}}
 								disabled={gRunStatus() == 'Running'}
 							>Start Run</MxButton>

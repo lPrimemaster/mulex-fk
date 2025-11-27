@@ -13,6 +13,7 @@ import { concat_bytes, download_data } from "./lib/utils";
 import { MxPopup } from "./components/Popup";
 import { MxButton, MxSpinner, MxSwitch } from "./api";
 import { untrack } from "solid-js/web";
+import { gRunStatus } from "./lib/globalstate";
 
 interface RunEntry {
 	id: number;
@@ -184,11 +185,15 @@ const RunLogsTable : Component = () => {
 		}
 	}
 
-	rdb.watch('/system/run/status', () => page() === 1 ? updateLogsPage(0) : null);
+	createEffect(on(gRunStatus, () => {
+		if(untrack(() => page()) === 1) {
+			updateLogsPage(0);
+		}
+	}));
 
-	onMount(() => {
-		updateLogsPage(0);
-	});
+	// onMount(() => {
+	// 	updateLogsPage(0);
+	// });
 
 	function getRunStatusBadge(status: string) {
 		return <BadgeLabel type={status === 'Stopped' ? 'error' : 'success'}>{status}</BadgeLabel>;

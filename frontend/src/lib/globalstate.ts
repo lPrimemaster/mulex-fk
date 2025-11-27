@@ -198,61 +198,57 @@ async function init_backend_status() {
 	const rdb = new MxRdb();
 
 	// Connection status
-	rdb.watch('/system/backends/*/connected', (key: string, value: MxGenericType) => {
+	rdb.watch('/system/backends/*/connected', async (key: string, value: MxGenericType) => {
 		const cid = extract_backend_name(key);
-		let prev = { ...backends[cid] };
-		prev.connected = value.astype('bool');
-		prev.user_status = 'None';
+		const connected = value.astype('bool');
+		const user_status = 'None';
 
 		const conkey = '/system/backends/' + cid + '/last_connect_time';
-		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(conkey)], 'generic').then((res: MxGenericType) => {
-			prev.uptime = Number(res.astype('int64'));
-			setBackends(cid, () => prev);
+		const res = await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(conkey)], 'generic');
+		const uptime = Number(res.astype('int64'));
+		setBackends(cid, {
+			connected,
+			user_status,
+			uptime
 		});
 	});
 
 	// Backend creation
-	rdb.watch('/system/backends/*/name', (key: string, value: MxGenericType) => {
+	rdb.watch('/system/backends/*/name', async (key: string, value: MxGenericType) => {
 		const cid = extract_backend_name(key);
-		let prev = { ...backends[cid] };
-		prev.name = value.astype('string');
+		const name = value.astype('string');
 
 		const hostkey = '/system/backends/' + cid + '/host';
-		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(hostkey)], 'generic').then((res: MxGenericType) => {
-			prev.host = res.astype('string');
-			setBackends(cid, () => prev);
+		const res = await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(hostkey)], 'generic');
+		const host = res.astype('string');
+		setBackends(cid, {
+			name,
+			host
 		});
 	});
 
 	// Connection metrics
-	rdb.watch('/system/backends/*/statistics/event/*', (key: string) => {
-		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(key)], 'generic').then((res: MxGenericType) => {
-			if(key.endsWith('read')) {
-				const cid = extract_backend_name(key);
-				let prev = { ...backends[cid] };
-				prev.evt_download_speed = res.astype('uint32');
-				setBackends(cid, () => prev);
-			}
-			else if(key.endsWith('write')) {
-				const cid = extract_backend_name(key);
-				let prev = { ...backends[cid] };
-				prev.evt_upload_speed = res.astype('uint32');
-				setBackends(cid, () => prev);
-			}
-		});
+	rdb.watch('/system/backends/*/statistics/event/*', async (key: string) => {
+		const res = await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(key)], 'generic');
+		const cid = extract_backend_name(key);
+		const speed = res.astype('uint32');
+		if(key.endsWith('read')) {
+			setBackends(cid, { evt_download_speed: speed });
+		}
+		else if(key.endsWith('write')) {
+			setBackends(cid, { evt_upload_speed: speed });
+		}
 	});
 
 	// Connection user status
-	rdb.watch('/system/backends/*/user_status/text', (key: string, value: MxGenericType) => {
+	rdb.watch('/system/backends/*/user_status/text', async (key: string, value: MxGenericType) => {
 		const cid = extract_backend_name(key);
-		let prev = { ...backends[cid] };
-		prev.user_status = value.astype('string');
+		const user_status = value.astype('string');
 
 		const conkey = '/system/backends/' + cid + '/user_status/color';
-		MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(conkey)], 'generic').then((res: MxGenericType) => {
-			prev.user_color = res.astype('string');
-			setBackends(cid, () => prev);
-		});
+		const res = await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(conkey)], 'generic');
+		const user_color = res.astype('string');
+		setBackends(cid, { user_color, user_status });
 	});
 }
 
