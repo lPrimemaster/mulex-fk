@@ -301,7 +301,8 @@ namespace mulex
 		
 	private:
 		RPCGenericType _genvalue;
-		std::string _key;
+		std::string    _key;
+		std::string    _swatch_event;
 	};
 
 	template<>

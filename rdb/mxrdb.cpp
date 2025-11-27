@@ -1100,8 +1100,8 @@ namespace mulex
 		{
 			return;
 		}
-		mulex::string32 event_name = exp.value()->_rpc_client->call<mulex::string32>(RPC_CALL_MULEX_RDBWATCH, RdbKeyName(_key));
-		exp.value()->_evt_client->subscribe(event_name.c_str(), [=](const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata) {
+		_swatch_event = exp.value()->_rpc_client->call<mulex::string32>(RPC_CALL_MULEX_RDBWATCH, RdbKeyName(_key)).c_str();
+		exp.value()->_evt_client->subscribe(_swatch_event, [=](const std::uint8_t* data, std::uint64_t len, const std::uint8_t* userdata) {
 			RdbKeyName key = reinterpret_cast<const char*>(data);
 			RPCGenericType value = RPCGenericType::FromData(
 				data + sizeof(RdbKeyName) + sizeof(std::uint64_t),
@@ -1113,13 +1113,15 @@ namespace mulex
 
 	void RdbProxyValue::unwatch()
 	{
+		// TODO: (César): One should fix the event sub/unsub when the same
+		// 				  backends / actors are using it multiple times
 		ZoneScoped;
 		std::optional<const Experiment*> exp = SysGetConnectedExperiment();
-		if(!exp.has_value())
+		if(!exp.has_value() || _swatch_event.empty())
 		{
 			return;
 		}
-		exp.value()->_rpc_client->call<mulex::string32>(RPC_CALL_MULEX_RDBUNWATCH, RdbKeyName(_key));
+		exp.value()->_evt_client->unsubscribe(_swatch_event);
 	}
 
 	bool RdbProxyValue::history(bool status)

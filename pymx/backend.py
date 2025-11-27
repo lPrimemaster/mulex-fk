@@ -510,7 +510,7 @@ class Backend(ABC):
 
     def unwatch(self, key: str) -> None:
         self._lib.CMxRdbUnwatch(self._ctx, key.encode('utf-8'))
-        del self._rdb_watches[key]
+        # del self._rdb_watches[key]
 
     def log(self, ltype: LogType, msg: str) -> None:
         match ltype:

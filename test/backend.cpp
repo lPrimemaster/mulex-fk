@@ -39,7 +39,16 @@ public:
 		);
 		std::cout << static_cast<int>(status) << " -> " << ret << std::endl;
 		// registerDependency("pmc8742.exe").required(true).onFail(MxRexDependencyManager::LOG_ERROR);
-		// registerDependency("backend.py").required(true).onFail(MxRexDependencyManager::TERMINATE);
+		registerDependency("backend.py").required(true).onFail(MxRexDependencyManager::LOG_ERROR);
+
+		rdb["/user/mykey"].watch([](const auto& key, const RPCGenericType& value){
+			std::cout << "watch kv -> " << key.c_str() << " " << (int)static_cast<std::int8_t>(value) << std::endl;
+		});
+
+		// BUG: (César) This is not working
+		deferExec([this](){
+			rdb["/user/mykey"].unwatch();
+		}, 5000);
 	}
 
 	void onRunStart(std::uint64_t runno)

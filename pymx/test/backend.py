@@ -21,15 +21,15 @@ class TestBackend(Backend):
         # self.subscribe('test_evt', lambda data: print(data))
 
         self.watch(
-            '/system/metrics/cpu_usage',
+            '/user/mykey',
             lambda key, val: print(key, val)
         )
 
         time.sleep(1)
 
-        self.delete('/user/mykey')
+        # self.delete('/user/mykey')
 
-        # self.unwatch('/system/metrics/cpu_usage')
+        self.unwatch('/user/mykey')
 
         print('Tesing event subscription...')
 
