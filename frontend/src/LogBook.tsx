@@ -701,9 +701,9 @@ const LogBookComments : Component<{ postId: number }> = (props) => {
 		], 'generic');
 
 		commentsActions("items", []);
-		const comments = res.unpack(['str512', 'cstr', 'str512']);
+		const lcomments = res.unpack(['str512', 'cstr', 'str512']);
 
-		for(const comment of comments) {
+		for(const comment of lcomments) {
 			const [ user, body, date ] = comment;
 			commentsActions("items", (p) => [...p, { author: user, body: body, date: date }]);
 		}
@@ -721,7 +721,7 @@ const LogBookComments : Component<{ postId: number }> = (props) => {
 				<div class="font-semibold text-md mb-5">Discussion</div>
 				<LogBookCommentWrite postId={props.postId} onUpdate={updateComments}/>
 
-				<Show when={numComments() > 0}>
+				<Show when={comments.items.length > 0}>
 					<div class="flex flex-col gap-5">
 						<For each={comments.items}>{(comment: LogBookComment) =>
 							<LogBookCommentBox comment={comment}/>
