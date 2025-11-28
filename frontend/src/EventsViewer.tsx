@@ -1,4 +1,5 @@
 import { Component, createEffect, createSignal, Show, on, For } from 'solid-js';
+import { createStore, produce } from 'solid-js/store';
 import Sidebar from './components/Sidebar';
 import { DynamicTitle } from './components/DynamicTitle';
 import { DiGraph } from './components/DiGraph';
@@ -18,57 +19,44 @@ import { createSetStore } from './lib/rset';
 import { MxTree, MxTreeNode } from './components/TreeNode';
 import { MxHexTable } from './components/HexTable';
 
-class EventIO {
+interface EventIO {
 	read: number;
 	write: number;
 
-	lread: Array<number>;
-	lwrite: Array<number>;
-
-	constructor(read: number, write: number, lread: Array<number> | undefined = undefined, lwrite: Array<number> | undefined = undefined) {
-		this.read = read;
-		this.write = write;
-		this.lread = [...(lread ?? []), read].slice(-20);
-		this.lwrite = [...(lwrite ?? []), write].slice(-20);
-	}
+	lread?: Array<number>;
+	lwrite?: Array<number>;
 };
 
-type ClientsIO = Map<BigInt, EventIO> | undefined;
+interface ClientsIO {
+	[key: string]: EventIO;
+};
 
-class EventMeta {
+interface EventMeta {
 	name: string;
-	io: EventIO;
 	trigger: number; // In number of frames/cycles
-	clients: ClientsIO;
 	issys: boolean;
 	capture: boolean;
 
-	constructor(name: string,
-				read: number,
-				write: number,
-				trigger: number,
-				issys: boolean,
-				capture: boolean,
-				clients: ClientsIO = undefined,
-				lread: Array<number> | undefined = undefined,
-				lwrite: Array<number> | undefined = undefined) {
-		this.name = name;
-		this.io = new EventIO(read, write, lread, lwrite);
-		this.trigger = trigger;
-		this.issys = issys;
-		this.clients = clients;
-		this.capture = capture;
-	}
+	// IO
+	io: EventIO;
+	clients?: ClientsIO;
 };
 
-class CaptureMeta {
+interface CaptureMeta {
 	totalbytes: number;
 	autoCapture: boolean;
+}
 
-	constructor(totalbytes: number, autoCapture: boolean = true) {
-		this.totalbytes = totalbytes;
-		this.autoCapture = autoCapture;
-	}
+interface EventMetaList {
+	[key: number]: EventMeta;
+};
+
+interface CaptureMetaList {
+	[key: number]: CaptureMeta;
+};
+
+interface CaptureDataList {
+	[key: number]: Uint8Array;
 };
 
 export const EventsViewer : Component = () => {
@@ -76,11 +64,13 @@ export const EventsViewer : Component = () => {
 	const [gmode, setGmode] = createSignal<boolean>(false);
 	const [sysEvents, setSysEvents] = createSignal<boolean>(false);
 	const [pollFast, setPollFast] = createSignal<boolean>(true);
-	const [eventMap, eventMapActions] = createMapStore<number, EventMeta>(new Map<number, EventMeta>());
 	const [popupID, setPopupID] = createSignal<number>(0);
+
+	const [eventsMeta, setEventsMeta] = createStore<EventMetaList>();
+	const [captureData, setCaptureData] = createStore<CaptureDataList>();
+	const [captureMeta, setCaptureMeta] = createStore<CaptureMetaList>();
+
 	const [captureSet, captureSetActions] = createSetStore<number>([]);
-	const [captureData, captureDataActions] = createMapStore<number, Uint8Array>(new Map<number, Uint8Array>());
-	const [captureMeta, captureMetaActions] = createMapStore<number, CaptureMeta>(new Map<number, CaptureMeta>());
 	const [captureTick, captureTickActions] = createSetStore<number>([]);
 	const [captureCollapse, captureCollapseActions] = createMapStore<number, boolean>(new Map<number, boolean>());
 
@@ -92,17 +82,13 @@ export const EventsViewer : Component = () => {
 		iid = setInterval(readEventStatistics, pollFast() ? 1000 : 5000);
 	}));
 
-	// onMount(() => {
-	// 	iid = setInterval(readEventStatistics, pollFast() ? 1000 : 5000);
-	// });
-	
 	// TODO: (Cesar) This way of detecting system events is poor.
 	// 				 What if the user decides to name an event starting with the mx prefix also?
 	function checkSystemEvent(name: string) : boolean {
 		return name.startsWith('mx') || name.endsWith('::rpc') || name.endsWith('::rpc_res');
 	}
 
-	function computeClientsIO(clients: Uint8Array, frames: Uint8Array) : ClientsIO {
+	function computeClientsIO(clients: Uint8Array, frames: Uint8Array) : ClientsIO | undefined {
 		if(clients.length === 0 || frames.length === 0) {
 			return undefined;
 		}
@@ -112,7 +98,7 @@ export const EventsViewer : Component = () => {
 			return undefined;
 		}
 
-		const cio = new Map<BigInt, EventIO>();
+		const cio: ClientsIO = {};
 		const cview = new DataView(clients.buffer, clients.byteOffset, clients.byteLength);
 		const fview = new DataView(frames.buffer, frames.byteOffset, frames.byteLength);
 
@@ -120,35 +106,37 @@ export const EventsViewer : Component = () => {
 			const coffset = i;// + clients.byteOffset;
 			const foffset = i;// + frames.byteOffset;
 			const { r, w } = event_io_extract(fview.getBigUint64(foffset, true));
-			cio.set(cview.getBigUint64(coffset, true), new EventIO(r, w));
+			const key = cview.getBigUint64(coffset, true).toString(16);
+			cio[key] = { read: r, write: w };
 		}
 
 		return cio;
 	}
 	
 	function getSelectedEventName() : string {
-		const evt = eventMap.data.get(popupID());
+		const evt = eventsMeta[popupID()];
 		return evt !== undefined ? evt.name : '';
 	}
 
 	function getSelectedEventRegistrar() : string {
-		const evt = eventMap.data.get(popupID());
+		const evt = eventsMeta[popupID()];
 		return evt !== undefined ? (evt.issys ? 'System' : 'User') : '';
 	}
 
 	function getSelectedEventTotalReadString() : string {
-		const evt = eventMap.data.get(popupID());
+		const evt = eventsMeta[popupID()];
 		return evt !== undefined ? bps_to_string(evt.io.read, false) : '';
 	}
 
 	function getSelectedEventTotalWriteString() : string {
-		const evt = eventMap.data.get(popupID());
+		const evt = eventsMeta[popupID()];
 		return evt !== undefined ? bps_to_string(evt.io.write, false) : '';
 	}
 
-	function getSelectedEventClientFrames() : Array<[BigInt, EventIO]> {
-		const evt = eventMap.data.get(popupID());
-		return (evt !== undefined && evt.clients !== undefined) ? Array.from(evt.clients.entries()) : [];
+	function getSelectedEventClientFrames() : Array<[string, EventIO]> {
+		const evt = eventsMeta[popupID()];
+		console.log(evt);
+		return (evt !== undefined && evt.clients !== undefined) ? Array.from(Object.entries(evt.clients)) : [];
 	}
 
 	async function readEventStatistics() {
@@ -161,70 +149,72 @@ export const EventsViewer : Component = () => {
 			const { r, w } = event_io_extract(io);
 			const clientFrames = computeClientsIO(clients, frames);
 
-			// NOTE: (Cesar) For now we check for the event being system on the clientside
-			if(!eventMap.data.has(eid)) {
-				eventMapActions.add(eid, new EventMeta(name, r, w, 0, checkSystemEvent(name), false, clientFrames));
+			if(!(eid in eventsMeta)) {
+				setEventsMeta(eid, {
+						name: name,
+						trigger: 0,
+						// NOTE: (Cesar) For now we check for the event being system on the clientside
+						issys: checkSystemEvent(name),
+						capture: false,
+
+						clients: clientFrames,
+						io: {
+							read: r,
+							write: w,
+							lread: [],
+							lwrite: []
+						}
+					});
 				continue;
 			}
 
-			const evtStore : EventMeta = eventMap.data.get(eid)!;
 			if(r == 0 && w == 0) {
-				// No changes on this event
-				// skip
-				eventMapActions.modify(
-					eid,
-					new EventMeta(name, r, w, evtStore.trigger + 1, evtStore.issys, evtStore.capture, clientFrames, evtStore.io.lread, evtStore.io.lwrite)
-				);
+				setEventsMeta(eid, { trigger: eventsMeta[eid].trigger + 1 });
 				continue;
 			}
 
-			eventMapActions.modify(
-				eid,
-				new EventMeta(name, r, w, 0, evtStore.issys, evtStore.capture, clientFrames, evtStore.io.lread, evtStore.io.lwrite)
-			);
+			setEventsMeta(eid, (p) => {
+				return {
+					trigger: 0,
+					clients: clientFrames,
+					io: {
+						read: r,
+						write: w,
+						lread: [...(p.io.lread ?? []), r].slice(-20),
+						lwrite: [...(p.io.lwrite ?? []), w].slice(-20)
+					}
+				};
+			});
 		}
 	}
 
 	function modifyCapture(value: boolean) {
 		const eid : number = popupID();
 		if(eid > 0) {
-			const evtStore : EventMeta = eventMap.data.get(eid)!;
-			eventMapActions.modify(
-				eid,
-				new EventMeta(
-					evtStore.name,
-					evtStore.io.read,
-					evtStore.io.write,
-					evtStore.trigger,
-					evtStore.issys,
-					value, 
-					evtStore.clients,
-					evtStore.io.lread,
-					evtStore.io.lwrite
-				)
-			);
+			setEventsMeta(eid, {
+				capture: value
+			});
 
 			if(value) {
 				captureCollapseActions.add(eid, false);
 				captureSetActions.add(eid);
-				captureMetaActions.add(eid, new CaptureMeta(0));
-				captureDataActions.add(eid, new Uint8Array());
-				MxWebsocket.instance.subscribe(evtStore.name, (data: Uint8Array) => {
+				setCaptureMeta(eid, { totalbytes: 0, autoCapture: false });
+				setCaptureData(eid, {});
+				MxWebsocket.instance.subscribe(eventsMeta[eid].name, (data: Uint8Array) => {
 					captureTickActions.add(eid);
-					const capMeta: CaptureMeta = captureMeta.data.get(eid)!;
 
-					if(capMeta.autoCapture) {
-						captureDataActions.modify(eid, data);
-						captureMetaActions.modify(eid, new CaptureMeta(capMeta.totalbytes + data.length));
+					if(captureMeta[eid].autoCapture) {
+						setCaptureData(eid, data);
+						setCaptureMeta(eid, (p) => { return { totalbytes: p.totalbytes + data.length }; });
 					}
 				});
 			}
 			else {
 				captureSetActions.remove(eid);
 				// FIX: (Cesar) This could be tricky and unsubscribe us from the event somewhere else!
-				MxWebsocket.instance.unsubscribe(evtStore.name);
-				captureMetaActions.remove(eid);
-				captureDataActions.remove(eid);
+				MxWebsocket.instance.unsubscribe(eventsMeta[eid].name);
+				setCaptureMeta(produce(p => { delete p[eid]; }));
+				setCaptureData(produce(p => { delete p[eid]; }));
 				captureCollapseActions.remove(eid);
 			}
 		}
@@ -236,6 +226,16 @@ export const EventsViewer : Component = () => {
 			captureTickActions.remove(id);
 		}
 		return new_frame;
+	}
+
+	function objectNumberEntries<T>(obj: { [key: number]: T }) {
+		// console.log(Object.entries(obj).map(([k, v]) => [Number(k), v] as [number, T]));
+		return Object.entries(obj).map(([k, v]) => [Number(k), v] as [number, T]);
+	}
+
+	function objectKeys(obj: any) {
+		// console.log(Object.keys(obj));
+		return Object.keys(obj);
 	}
 
 	return (
@@ -282,7 +282,7 @@ export const EventsViewer : Component = () => {
 				<Show when={!gmode()}>
 					<Card title="Event List">
 						<div class="py-0">
-							<Show when={eventMap.data.size === 0}>
+							<Show when={objectKeys(eventsMeta).length === 0}>
 								<div class="pt-5">
 									<MxSpinner description="Waiting for events..."/>
 								</div>
@@ -308,7 +308,7 @@ export const EventsViewer : Component = () => {
 									<MxDoubleSwitch
 										labelFalse="No"
 										labelTrue="Yes"
-										value={popupID() > 0 ? eventMap.data.get(popupID())!.capture : false}
+										value={popupID() > 0 ? eventsMeta[popupID()].capture : false}
 										onChange={(value) => modifyCapture(value)}/>
 								</div>
 								<div class="mt-5">
@@ -322,7 +322,7 @@ export const EventsViewer : Component = () => {
 										<TableBody>
 											<For each={getSelectedEventClientFrames()}>{(client) =>
 												<TableRow>
-													<TableCell class="py-1">0x{client[0].toString(16)}</TableCell>
+													<TableCell class="py-1">0x{client[0]}</TableCell>
 													<TableCell class="py-1">
 														<span>
 															<BadgeDelta class="w-28" deltaType="increase">{bps_to_string(client[1].write, false)}</BadgeDelta>
@@ -340,7 +340,7 @@ export const EventsViewer : Component = () => {
 									</Show>
 								</div>
 							</MxPopup>
-							<Show when={eventMap.data.size > 0}>
+							<Show when={Object.keys(eventsMeta).length > 0}>
 								<Table>
 									<TableHeader>
 										<TableRow>
@@ -355,7 +355,7 @@ export const EventsViewer : Component = () => {
 									</TableHeader>
 									<TableBody>
 										{/* TODO: (Cesar) Prevent flicker by not re-rendering the TableRow element */}
-										<For each={Array.from(eventMap.data.entries())}>{(evt) =>
+										<For each={Array.from(objectNumberEntries(eventsMeta))}>{(evt) =>
 											<Show when={sysEvents() || (!sysEvents() && !evt[1].issys)}>
 												<TableRow
 													class="hover:bg-yellow-100 cursor-pointer even:bg-gray-200"
@@ -378,7 +378,7 @@ export const EventsViewer : Component = () => {
 																width={60}
 																class="border bg-success"
 																npoints={20}
-																values={evt[1].io.lwrite}
+																values={evt[1].io.lwrite!}
 															/>
 														</span>
 														<span class="p-0 w-28">
@@ -391,11 +391,11 @@ export const EventsViewer : Component = () => {
 																width={60}
 																class="border bg-error"
 																npoints={20}
-																values={evt[1].io.lread}
+																values={evt[1].io.lread!}
 															/>
 														</span>
 													</TableCell>
-													<TableCell class="py-1">{evt[1].clients === undefined ? 0 : evt[1].clients.size}</TableCell>
+													<TableCell class="py-1">{evt[1].clients === undefined ? 0 : Object.keys(evt[1].clients).length}</TableCell>
 													<TableCell class="py-1">{evt[1].trigger > 0 ? `${evt[1].trigger} poll(s) ago` : "Now"}</TableCell>
 													<TableCell class="py-1"><BadgeLabel type="display">{evt[1].issys ? "Yes" : "No"}</BadgeLabel></TableCell>
 												</TableRow>
@@ -420,9 +420,9 @@ export const EventsViewer : Component = () => {
 							</Show>
 							<Show when={captureSet.data.size !== 0}>
 								<MxTree>
-									<For each={Array.from(captureData.data.entries())}>{(evt) => {
-										const evtStore: EventMeta = eventMap.data.get(evt[0])!;
-										const capMeta: CaptureMeta = captureMeta.data.get(evt[0])!;
+									<For each={Array.from(objectNumberEntries(captureData))}>{(evt) => {
+										const evtStore: EventMeta = eventsMeta[evt[0]];
+										const capMeta: CaptureMeta = captureMeta[evt[0]];
 
 										return (
 											<MxTreeNode
@@ -440,11 +440,9 @@ export const EventsViewer : Component = () => {
 															<MxDoubleSwitch
 																labelFalse="No"
 																labelTrue="Yes"
-																value={captureMeta.data.get(evt[0])!.autoCapture}
-																// disabled
+																value={captureMeta[evt[0]].autoCapture}
 																onChange={(value: boolean) => {
-																	console.log(value);
-																	captureMetaActions.modify(evt[0], new CaptureMeta(capMeta.totalbytes, value));
+																	setCaptureMeta(evt[0], { autoCapture: value });
 																}}
 															/>
 
