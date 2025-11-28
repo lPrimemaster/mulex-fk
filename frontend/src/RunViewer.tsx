@@ -13,7 +13,8 @@ import { concat_bytes, download_data } from "./lib/utils";
 import { MxPopup } from "./components/Popup";
 import { MxButton, MxSpinner, MxSwitch } from "./api";
 import { untrack } from "solid-js/web";
-import { gRunStatus } from "./lib/globalstate";
+import { gRunNumber, gRunStatus } from "./lib/globalstate";
+import { Pagination, PaginationEllipsis, PaginationItem, PaginationItems, PaginationNext, PaginationPrevious } from "./components/ui/pagination";
 
 interface RunEntry {
 	id: number;
@@ -164,13 +165,13 @@ const RunLogsFilesTable : Component<{ run: number, onlyLastVersion: boolean, ref
 
 const RunLogsTable : Component = () => {
 	const RUNS_PER_PAGE = 50n;
+	const RUNS_PER_PAGE_N = Number(RUNS_PER_PAGE);
 	const [runs, runsActions] = createStore<RunEntryArray>({ items: [] });
 	const [page, setPage] = createSignal<number>(1);
 	const [onlyLast, setOnlyLast] = createSignal<boolean>(true);
 	const [refresh, setRefresh] = createSignal<number>(0);
 	const [runToInspect, setRunToInspect] = createSignal<number>(0);
 	const [openPopup, setOpenPopup] = createSignal<boolean>(false);
-	const rdb = new MxRdb();
 
 	async function updateLogsPage(page: number) {
 		runsActions("items", []);
@@ -185,10 +186,8 @@ const RunLogsTable : Component = () => {
 		}
 	}
 
-	createEffect(on(gRunStatus, () => {
-		if(untrack(() => page()) === 1) {
-			updateLogsPage(0);
-		}
+	createEffect(on([gRunStatus, page], () => {
+		updateLogsPage(page() - 1);
 	}));
 
 	// onMount(() => {
@@ -223,6 +222,22 @@ const RunLogsTable : Component = () => {
 					}</For>
 				</TableBody>
 			</Table>
+			<div class="container mt-5">
+				<div class="flex w-full items-center place-content-center">
+					<Pagination
+						count={Math.ceil(gRunNumber() / RUNS_PER_PAGE_N)}
+						fixedItems
+						page={page()}
+						onPageChange={setPage}
+						itemComponent={(p) => <PaginationItem page={p.page}>{p.page}</PaginationItem>}
+						ellipsisComponent={() => <PaginationEllipsis/>}
+					>
+						<PaginationPrevious/>
+						<PaginationItems/>
+						<PaginationNext/>
+					</Pagination>
+				</div>
+			</div>
 
 			<Dialog open={openPopup()} onOpenChange={setOpenPopup}>
 				<DialogTrigger/>
