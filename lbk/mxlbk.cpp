@@ -66,7 +66,7 @@ namespace mulex
 			"post_id INTEGER NOT NULL,"
 			"body TEXT NOT NULL,"
 			"created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
-			"FOREIGN KEY(post_id) REFERENCES posts(id)"
+			"FOREIGN KEY(post_id) REFERENCES posts(id) ON DELETE CASCADE"
 		");";
 		PdbExecuteQuery(comments);
 	}

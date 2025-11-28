@@ -1,4 +1,4 @@
-import { Accessor, Component, For, JSXElement, Setter, Show, createContext, createEffect, createSignal, onMount, useContext } from "solid-js";
+import { Accessor, Component, For, JSXElement, Setter, Show, createContext, createEffect, createSignal, onMount, useContext, on } from "solid-js";
 import { DynamicTitle } from "./components/DynamicTitle";
 import Sidebar from "./components/Sidebar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
@@ -688,10 +688,22 @@ const LogBookComments : Component<{ postId: number }> = (props) => {
 	const [numComments, setNumComments] = createSignal<number>(0);
 	const [comments, commentsActions] = createStore<LogBookCommentsArray>({ items: [] });
 
-	createEffect(async () => {
+	async function getPostComments() {
 		const nc = await MxWebsocket.instance.rpc_call('mulex::LbkGetNumComments', [MxGenericType.int32(props.postId)]);
-		setNumComments(Number(nc.astype('int64')));
+		return Number(nc.astype('int64'));
+	}
+
+	onMount(async () => {
+		const nc = await getPostComments();
+		setNumComments(nc);
+		if(nc > 0) {
+			updateComments();
+		}
 	});
+
+	createEffect(on(() => comments.items, async () => {
+		setNumComments(await getPostComments());
+	}));
 
 	async function updateComments() {
 		const res = await MxWebsocket.instance.rpc_call('mulex::LbkGetComments', [
@@ -709,11 +721,9 @@ const LogBookComments : Component<{ postId: number }> = (props) => {
 		}
 	}
 
-	createEffect(async () => {
-		if(numComments() > 0) {
-			updateComments();
-		}
-	});
+	createEffect(on(page, () => {
+		updateComments();
+	}));
 
 	return (
 		<div class="m-0 mt-1 rounded-md shadow-md bg-white">
@@ -721,7 +731,7 @@ const LogBookComments : Component<{ postId: number }> = (props) => {
 				<div class="font-semibold text-md mb-5">Discussion</div>
 				<LogBookCommentWrite postId={props.postId} onUpdate={updateComments}/>
 
-				<Show when={comments.items.length > 0}>
+				<Show when={numComments() > 0}>
 					<div class="flex flex-col gap-5">
 						<For each={comments.items}>{(comment: LogBookComment) =>
 							<LogBookCommentBox comment={comment}/>
@@ -968,8 +978,6 @@ const LogBookControls : Component = () => {
 
 		setSelectedIds(fdeletions);
 		setSelection(fdeletions.length > 0);
-
-		console.log(fdeletions);
 		
 		if(fdeletions.length > 0) {
 			// Failed to delete post
