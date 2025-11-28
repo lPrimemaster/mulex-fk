@@ -135,7 +135,6 @@ export const EventsViewer : Component = () => {
 
 	function getSelectedEventClientFrames() : Array<[string, EventIO]> {
 		const evt = eventsMeta[popupID()];
-		console.log(evt);
 		return (evt !== undefined && evt.clients !== undefined) ? Array.from(Object.entries(evt.clients)) : [];
 	}
 
@@ -198,8 +197,8 @@ export const EventsViewer : Component = () => {
 			if(value) {
 				captureCollapseActions.add(eid, false);
 				captureSetActions.add(eid);
-				setCaptureMeta(eid, { totalbytes: 0, autoCapture: false });
-				setCaptureData(eid, {});
+				setCaptureMeta(eid, { totalbytes: 0, autoCapture: true });
+				setCaptureData(eid, new Uint8Array());
 				MxWebsocket.instance.subscribe(eventsMeta[eid].name, (data: Uint8Array) => {
 					captureTickActions.add(eid);
 
@@ -229,12 +228,10 @@ export const EventsViewer : Component = () => {
 	}
 
 	function objectNumberEntries<T>(obj: { [key: number]: T }) {
-		// console.log(Object.entries(obj).map(([k, v]) => [Number(k), v] as [number, T]));
 		return Object.entries(obj).map(([k, v]) => [Number(k), v] as [number, T]);
 	}
 
 	function objectKeys(obj: any) {
-		// console.log(Object.keys(obj));
 		return Object.keys(obj);
 	}
 
@@ -420,29 +417,30 @@ export const EventsViewer : Component = () => {
 							</Show>
 							<Show when={captureSet.data.size !== 0}>
 								<MxTree>
-									<For each={Array.from(objectNumberEntries(captureData))}>{(evt) => {
-										const evtStore: EventMeta = eventsMeta[evt[0]];
-										const capMeta: CaptureMeta = captureMeta[evt[0]];
+									<For each={Object.entries(captureData)}>{([evt, data]) => {
+										const key = Number(evt);
+										const evtStore: EventMeta = eventsMeta[key];
+										const capMeta: CaptureMeta = captureMeta[key];
 
 										return (
 											<MxTreeNode
 												title={evtStore.name}
-												open={!captureCollapse.data.get(evt[0])!}
-												onClick={() => captureCollapseActions.modify(evt[0], !captureCollapse.data.get(evt[0])!)}
+												open={!captureCollapse.data.get(key)!}
+												onClick={() => captureCollapseActions.modify(key, !captureCollapse.data.get(key)!)}
 											>
 												<div>
 													<div class="w-1/4">
 														<div class="grid grid-rows-3 grid-cols-2 gap-2">
 															<span class="font-bold">Size</span>
-															<span>{evt[1].length}</span>
+															<span>{captureData[key].length}</span>
 
 															<span class="font-bold">Auto-capture</span>
 															<MxDoubleSwitch
 																labelFalse="No"
 																labelTrue="Yes"
-																value={captureMeta[evt[0]].autoCapture}
+																value={capMeta.autoCapture}
 																onChange={(value: boolean) => {
-																	setCaptureMeta(evt[0], { autoCapture: value });
+																	setCaptureMeta(key, { autoCapture: value });
 																}}
 															/>
 
@@ -451,7 +449,7 @@ export const EventsViewer : Component = () => {
 														</div>
 													</div>
 													<div class="w-full mt-5">
-														<MxHexTable data={evt[1]} bpr={32}/>
+														<MxHexTable data={data} bpr={32}/>
 													</div>
 												</div>
 											</MxTreeNode>
