@@ -1,4 +1,5 @@
-import { Component, For, Show, createEffect, createSignal, useContext } from "solid-js";
+import { Component, For, Show, createEffect, createSignal, onMount, useContext } from "solid-js";
+import { createStore } from "solid-js/store";
 import { DynamicTitle } from "./components/DynamicTitle";
 import Sidebar from "./components/Sidebar";
 import { gBackends as backends } from './lib/globalstate';
@@ -53,6 +54,7 @@ const BackendLogViewer: Component<{cid: string}> = (props) => {
 
 export const BackendViewer: Component = () => {
 
+	const STREAM_SIZE = 100;
 	const [currentLog, setCurrentLog] = createSignal<string>('');
 	const [time, setTime] = createSignal(Date.now() as number);
 	setInterval(() => setTime(Date.now() as number), 1000);
@@ -194,35 +196,35 @@ export const BackendViewer: Component = () => {
 											</div>
 										</div>
 										<div class="flex place-content-start items-center px-5 hidden 2xl:block">
-											<div class="flex place-content-center items-center">
-												<div class="flex absolute place-content-center items-center font-semibold text-xs text-success-foreground">
-													Upstream
-													<BadgeDelta deltaType="increase">{bps_to_string(backends[clientid].evt_upload_speed, false)}</BadgeDelta>
+											<div class="flex flex-col place-content-center items-center gap-1">
+												<div class="flex place-content-center items-center">
+													<div class="flex absolute place-content-center items-center font-semibold text-xs text-success-foreground">
+														Upstream
+														<BadgeDelta deltaType="increase">{bps_to_string(backends[clientid].evt_upload_speed, false)}</BadgeDelta>
+													</div>
+													<MxInlineGraph
+														color="green"
+														height={32}
+														width={180}
+														class="border bg-success rounded-md shadow-md"
+														npoints={STREAM_SIZE}
+														values={[]}
+													/>
 												</div>
-												<MxInlineGraph
-													color="green"
-													height={64}
-													width={180}
-													class="border bg-success rounded-md shadow-md"
-													npoints={100}
-													values={[]}
-												/>
-											</div>
-										</div>
-										<div class="flex place-content-start items-center px-5 hidden 2xl:block">
-											<div class="flex place-content-center items-center">
-												<div class="flex absolute place-content-center items-center font-semibold text-xs text-error-foreground">
-													Downstream
-													<BadgeDelta deltaType="decrease">{bps_to_string(backends[clientid].evt_download_speed, false)}</BadgeDelta>
+												<div class="flex place-content-center items-center">
+													<div class="flex absolute place-content-center items-center font-semibold text-xs text-error-foreground">
+														Downstream
+														<BadgeDelta deltaType="decrease">{bps_to_string(backends[clientid].evt_download_speed, false)}</BadgeDelta>
+													</div>
+													<MxInlineGraph
+														color="red"
+														height={32}
+														width={180}
+														class="border bg-error rounded-md shadow-md"
+														npoints={STREAM_SIZE}
+														values={[]}
+													/>
 												</div>
-												<MxInlineGraph
-													color="red"
-													height={64}
-													width={180}
-													class="border bg-error rounded-md shadow-md"
-													npoints={100}
-													values={[]}
-												/>
 											</div>
 										</div>
 										<div class="flex place-content-start items-center px-5">
