@@ -78,6 +78,17 @@ namespace mulex
 		return response_full;
 	}
 
+	void BckDeleteMeta(std::uint64_t cid)
+	{
+		std::vector<RdbKeyName> bck_keys = RdbListSubkeys("/system/backends/" + SysI64ToHexString(cid) + "/");
+		LogTrace("[mxbackend] Deleting subkeys from: %s", ("/system/backends/" + SysI64ToHexString(cid) + "/").c_str());
+		for(const auto& key : bck_keys)
+		{
+			LogTrace("[mxbackend] Deleted metadata key <%s>.", key.c_str());
+			RdbDeleteValueDirect(key);
+		}
+	}
+
 	MxBackend::MxBackend(int argc, char* argv[])
 	{
 		if(!SysInitializeBackend(argc, argv))

@@ -2,7 +2,7 @@ import { Component, For, Show, createEffect, createSignal, onMount, useContext }
 import { createStore } from "solid-js/store";
 import { DynamicTitle } from "./components/DynamicTitle";
 import Sidebar from "./components/Sidebar";
-import { gBackends as backends } from './lib/globalstate';
+import { gBackends as backends, gBackendDelete } from './lib/globalstate';
 import Card from "./components/Card";
 import { MxColorBadge } from "./components/Badges";
 import { BadgeLabel } from "./components/ui/badge-label";
@@ -13,6 +13,7 @@ import TimerIcon from './assets/timer.svg';
 import PlayIcon from './assets/play.svg';
 import StopIcon from './assets/stop.svg';
 import LogsIcon from './assets/logs.svg';
+import DeleteIcon from './assets/deleteB.svg';
 
 import { bps_to_string, calculate_text_color_yiq, timestamp_tohms } from "./lib/utils";
 import { MxInlineGraph } from "./components/InlineGraph";
@@ -103,6 +104,12 @@ export const BackendViewer: Component = () => {
 				});
 			}
 		});
+	}
+
+	function delete_backend(cid: BigInt) {
+		MxWebsocket.instance.rpc_call('mulex::BckDeleteMeta', [
+			MxGenericType.uint64(cid)
+		], 'none').then(() => gBackendDelete(cid));
 	}
 	
 	return (
@@ -228,36 +235,50 @@ export const BackendViewer: Component = () => {
 											</div>
 										</div>
 										<div class="flex place-content-start items-center px-5">
-											<MxButton
-												class="mr-2 flex place-content-center"
-												disabled={backends[clientid].connected}
-												type="success"
-												onClick={() => start_backend(BigInt('0x' + clientid))}
-											>
-												{/* @ts-ignore */}
-												<PlayIcon class="size-7 mr-2"/>
-												<div class="text-black font-bold">Start</div>
-											</MxButton>
-											<MxButton
-												class="flex place-content-center"
-												disabled={!backends[clientid].connected}
-												type="error"
-												onClick={() => stop_backend(BigInt('0x' + clientid))}
-											>
-												{/* @ts-ignore */}
-												<StopIcon class="size-7 mr-2"/>
-												<div class="text-black font-bold">Stop</div>
-											</MxButton>
+											<div class="flex flex-col place-content-center items-center gap-1">
+												<MxButton
+													class="flex place-content-center items-center h-8 w-24"
+													disabled={backends[clientid].connected}
+													type="success"
+													onClick={() => start_backend(BigInt('0x' + clientid))}
+												>
+													{/* @ts-ignore */}
+													<PlayIcon class="size-7 mr-2"/>
+													<div class="text-black font-bold">Start</div>
+												</MxButton>
+												<MxButton
+													class="flex place-content-center items-center h-8 w-24"
+													disabled={!backends[clientid].connected}
+													type="error"
+													onClick={() => stop_backend(BigInt('0x' + clientid))}
+												>
+													{/* @ts-ignore */}
+													<StopIcon class="size-7 mr-2"/>
+													<div class="text-black font-bold">Stop</div>
+												</MxButton>
+											</div>
 										</div>
 										<div class="flex place-content-start items-center px-5">
-											<MxButton
-												class="mr-2 flex place-content-center"
-												onClick={() => setCurrentLog(clientid)}
-											>
-												{/* @ts-ignore */}
-												<LogsIcon class="size-7 mr-2"/>
-												<div class="text-black font-bold">View Logs</div>
-											</MxButton>
+											<div class="grid grid-cols-1 grid-rows-2 place-content-center items-center gap-1">
+												<MxButton
+													class="flex place-content-start items-center h-8"
+													onClick={() => setCurrentLog(clientid)}
+												>
+													{/* @ts-ignore */}
+													<LogsIcon class="size-7 mr-2"/>
+													<div class="text-black font-bold">View Logs</div>
+												</MxButton>
+												<MxButton
+													class="flex place-content-start items-center h-8"
+													type="error"
+													disabled={backends[clientid].connected}
+													onClick={() => delete_backend(BigInt('0x' + clientid))}
+												>
+													{/* @ts-ignore */}
+													<DeleteIcon class="size-7 mr-2"/>
+													<div class="text-black font-bold">Delete Backend</div>
+												</MxButton>
+											</div>
 										</div>
 									</div>
 								</div>

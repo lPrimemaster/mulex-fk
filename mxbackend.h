@@ -29,6 +29,7 @@ namespace mulex
 	};
 
 	MX_RPC_METHOD mulex::RPCGenericType BckCallUserRpc(mulex::string32 evt, mulex::RPCGenericType data, std::int64_t timeout);
+	MX_RPC_METHOD void BckDeleteMeta(std::uint64_t cid);
 
 	class MxRexDependencyManager;
 
