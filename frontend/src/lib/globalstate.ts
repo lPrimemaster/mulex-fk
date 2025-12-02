@@ -1,4 +1,4 @@
-import { createStore } from "solid-js/store";
+import { createStore, produce } from "solid-js/store";
 import { MxGenericType } from "./convert";
 import { MxWebsocket } from "./websocket";
 import { MxRdb } from "./rdb";
@@ -250,6 +250,18 @@ async function init_backend_status() {
 		const user_color = res.astype('string');
 		setBackends(cid, { user_color, user_status });
 	});
+
+	MxWebsocket.instance.subscribe('mxrdb::keydeleted', (data: Uint8Array) => {
+		const key: string = MxGenericType.fromData(data).astype('string');
+		if(key.startsWith('/system/backends/') && key.endsWith('connected')) {
+			const cid = extract_backend_name(key);
+			delete_backend_metadata(BigInt('0x' + cid));
+		}
+	});
+}
+
+function delete_backend_metadata(cid: BigInt) {
+	setBackends(produce(b => { delete b[cid.toString(16)]; }));
 }
 
 async function init_global_state() {

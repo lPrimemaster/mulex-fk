@@ -80,8 +80,18 @@ namespace mulex
 
 	void BckDeleteMeta(std::uint64_t cid)
 	{
-		std::vector<RdbKeyName> bck_keys = RdbListSubkeys("/system/backends/" + SysI64ToHexString(cid) + "/");
-		LogTrace("[mxbackend] Deleting subkeys from: %s", ("/system/backends/" + SysI64ToHexString(cid) + "/").c_str());
+		// Check if we are connected to this backend first
+		std::string root = "/system/backends/" + SysI64ToHexString(cid) + "/";
+		bool connected = static_cast<bool>(RdbReadValueDirect(root + "connected"));
+
+		if(connected)
+		{
+			LogError("[mxbackend] Cannot delete backend keys. Backend is currently running.");
+			return;
+		}
+
+		std::vector<RdbKeyName> bck_keys = RdbListSubkeys(root);
+		LogTrace("[mxbackend] Deleting subkeys from: %s", root.c_str());
 		for(const auto& key : bck_keys)
 		{
 			LogTrace("[mxbackend] Deleted metadata key <%s>.", key.c_str());

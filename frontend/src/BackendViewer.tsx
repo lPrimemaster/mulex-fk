@@ -2,7 +2,7 @@ import { Component, For, Show, createEffect, createSignal, onMount, useContext }
 import { createStore } from "solid-js/store";
 import { DynamicTitle } from "./components/DynamicTitle";
 import Sidebar from "./components/Sidebar";
-import { gBackends as backends, gBackendDelete } from './lib/globalstate';
+import { gBackends as backends } from './lib/globalstate';
 import Card from "./components/Card";
 import { MxColorBadge } from "./components/Badges";
 import { BadgeLabel } from "./components/ui/badge-label";
@@ -109,7 +109,7 @@ export const BackendViewer: Component = () => {
 	function delete_backend(cid: BigInt) {
 		MxWebsocket.instance.rpc_call('mulex::BckDeleteMeta', [
 			MxGenericType.uint64(cid)
-		], 'none').then(() => gBackendDelete(cid));
+		], 'none');
 	}
 	
 	return (
