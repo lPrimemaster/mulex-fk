@@ -576,6 +576,7 @@ namespace mulex
 
 			if(free_size >= total_size)
 			{
+				std::uint64_t alloc_offset = offset;
 				offset += total_size;
 				free_size -= total_size;
 				_rdb_offset += total_size;
@@ -585,7 +586,7 @@ namespace mulex
 					_rdb_free_blocks.erase(it);
 				}
 
-				return new (_rdb_handle + offset) RdbEntry();
+				return new (_rdb_handle + alloc_offset) RdbEntry();
 			}
 		}
 
@@ -743,7 +744,7 @@ namespace mulex
 	  		const RdbEntry* const entry = it.second;
 			output << "Key: " << it.first << '\n';
 			output << "\t" << "Value type: " << static_cast<int>(entry->_type) << '\n';
-			output << "\t" << "Value ptr: " << entry + sizeof(RdbEntry) << '\n';
+			output << "\t" << "Value ptr: " << reinterpret_cast<const uint8_t*>(entry) + sizeof(RdbEntry) << '\n';
 			output << "\t" << "Value size: " << entry->_size << '\n';
 			output << "\t" << "Value count: " << entry->_count << '\n';
 			output << "\t" << "Entry ptr: " << entry << '\n';
