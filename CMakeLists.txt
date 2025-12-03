@@ -18,7 +18,7 @@ option(GH_ACTION_MODE "Signals this configure is running in a github action." OF
 option(CREATE_PACKAGE "Create a tar package for this install target. Package for kpm." OFF)
 
 # Version configuration
-project(mulex-fk VERSION 1.1.0)
+project(mulex-fk VERSION 1.1.1)
 set(PROJECT_VNAME "Lacaille")
 
 set(CMAKE_CXX_STANDARD 20)
@@ -140,6 +140,11 @@ add_library(mxapi
 	$<TARGET_OBJECTS:uSockets>
 )
 
+# We also need to setup the prefix for windows debug shipping
+if(WIN32)
+	set_target_properties(mxapi PROPERTIES DEBUG_POSTFIX "d")
+endif()
+
 # OS agnostic linking
 target_link_libraries(mxapi PUBLIC OpenSSL::SSL ZLIB::ZLIB)
 target_link_libraries(mxapi PRIVATE base64 TracyClient)
@@ -181,6 +186,11 @@ add_subdirectory(rexs)
 add_library(mxcapi SHARED
 	capi/mxcapi.cpp
 )
+
+# We also need to setup the prefix for windows debug shipping
+if(WIN32)
+	set_target_properties(mxcapi PROPERTIES DEBUG_POSTFIX "d")
+endif()
 
 target_link_libraries(mxcapi PRIVATE mxapi)
 
