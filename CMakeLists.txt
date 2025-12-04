@@ -18,7 +18,7 @@ option(GH_ACTION_MODE "Signals this configure is running in a github action." OF
 option(CREATE_PACKAGE "Create a tar package for this install target. Package for kpm." OFF)
 
 # Version configuration
-project(mulex-fk VERSION 1.1.1)
+project(mulex-fk VERSION 1.1.2)
 set(PROJECT_VNAME "Lacaille")
 
 set(CMAKE_CXX_STANDARD 20)

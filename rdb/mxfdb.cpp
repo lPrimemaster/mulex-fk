@@ -235,6 +235,7 @@ namespace mulex
 			{"application/json", "json"},
 			{"application/javascript", "js"},
 			{"application/xml", "xml"},
+			{"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"},
 			{"application/octet-stream", "bin"},
 
 			{"text/plain", "txt"},
@@ -355,7 +356,7 @@ namespace mulex
 		FdbInitTables();
 	}
 
-	inline static FdbHandle FdbWriteFile(const std::vector<std::uint8_t>& buffer, const string32& mimetype, const string32& extension)
+	inline static FdbHandle FdbWriteFile(const std::vector<std::uint8_t>& buffer, const string128& mimetype, const string32& extension)
 	{
 		FdbHandle handle = FdbGenerateUniqueHandle();
 		const std::string bucket = FdbGetCurrentBucket();
@@ -392,7 +393,7 @@ namespace mulex
 		SysAppendBinFile(path.c_str(), buffer);
 	}
 
-	FdbHandle FdbChunkedUploadStart(mulex::string32 mimetype, mulex::string32 extension)
+	FdbHandle FdbChunkedUploadStart(mulex::string128 mimetype, mulex::string32 extension)
 	{
 		// NOTE: (Cesar) Touch the file
 		FdbHandle handle = FdbWriteFile({}, mimetype, extension);

@@ -43,7 +43,7 @@ export const MxFileDropUpload : Component<MxFileDropUploadProps> = (props) => {
 
 		for(const file of files.data.values()) {
 			const res = await MxWebsocket.instance.rpc_call('mulex::FdbChunkedUploadStart', [
-				MxGenericType.str32(file.type),
+				MxGenericType.str128(file.type),
 				MxGenericType.str32('')
 			]);
 			const handle = res.astype('string');

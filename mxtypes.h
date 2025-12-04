@@ -47,4 +47,5 @@ namespace mulex
 	};
 
 	using string32 = mxstring<32>;
+	using string128 = mxstring<128>;
 }

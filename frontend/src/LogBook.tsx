@@ -282,7 +282,7 @@ const LogBookWritePost : Component = () => {
 		const ext = fetchExtension(filename);
 
 		const res = await MxWebsocket.instance.rpc_call('mulex::FdbChunkedUploadStart', [
-			MxGenericType.str32(file.file.type),
+			MxGenericType.str128(file.file.type),
 			MxGenericType.str32(ext)
 		]);
 		const handle = res.astype('string');

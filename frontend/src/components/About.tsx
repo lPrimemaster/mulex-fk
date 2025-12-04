@@ -19,12 +19,15 @@ const About: Component<{show: boolean, setShow: SetShowF, children? : JSX.Elemen
 
 					<br/><br/>
 					<h2 class="font-bold">Dependencies</h2>
-					<li>SQLite - [Public Domain]</li>
-					<li>RapidJSON - Copyright (c) 2006-2013 Alexander Chemeris [BSD License]</li>
-					<li>Libusb - [GNU LGPLv2.1]</li>
-					<li>uSockets - [Apache License v2.0]</li>
-					<li>uWebSockets - [Apache License v2.0]</li>
-					<li>base64 - Copyright (c) Nick Galbreath, Wojciech Muła, Matthieu Darbois & Alfred Klomp [BSD License]</li>
+					<div class="mx-5">
+						<li>SQLite - [Public Domain]</li>
+						<li>RapidJSON - Copyright (c) Alexander Chemeris [BSD License]</li>
+						<li>Libusb - [GNU LGPLv2.1]</li>
+						<li>uSockets - [Apache License v2.0]</li>
+						<li>uWebSockets - [Apache License v2.0]</li>
+						<li>base64 - Copyright (c) Nick Galbreath,<br/>Wojciech Muła, Matthieu Darbois & Alfred Klomp [BSD License]</li>
+						<li>zlib - Copyright (c) Jean-loup Gailly<br/>& Mark Adler [zlib License]</li>
+					</div>
 				</AlertDialogDescription>
 			</AlertDialogContent>
 		</AlertDialog>

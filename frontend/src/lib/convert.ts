@@ -30,6 +30,10 @@ export class MxGenericType
 		return MxGenericType.fromValue(value, 'string32', intype);
 	}
 
+	static str128(value: string, intype: string = 'native') : MxGenericType {
+		return MxGenericType.fromValue(value, 'string128', intype);
+	}
+
 	static str512(value: string, intype: string = 'native') : MxGenericType {
 		return MxGenericType.fromValue(value, 'string512', intype);
 	}
@@ -75,6 +79,11 @@ export class MxGenericType
 		if(type === 'string32') {
 			const encoder = new TextEncoder();
 			data = new Uint8Array(32);
+			data.set(encoder.encode(value + '\0'), 0);
+		}
+		else if(type === 'string128') {
+			const encoder = new TextEncoder();
+			data = new Uint8Array(128);
 			data.set(encoder.encode(value + '\0'), 0);
 		}
 		else if(type === 'string512') {
@@ -396,6 +405,11 @@ export class MxGenericType
 					const decoder = new TextDecoder();
 					element.push(decoder.decode(view.buffer.slice(view.byteOffset + packoffset)).split('\0').shift()); // Null terminate the string
 					packoffset += 32;
+				}
+				else if(type === 'str128') {
+					const decoder = new TextDecoder();
+					element.push(decoder.decode(view.buffer.slice(view.byteOffset + packoffset)).split('\0').shift()); // Null terminate the string
+					packoffset += 128;
 				}
 				else if(type === 'float32') {
 					element.push(view.getFloat32(packoffset, true));
