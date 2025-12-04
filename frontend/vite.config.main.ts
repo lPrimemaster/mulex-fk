@@ -36,7 +36,7 @@ export default defineConfig({
     target: 'esnext',
 	rollupOptions: {
 		output: {
-			entryFileNames: 'index.js',
+			entryFileNames: 'index-[hash].js',
 			chunkFileNames: 'chunks/[name].js',
 			assetFileNames: '[name].[ext]'
 		}
