@@ -397,7 +397,7 @@ namespace mulex
 		}
 	}
 
-	static void RegisterClientRdb(const mxstring<512>& name, const mxstring<512>& host, std::uint64_t cid)
+	static void RegisterClientRdb(const string512& name, const string512& host, std::uint64_t cid)
 	{
 		std::string root_key = "/system/backends/" + SysI64ToHexString(cid) + "/";
 
@@ -419,12 +419,12 @@ namespace mulex
 
 		if(!RdbNewEntry(root_key + "user_status/text", RdbValueType::STRING, "None"))
 		{
-			RdbWriteValueDirect(root_key + "user_status/text", mxstring<512>("None"));
+			RdbWriteValueDirect(root_key + "user_status/text", string512("None"));
 		}
 
 		if(!RdbNewEntry(root_key + "user_status/color", RdbValueType::STRING, "#000000"))
 		{
-			RdbWriteValueDirect(root_key + "user_status/color", mxstring<512>("#000000"));
+			RdbWriteValueDirect(root_key + "user_status/color", string512("#000000"));
 		}
 
 		std::uint32_t init = 0;
@@ -462,8 +462,8 @@ namespace mulex
 		LogDebug("[evtserver] New connected client <%s>.", reinterpret_cast<const char*>(data));
 		std::string name_data = reinterpret_cast<const char*>(data);
 		auto token = name_data.find_first_of("@");
-		mxstring<512> bname = name_data.substr(0, token);
-		mxstring<512> hname = name_data.substr(token + 1);
+		string512 bname = name_data.substr(0, token);
+		string512 hname = name_data.substr(token + 1);
 		RegisterClientRdb(bname, hname, cid);
 		RexUpdateHostsFile(cid, socket._addr);
 	}
@@ -485,8 +485,8 @@ namespace mulex
 		}
 
 		// Reset custom status
-		RdbWriteValueDirect("/system/backends/" + SysI64ToHexString(cid) + "/user_status/text" , mxstring<512>("None"));
-		RdbWriteValueDirect("/system/backends/" + SysI64ToHexString(cid) + "/user_status/color", mxstring<512>("#000000"));
+		RdbWriteValueDirect("/system/backends/" + SysI64ToHexString(cid) + "/user_status/text" , string512("None"));
+		RdbWriteValueDirect("/system/backends/" + SysI64ToHexString(cid) + "/user_status/color", string512("#000000"));
 
 		SetRdbClientConnectionStatus(cid, false);
 
@@ -1019,7 +1019,7 @@ namespace mulex
 	mulex::RPCGenericType EvtGetAllRegisteredEvents()
 	{
 		std::shared_lock lock(_evt_reg_lock);
-		std::vector<mxstring<512>> output;
+		std::vector<string512> output;
 		output.reserve(_evt_server_reg.size());
 		for(const auto& reg : _evt_server_reg)
 		{

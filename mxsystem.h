@@ -316,7 +316,7 @@ namespace mulex
 	std::string_view SysGetCachePrivateDir();
 	bool SysCreateNewExperiment(const std::string& expname);
 	std::string SysGetExperimentHome();
-	MX_RPC_METHOD mulex::mxstring<512> SysGetExperimentName();
+	MX_RPC_METHOD mulex::string512 SysGetExperimentName();
 	void SysOverrideBinaryName(const std::string& name);
 	std::string_view SysGetBinaryName();
 	std::string_view SysGetBinaryFullCommandLineArguments();

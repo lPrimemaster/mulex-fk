@@ -76,14 +76,14 @@ namespace mulex
 	static std::optional<std::string> PlugFSReceiveExperimentName(const Socket& client)
 	{
 		ZoneScoped;
-		auto expname_buffer = PlugFSRecvTimeout(client, sizeof(mxstring<512>));
+		auto expname_buffer = PlugFSRecvTimeout(client, sizeof(string512));
 		if(!expname_buffer.has_value())
 		{
 			return std::nullopt;
 		}
 
-		mxstring<512> expname;
-		std::memcpy(&expname, expname_buffer.value().data(), sizeof(mxstring<512>));
+		string512 expname;
+		std::memcpy(&expname, expname_buffer.value().data(), sizeof(string512));
 		return expname.c_str();
 	}
 
@@ -383,7 +383,7 @@ namespace mulex
 			return false;
 		}
 
-		mxstring<512> exp = experiment;
+		string512 exp = experiment;
 		std::vector<std::uint8_t> buffer(512);
 		std::memcpy(buffer.data(), &exp, 512);
 		PlugFSSendData(socket, buffer);

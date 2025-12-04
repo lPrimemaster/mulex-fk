@@ -464,7 +464,7 @@ namespace mulex
 		static std::mutex _mtx;
 		std::unique_lock lock(_mtx);
 
-		static std::vector<mulex::mxstring<512>> method_signatures;
+		static std::vector<mulex::string512> method_signatures;
 		if(method_signatures.empty())
 		{
 			for(const auto& method : RPCGetMethods())

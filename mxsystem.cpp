@@ -1073,7 +1073,7 @@ namespace mulex
 		return "";
 	}
 
-	mulex::mxstring<512> SysGetExperimentName()
+	mulex::string512 SysGetExperimentName()
 	{
 		return _sys_expname.c_str();
 	}

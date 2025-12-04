@@ -21,7 +21,7 @@ namespace mulex
 		{
 			// Register the pdb path on rdb
 			pdb_loc = cache + "/pdb.db";
-			pdb = RdbNewEntry("/system/pdbloc", RdbValueType::STRING, mxstring<512>(pdb_loc).c_str());
+			pdb = RdbNewEntry("/system/pdbloc", RdbValueType::STRING, string512(pdb_loc).c_str());
 			if(!pdb)
 			{
 				LogError("[pdb] Failed to register pdb path on rdb.");
@@ -30,7 +30,7 @@ namespace mulex
 		}
 		else
 		{
-			pdb_loc = RdbReadValueDirect("/system/pdbloc").asType<mxstring<512>>().c_str();
+			pdb_loc = RdbReadValueDirect("/system/pdbloc").asType<string512>().c_str();
 		}
 
 		LogTrace("[pdb] Got pdb location: %s", pdb_loc.c_str());

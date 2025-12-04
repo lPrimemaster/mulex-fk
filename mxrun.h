@@ -16,9 +16,9 @@ namespace mulex
 
 	struct RunLogFileMetadata
 	{
-		std::uint64_t 		 _runno;
-		mulex::FdbHandle 	 _handle;
-		mulex::mxstring<512> _alias;
+		std::uint64_t 	 _runno;
+		mulex::FdbHandle _handle;
+		mulex::string512 _alias;
 	};
 
 	void RunInitVariables();

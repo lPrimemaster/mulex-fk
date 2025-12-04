@@ -202,8 +202,8 @@ namespace mulex
 	{
 		// This only happens on non-ghost backends so one can call the SysGetClientId function
 		static const std::string root_key = "/system/backends/" + SysI64ToHexString(SysGetClientId()) + "/";
-		rdb[root_key + "user_status/text"] = mxstring<512>(status);
-		rdb[root_key + "user_status/color"] = mxstring<512>(color);
+		rdb[root_key + "user_status/text"] = string512(status);
+		rdb[root_key + "user_status/color"] = string512(color);
 	}
 
 	MxRexDependencyManager MxBackend::registerDependency(const std::string& backend)
@@ -420,7 +420,7 @@ namespace mulex
 
 		auto readName = [&rdb](const std::string& key) -> std::string {
 			std::string nkey = key.substr(0, key.find_last_of('/')) + "/name";
-			mulex::mxstring<512> output = rdb[nkey];
+			mulex::string512 output = rdb[nkey];
 			return output.c_str();
 		};
 
@@ -446,7 +446,7 @@ namespace mulex
 			std::vector<RdbKeyName> keys = exp.value()->_rpc_client->call<RPCGenericType>(RPC_CALL_MULEX_RDBLISTSUBKEYS, RdbKeyName("/system/backends/*/name"));
 			for(const RdbKeyName& key : keys)
 			{
-				mulex::mxstring<512> kname = rdb[key.c_str()];
+				mulex::string512 kname = rdb[key.c_str()];
 				std::string name = kname.c_str();
 				
 				if(name == _dep_name)
@@ -513,7 +513,7 @@ namespace mulex
 		{
 			const std::uint8_t* ptr = buffer + i;
 			const std::uint64_t sz = (i + CHUNK_SIZE) > size ? (size - i) : CHUNK_SIZE;
-			_experiment->_rpc_client->call<bool>(RPC_CALL_MULEX_FDBCHUNKEDUPLOADSEND, mxstring<512>(handle), RPCGenericType::FromData(ptr, sz));
+			_experiment->_rpc_client->call<bool>(RPC_CALL_MULEX_FDBCHUNKEDUPLOADSEND, string512(handle), RPCGenericType::FromData(ptr, sz));
 		}
 
 		if(!_experiment->_rpc_client->call<bool>(RPC_CALL_MULEX_FDBCHUNKEDUPLOADEND, handle))
