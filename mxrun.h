@@ -25,6 +25,8 @@ namespace mulex
 	MX_RPC_METHOD MX_PERMISSION("run_control") bool RunStart();
 	MX_RPC_METHOD MX_PERMISSION("run_control") void RunStop();
 	MX_RPC_METHOD MX_PERMISSION("run_reset") void RunReset();
+	MX_RPC_METHOD MX_PERMISSION("run_configure") void RunConfigure(mulex::string512 aliasfmt, mulex::string512 description, std::uint64_t restarttimer);
+	MX_RPC_METHOD mulex::RPCGenericType RunGetConfiguration();
 
 	MX_RPC_METHOD mulex::RPCGenericType RunLogGetRuns(std::uint64_t limit, std::uint64_t page);
 	MX_RPC_METHOD mulex::RPCGenericType RunLogGetMeta(std::uint64_t runno);

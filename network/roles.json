@@ -12,7 +12,7 @@
 				"create_user", "modify_user", "delete_user",
 				"read_entry", "write_entry", "modify_entry", "delete_entry",
 				"upload_files", "download_files", "delete_files",
-				"run_control", "run_reset"
+				"run_control", "run_reset", "run_configure"
 			]
 		},
 		{
@@ -43,6 +43,7 @@
 		{ "name": "delete_files", "description": "Allows user to delete files from the FDB." },
 
 		{ "name": "run_control", "description": "User can start/stop a run."},
-		{ "name": "run_reset", "description": "User can reset the run database."}
+		{ "name": "run_reset", "description": "User can reset the run database."},
+		{ "name": "run_configure", "description": "User can configure the run." }
 	]
 }

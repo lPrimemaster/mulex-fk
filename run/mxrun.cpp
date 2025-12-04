@@ -1,6 +1,11 @@
 #include "../mxrun.h"
 #include "../mxrdb.h"
+#include <concepts>
 #include <cstdint>
+#include <sstream>
+
+static std::string _run_current_alias_fmt;
+static std::string _run_current_description;
 
 namespace mulex
 {
@@ -44,11 +49,38 @@ namespace mulex
 		}
 	}
 
-	static bool RunRegisterStart(std::uint64_t runno)
+	template<typename T>
+	concept SStreamable = requires(std::stringstream& ss, const T& value) {
+		{ ss << value } -> std::convertible_to<std::ostream&>;
+	};
+
+	static void RunFindAndReplaceField(const std::string& field, const SStreamable auto& value, std::string& output)
 	{
-		static const std::string query = "INSERT OR REPLACE INTO runlog (id) VALUES (?)";
-		static const std::vector<PdbValueType> types = { PdbValueType::UINT64 };
-		return PdbWriteTable(query, types, SysPackArguments(runno));
+		std::stringstream ss;
+		const auto field_no = output.find(field);
+		if(field_no != std::string::npos)
+		{
+			output.erase(field_no, 2);
+			ss << value;
+			output.insert(field_no, ss.str());
+		}
+	}
+
+	static std::string RunComputeAliasFields(const std::string& alias)
+	{
+		std::string output = alias;
+
+		std::uint64_t runno = RdbReadValueDirect("/system/run/number").asType<std::uint64_t>();
+		RunFindAndReplaceField("%n", runno, output);
+
+		return output;
+	}
+
+	static bool RunRegisterStart(std::uint64_t runno, std::string&& name, const std::string& desc)
+	{
+		static const std::string query = "INSERT OR REPLACE INTO runlog (id, name, description) VALUES (?, ?, ?)";
+		static const std::vector<PdbValueType> types = { PdbValueType::UINT64, PdbValueType::STRING, PdbValueType::STRING };
+		return PdbWriteTable(query, types, SysPackArguments(runno, PdbString(name), PdbString(desc)));
 	}
 
 	static bool RunRegisterStop(std::uint64_t runno)
@@ -98,7 +130,7 @@ namespace mulex
 		std::uint64_t runno = RdbReadValueDirect("/system/run/number").asType<std::uint64_t>() + 1;
 		RdbWriteValueDirect("/system/run/number", runno);
 
-		RunRegisterStart(runno);
+		RunRegisterStart(runno, RunComputeAliasFields(_run_current_alias_fmt), _run_current_description);
 		
 		RdbWriteValueDirect("/system/run/timestamp", SysGetCurrentTime());
 		RdbWriteValueDirect("/system/run/status", std::uint8_t(1));
@@ -164,6 +196,30 @@ namespace mulex
 		PdbExecuteQuery("DELETE FROM runlogxref;");
 
 		LogTrace("[mxrun] RunReset() OK.");
+	}
+
+	void RunConfigure(mulex::string512 aliasfmt, mulex::string512 description, std::uint64_t restarttimer)
+	{
+		// Check the status
+		RunStatus status = static_cast<RunStatus>(RdbReadValueDirect("/system/run/status").asType<std::uint8_t>());
+
+		if(status != RunStatus::STOPPED)
+		{
+			LogError("[mxrun] Failed to configure run. Status is '%s'. Status 'STOPPED' is required.", RunStatusToString(status));
+			return;
+		}
+
+		_run_current_alias_fmt = aliasfmt.c_str();
+		_run_current_description = description.c_str();
+		LogDebug("[mxrun] Changed run configuration settings.");
+	}
+
+	mulex::RPCGenericType RunGetConfiguration()
+	{
+		return std::vector<string512>({
+			_run_current_alias_fmt,
+			_run_current_description
+		});
 	}
 
 	mulex::RPCGenericType RunLogGetRuns(std::uint64_t limit, std::uint64_t page)

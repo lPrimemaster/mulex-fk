@@ -153,7 +153,7 @@ async function init_run_status() {
 	});
 
 	rdb.watch('/system/run/number', (_: string, value: MxGenericType) => {
-		setRunNumber(value.astype('uint64'));
+		setRunNumber(Number(value.astype('uint64')));
 	});
 
 	rdb.watch('/system/run/timestamp', (_: string, value: MxGenericType) => {

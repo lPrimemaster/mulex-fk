@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, on } from 'solid-js';
+import { Component, createSignal, createEffect, on, onMount } from 'solid-js';
 import Sidebar from './components/Sidebar'
 import Card from './components/Card';
 import BackendStatusTable from './components/BackendStatusTable';
@@ -15,8 +15,71 @@ import { DynamicTitle } from './components/DynamicTitle';
 import { MxPopup } from './components/Popup';
 import { gRunNumber, gRunStatus, gRunTimestamp, gSocketStatus } from './lib/globalstate';
 
+const RunConfigure : Component<{ open: boolean, onOpenChange: (o: boolean) => void }> = (props) => {
+	const [runAlias, setRunAlias] = createSignal<string>('');
+	const [runDescription, setRunDescription] = createSignal<string>('');
+
+	onMount(async () => {
+		const res = await MxWebsocket.instance.rpc_call('mulex::RunGetConfiguration', [], 'generic');
+		const [alias, desc] = res.unpack(['str512', 'str512'])[0];
+
+		setRunAlias(alias);
+		setRunDescription(desc);
+	});
+
+	return (
+		<MxPopup title="Configure Runs" open={props.open} onOpenChange={props.onOpenChange}>
+			<div class="place-items-center">
+				<form onSubmit={(e) => { 
+					e.preventDefault();
+					MxWebsocket.instance.rpc_call('mulex::RunConfigure', [
+						MxGenericType.str512(runAlias()),
+						MxGenericType.str512(runDescription()),
+						MxGenericType.uint64(0n)
+					], 'none');
+					props.onOpenChange(false);
+				}} class="space-y-4 w-full">
+					<div>
+						<label class="block text-gray-700 text-sm font-medium mb-1">Alias</label>
+						<input
+							type="text"
+							maxlength={512}
+							value={runAlias()}
+							onInput={(e) => setRunAlias(e.currentTarget.value)}
+							disabled={gRunStatus() != 'Stopped'}
+							placeholder="Run %n"
+							class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						/>
+					</div>
+					<div>
+						<label class="block text-gray-700 text-sm font-medium mb-1">Description</label>
+						<textarea
+							maxlength={512}
+							value={runDescription()}
+							onInput={(e) => setRunDescription(e.currentTarget.value)}
+							disabled={gRunStatus() != 'Stopped'}
+							placeholder="Run description."
+							class="w-full min-h-32 focus:outline-none focus:ring-2 rounded-lg
+							overflow-x-hidden resize-none py-2 border border-gray-300 px-4
+							focus:ring-blue-500 whitespace-pre-wrap"
+						/>
+					</div>
+					<button
+						type="submit"
+						class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+						disabled={gRunStatus() != 'Stopped'}
+					>
+						Done
+					</button>
+				</form>
+			</div>
+		</MxPopup>
+	);
+};
+
 const Home: Component = () => {
 	const [runReset, setRunReset] = createSignal<boolean>(false);
+	const [runConf, setRunConf] = createSignal<boolean>(false);
 	const [runResetCheckPhrase, setRunResetCheckPhrase] = createSignal<string>('');
 
 	const [time, setTime] = createSignal(Date.now() as number);
@@ -49,12 +112,17 @@ const Home: Component = () => {
 					<Card title="Status">
 						<div class="grid grid-cols-4 grid-rows-4 gap-1">
 							<MxButton
-								class="col-span-2 row-span-2 m-1"
+								class="col-span-1 row-span-2 m-1"
 								onClick={() => {
 									MxWebsocket.instance.rpc_call('mulex::RunStart');
 								}}
 								disabled={gRunStatus() == 'Running'}
 							>Start Run</MxButton>
+							<MxButton
+								class="col-span-1 row-span-2 m-1"
+								onClick={() => setRunConf(true)}
+								disabled={gRunStatus() != 'Stopped'}
+							>Configure Run</MxButton>
 							<MxButton
 								class="col-span-1 row-span-2 row-start-3 m-1"
 								onClick={() => {
@@ -136,6 +204,7 @@ const Home: Component = () => {
 							</div>
 						</div>
 					</MxPopup>
+					<RunConfigure open={runConf()} onOpenChange={setRunConf}/>
 				</div>
 			</div>
 		</div>
