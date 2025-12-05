@@ -29,6 +29,7 @@ namespace mulex
 	MX_RPC_METHOD mulex::RPCGenericType RunGetConfiguration();
 
 	MX_RPC_METHOD mulex::RPCGenericType RunLogGetRuns(std::uint64_t limit, std::uint64_t page);
+	MX_RPC_METHOD mulex::RPCGenericType RunLogGetDescription(std::uint64_t runno);
 	MX_RPC_METHOD mulex::RPCGenericType RunLogGetMeta(std::uint64_t runno);
 	MX_RPC_METHOD bool RunLogFile(mulex::RunLogFileMetadata data);
 } // namespace mulex

@@ -172,6 +172,7 @@ const RunLogsTable : Component = () => {
 	const [refresh, setRefresh] = createSignal<number>(0);
 	const [runToInspect, setRunToInspect] = createSignal<number>(0);
 	const [openPopup, setOpenPopup] = createSignal<boolean>(false);
+	const [currRunDesc, setCurrRunDesc] = createSignal<string>('');
 
 	async function updateLogsPage(page: number) {
 		runsActions("items", []);
@@ -186,13 +187,24 @@ const RunLogsTable : Component = () => {
 		}
 	}
 
+	async function fetchRunDescription(id: BigInt) : Promise<string> {
+		const res = await MxWebsocket.instance.rpc_call('mulex::RunLogGetDescription', [MxGenericType.uint64(id)], 'generic');
+		if(res.isEmpty()) {
+			return '';
+		}
+		return res.unpack(['str512'])[0][0];
+	}
+
 	createEffect(on([gRunStatus, page], () => {
 		updateLogsPage(page() - 1);
 	}));
 
-	// onMount(() => {
-	// 	updateLogsPage(0);
-	// });
+	createEffect(async () => {
+		if(openPopup()) {
+			const desc = await fetchRunDescription(BigInt(runs.items[runToInspect()].id));
+			setCurrRunDesc(desc);
+		}
+	});
 
 	function getRunStatusBadge(status: string) {
 		return <BadgeLabel type={status === 'Stopped' ? 'error' : 'success'}>{status}</BadgeLabel>;
@@ -258,7 +270,24 @@ const RunLogsTable : Component = () => {
 							</div>
 						</DialogTitle>
 						<DialogDescription>
-							{runs.items[runToInspect()].alias}
+							<div class="flex-col mt-3">
+								<div class="font-medium shadow-md bg-blue-100 rounded-md mb-2 py-1 px-5 place-content-center">
+									<div class="font-normal text-xs mb-1 -ml-1">
+										Alias
+									</div>
+									<div>
+										{runs.items[runToInspect()].alias !== '' ? runs.items[runToInspect()].alias : <div class="font-mono">No alias</div>}
+									</div>
+								</div>
+								<div class="font-medium shadow-md bg-blue-100 rounded-md mb-2 py-1 px-5 place-content-center">
+									<div class="font-normal text-xs mb-1 -ml-1">
+										Description
+									</div>
+									<div class="whitespace-normal break-all max-h-32 overflow-y-auto">
+										{currRunDesc() !== '' ? currRunDesc() : <div class="font-mono">No description</div>}
+									</div>
+								</div>
+							</div>
 						</DialogDescription>
 						<RunLogsFilesTable run={runs.items[runToInspect()].id} onlyLastVersion={onlyLast()} refresh={refresh()}/>
 					</DialogHeader>

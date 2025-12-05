@@ -3,6 +3,7 @@
 #include <concepts>
 #include <cstdint>
 #include <sstream>
+#include <string>
 
 static std::string _run_current_alias_fmt;
 static std::string _run_current_description;
@@ -227,6 +228,13 @@ namespace mulex
 		static PdbAccessLocal accessor;
 		static auto reader = accessor.getReaderRaw<std::uint64_t, PdbString, PdbString, PdbString>("runlog", { "id", "name", "started_at", "stopped_at" });
 		return reader("ORDER BY id DESC LIMIT " + std::to_string(limit) + " OFFSET (" + std::to_string(limit) + " * " + std::to_string(page) + ")");
+	}
+
+	mulex::RPCGenericType RunLogGetDescription(std::uint64_t runno)
+	{
+		static PdbAccessLocal accessor;
+		static auto reader = accessor.getReaderRaw<PdbString>("runlog", { "description" });
+		return reader("WHERE id = " + std::to_string(runno));
 	}
 
 	mulex::RPCGenericType RunLogGetMeta(std::uint64_t runno)
