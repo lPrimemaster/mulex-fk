@@ -6,7 +6,7 @@ import { extract_backend_name } from "./utils";
 import { createSignal } from "solid-js";
 import { showToast } from "~/components/ui/toast";
 
-class BackendStatus {
+interface BackendStatus {
 	name: string;
 	host: string;
 	connected: boolean;
@@ -15,17 +15,6 @@ class BackendStatus {
 	uptime: number;
 	user_status: string;
 	user_color: string;
-
-	constructor(name: string, host: string, connected: boolean, time: number, ustatus: string, ucolor: string) {
-		this.name = name;
-		this.host = host;
-		this.connected = connected;
-		this.evt_upload_speed = 0;
-		this.evt_download_speed = 0;
-		this.uptime = time;
-		this.user_status = ustatus;
-		this.user_color = ucolor;
-	}
 };
 
 interface BackendStatusList {
@@ -90,7 +79,16 @@ async function create_client_status(clientid: string): Promise<BackendStatus> {
 	entry = MxGenericType.str512(`/system/backends/${clientid}/user_status/color`);
 	const ucolor: string = (await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [entry], 'generic')).astype('string');
 
-	return new BackendStatus(cname, chost, cconn, Number(ctime), ustatus, ucolor);
+	return {
+		name: cname,
+		host: chost,
+		connected: cconn,
+		uptime: Number(ctime),
+		user_status: ustatus,
+		user_color: ucolor,
+		evt_upload_speed: 0,
+		evt_download_speed: 0
+	};
 }
 
 async function init_client_status() {
