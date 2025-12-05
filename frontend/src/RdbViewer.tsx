@@ -165,15 +165,6 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 									<TableCell class="p-1 pl-5">Size</TableCell>
 									<TableCell class="p-1 pl-5 pr-10">{size()}</TableCell>
 								</TableRow>
-								<TableRow class="bg-gray-200 hover:bg-gray-200">
-									<TableCell class="p-1 pl-5">Array</TableCell>
-									<TableCell class="p-1 pl-5 pr-10">
-										<ComboSimple data={[
-											{ label: 'Yes', value: true , disabled: false },
-											{ label: 'No' , value: false, disabled: false }
-										]} placeholder="" default={isArray()} disabled onSelect={(value: boolean) => { console.log('Selected ' + value); }}/>
-									</TableCell>
-								</TableRow>
 								<TableRow class="bg-gray-100">
 									<TableCell class="p-1 pl-5 align-top">Raw View</TableCell>
 									<TableCell class="p-1 pl-5 pr-10">
