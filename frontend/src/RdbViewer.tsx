@@ -19,6 +19,7 @@ import { scroll_to_element, array_chunkify } from './lib/utils';
 import { TextField, TextFieldLabel, TextFieldInput, TextFieldErrorMessage } from './components/ui/text-field';
 import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip';
 import { DynamicTitle } from './components/DynamicTitle';
+import { MxHexTable } from './components/HexTable';
 
 class RdbStats {
 	read: number;
@@ -50,7 +51,7 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 	const [type, setType] = createSignal<string>('');
 	const [value, setValue] = createSignal<string>('');
 	const [size, setSize] = createSignal<string>('');
-	const [rawHexArray, setRawHexArray] = createSignal<Array<string>>([]);
+	const [rawHexArray, setRawHexArray] = createSignal<Uint8Array>(new Uint8Array(0));
 	const [isArray, setIsArray] = createSignal<string>('');
 	const [isActive, setIsActive] = createSignal<boolean>(false);
 	const [openEdit, setOpenEdit] = createSignal<boolean>(false);
@@ -85,7 +86,7 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 		const itemActive = (selectedItem().length > 0);
 		setIsActive(itemActive);
 		if(previous.length > 0) {
-			console.log('unwatch ', previous);
+			// console.log('unwatch ', previous);
 			rdb.unwatch(previous);
 		}
 
@@ -115,7 +116,7 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 						});
 					}
 				});
-				console.log('watch ', selectedItem());
+				// console.log('watch ', selectedItem());
 			});
 			setTimeout(() => scroll_to_element(element_ref), 200);
 			return selectedItem();
@@ -170,37 +171,15 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 									<TableCell class="p-1 pl-5 pr-10">
 										<Tooltip>
 											<TooltipTrigger>
-												<table
-													class={(rawHexArray().length > 8 ? 'cursor-pointer hover:bg-gray-200' : 'cursor-auto')}
+												<div
+													class={rawHexArray().length > 8 ? 'cursor-pointer hover:bg-gray-200' : 'cursor-auto'}
 													onClick={() => setExtendRawView(!extendRawView() && (rawHexArray().length > 8))}
 												>
-													<tbody>
-														<tr>
-															<td class="flex gap-5">
-																<For each={rawHexArray().slice(0, 8)}>{(byte: string) =>
-																	<div class="w-7">
-																		{byte}
-																	</div>
-																}</For>
-															</td>
-															{/*<td class="pl-5"></td>*/}
-														</tr>
-														<Show when={extendRawView()}>
-															<For each={array_chunkify(rawHexArray().slice(8), 8)}>{(bytes: string[]) =>
-																<tr class="animate-in">
-																	<td class="flex gap-5">
-																		<For each={bytes}>{(byte: string) =>
-																			<div class="w-7">
-																				{byte}
-																			</div>
-																		}</For>
-																	</td>
-																	{/*<td class="pl-5"></td>*/}
-																</tr>
-															}</For>
-														</Show>
-													</tbody>
-												</table>
+													<MxHexTable
+														data={extendRawView() ? rawHexArray() : rawHexArray().slice(0, 8)}
+														bpr={extendRawView() ? 16 : 8}
+													/>
+												</div>
 											</TooltipTrigger>
 											<Show when={(rawHexArray().length > 8)}>
 												<TooltipContent>

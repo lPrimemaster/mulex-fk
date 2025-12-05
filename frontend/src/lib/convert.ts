@@ -223,9 +223,9 @@ export class MxGenericType
 		return NaN;
 	}
 
-	public hexdump() : Array<string> {
+	public hexdump() : Uint8Array {
 		if(this.data.byteLength === 0) {
-			return [];
+			return new Uint8Array(0);
 		}
 
 		let offset = 0;
@@ -233,7 +233,8 @@ export class MxGenericType
 			offset = 8; // 64-bit uint with size first
 		}
 
-		return Array.from(this.data.slice(offset)).map((b) => '0x' + b.toString(16).padStart(2, '0')).reverse();
+		return this.data.slice(offset);
+		// return Array.from(this.data.slice(offset)).map((b) => '0x' + b.toString(16).padStart(2, '0')).reverse();
 	}
 
 	public astype(type: string) : any {

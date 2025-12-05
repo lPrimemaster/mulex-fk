@@ -1,4 +1,4 @@
-import { Component, For } from "solid-js";
+import { Component, createEffect, createSignal, For } from "solid-js";
 
 interface MxHexTableProps {
 	data: Uint8Array;
@@ -6,7 +6,19 @@ interface MxHexTableProps {
 };
 
 export const MxHexTable : Component<MxHexTableProps> = (props) => {
-	const rows = Math.ceil(props.data.length / props.bpr);
+	const [data, setData] = createSignal<Array<Uint8Array>>([]);
+
+	function make_chunks(data: Uint8Array, chunkSize: number): Array<Uint8Array> {
+		const chunks = new Array<Uint8Array>();
+		for(let i = 0; i < data.length; i += chunkSize) {
+			chunks.push(data.slice(i, i + chunkSize));
+		}
+		return chunks;
+	}
+
+	createEffect(() => {
+		setData(make_chunks(props.data, props.bpr));
+	});
 
 	return (
 		<table class="table-fixed border border-gray-300 text-sm font-mono">
@@ -20,11 +32,8 @@ export const MxHexTable : Component<MxHexTableProps> = (props) => {
 				</tr>
 			</thead>
 			<tbody>
-				<For each={[...Array(rows).keys()]}>{(i) => {
-
-					const start_addr = i * props.bpr;
-					const end_addr = start_addr + props.bpr;
-					const row_data = props.data.slice(start_addr, end_addr);
+				<For each={data()}>{(arr, i) => {
+					const start_addr = i() * props.bpr;
 
 					return (
 						<tr class="even:bg-white odd:bg-gray-100 border-t">
@@ -33,7 +42,7 @@ export const MxHexTable : Component<MxHexTableProps> = (props) => {
 							</td>
 
 							<For each={[...Array(props.bpr).keys()]}>{(j) =>
-								<td class="p-1 text-center">{row_data[j] === undefined ? '--' : row_data[j].toString(16).toUpperCase().padStart(2, "0")}</td>
+								<td class="p-1 text-center">{arr[j] === undefined ? '--' : arr[j].toString(16).toUpperCase().padStart(2, "0")}</td>
 							}</For>
 						</tr>
 					);
