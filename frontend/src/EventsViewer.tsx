@@ -168,7 +168,18 @@ export const EventsViewer : Component = () => {
 			}
 
 			if(r == 0 && w == 0) {
-				setEventsMeta(eid, { trigger: eventsMeta[eid].trigger + 1 });
+				setEventsMeta(eid, (p) => {
+					return {
+						trigger: eventsMeta[eid].trigger + 1,
+						clients: clientFrames,
+						io: {
+							read: 0,
+							write: 0,
+							lread: [...(p.io.lread ?? []), 0].slice(-20),
+							lwrite: [...(p.io.lwrite ?? []), 0].slice(-20)
+						}
+					};
+				});
 				continue;
 			}
 
@@ -400,6 +411,11 @@ export const EventsViewer : Component = () => {
 										}</For>
 									</TableBody>
 								</Table>
+								<Show when={objectNumberEntries(eventsMeta).filter(([k, x]) => (sysEvents()) || (!sysEvents() && !x.issys)).length === 0}>
+									<div class="w-full flex items-center justify-items-center">
+										<div class="w-full text-center text-muted-foreground">No events</div>
+									</div>
+								</Show>
 							</Show>
 						</div>
 					</Card>
