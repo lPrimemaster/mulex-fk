@@ -54,18 +54,17 @@ public:
 	void onRunStart(std::uint64_t runno)
 	{
 		std::string data = "Bing Xiling";
-		logRunWriteFile("somefile_bx.txt.random", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+		logRunWriteFile("somefile_bx.txt.random", data);
 
 		std::this_thread::sleep_for(std::chrono::seconds(2));
 
 		data = "Bing Xiling 2";
-		logRunWriteFile("somefile_bx.txt.random", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+		logRunWriteFile("somefile_bx.txt.random", data);
 	}
 
 	void onRunStop(std::uint64_t runno)
 	{
-		std::string data = "Bing Xiling";
-		logRunWriteFile("somefile_bx_stop.txt", reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+		logRunWriteFile("somefile_bx_stop.txt", "Bing Xiling");
 	}
 
 	RPCGenericType userRpc(const std::int32_t& data, const float& ft)

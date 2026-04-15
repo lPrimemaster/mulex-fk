@@ -479,6 +479,11 @@ namespace mulex
 		return *this;
 	}
 
+	void MxBackend::logRunWriteFile(const std::string& alias, const std::string& buffer)
+	{
+		logRunWriteFile(alias, reinterpret_cast<const std::uint8_t*>(buffer.data()), buffer.size());
+	}
+
 	void MxBackend::logRunWriteFile(const std::string& alias, const std::vector<std::uint8_t>& buffer)
 	{
 		logRunWriteFile(alias, buffer.data(), buffer.size());

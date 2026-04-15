@@ -107,6 +107,7 @@ namespace mulex
 		}
 
 		// Run log
+		void logRunWriteFile(const std::string& alias, const std::string& buffer);
 		void logRunWriteFile(const std::string& alias, const std::vector<std::uint8_t>& buffer);
 		void logRunWriteFile(const std::string& alias, const std::uint8_t* buffer, std::uint64_t size);
 
