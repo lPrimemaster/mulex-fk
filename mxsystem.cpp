@@ -1,11 +1,15 @@
 #include "mxsystem.h"
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <regex>
 #include <signal.h>
 #include "mxlogger.h"
+#include "mxtrace.h"
 #include "network/rpc.h"
 #include "mxevt.h"
 #include "mxrdb.h"
@@ -18,6 +22,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 #ifdef _WIN32
 #include <minwinbase.h>
@@ -368,6 +373,9 @@ namespace mulex
 
 		// Init plugfs server
 		PlugFSInitServerThread();
+
+		// Init tracing
+		TrxInit();
 
 		return true;
 	}
@@ -1819,5 +1827,36 @@ namespace mulex
 		header._mx_rpc_version = MX_RPC_PROTOCOL_VERSION;
 		header._mx_version = MX_HASH "-" MX_BRANCH;
 		return header;
+	}
+
+	template<SysMPSCQueueTypeConstraint T>
+	SysMPSCLocalQueue<T>::SysMPSCLocalQueue(SysMPSCQueue<T>& queue, std::uint64_t size) : _queue(queue), _capacity(size)
+	{
+		_data.reserve(_capacity);
+	}
+
+	template<SysMPSCQueueTypeConstraint T>
+	bool SysMPSCLocalQueue<T>::enqueue(const T& item)
+	{
+		_data.push_back(item);
+
+		if(_data.size() >= _capacity)
+		{
+			flush();
+		}
+		return true;
+	}
+
+	template<SysMPSCQueueTypeConstraint T>
+	void SysMPSCLocalQueue<T>::flush()
+	{
+		for(const auto& value : _data)
+		{
+			while(!_queue.enqueue(value))
+			{
+				std::this_thread::yield();
+			}
+		}
+		_data.clear();
 	}
 } // namespace mulex

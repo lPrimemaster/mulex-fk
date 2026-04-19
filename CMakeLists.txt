@@ -18,8 +18,8 @@ option(GH_ACTION_MODE "Signals this configure is running in a github action." OF
 option(CREATE_PACKAGE "Create a tar package for this install target. Package for kpm." OFF)
 
 # Version configuration
-project(mulex-fk VERSION 1.1.4)
-set(PROJECT_VNAME "Lacaille")
+project(mulex-fk VERSION 1.2.0)
+set(PROJECT_VNAME "Aquarii")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -132,6 +132,8 @@ add_library(mxapi
 	rexs/mxrexs.cpp
 
 	run/mxrun.cpp
+
+	trace/mxtrace.cpp
 
 	mxsystem.cpp
 

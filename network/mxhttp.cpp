@@ -673,7 +673,7 @@ namespace mulex
 
 		d.Accept(writer);
 
-		LogTrace("[mxhttp] HttpMakeWSEVTMessage() OK.");
+		// LogTrace("[mxhttp] HttpMakeWSEVTMessage() OK.");
 
 		return buffer.GetString();
 	}
@@ -687,7 +687,7 @@ namespace mulex
 		// }
 
 		_ws_loop_thread->defer([ws, func]() {
-			LogTrace("[mxhttp] Calling defer within ws thread.");
+			// LogTrace("[mxhttp] Calling defer within ws thread.");
 			func(ws);
 		});
 	}
@@ -715,7 +715,7 @@ namespace mulex
 		// Move the data vector to the uWS loop thread
 		HttpDeferCall(nullptr, [ws, data_vector, event](auto*) {
 			const std::string message = HttpMakeWSEVTMessage(data_vector, event);
-			LogTrace("[mxhttp] Sending event message to ws.");
+			// LogTrace("[mxhttp] Sending event message to ws.");
 			ws->send(message);
 		});
 	}

@@ -24,6 +24,8 @@ namespace mulex
 
 		inline /* implicit */ mxstring(const std::string& data) : mxstring(data.c_str()) { }
 
+		inline /* implicit */ mxstring(const std::string_view& data) : mxstring(data.data()) { }
+
 		template<std::uint64_t N>
 		inline /* implicit */ mxstring(const mxstring<N>& data) : mxstring(data.c_str()) { }
 
@@ -36,6 +38,11 @@ namespace mulex
 		inline void operator=(const std::string& data)
 		{
 			operator=(data.c_str());
+		}
+
+		inline void operator=(const std::string_view& data)
+		{
+			operator=(data.data());
 		}
 
 		inline const char* c_str() const

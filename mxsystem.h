@@ -1,4 +1,5 @@
 #pragma once
+#include <numeric>
 #include <queue>
 #include <type_traits>
 #include <vector>
@@ -338,6 +339,16 @@ namespace mulex
 	std::vector<std::string> SysStringSplitOnTokenSkipCommas(const std::string& input, char token);
 	std::uint64_t SysStringHash64(const std::string& key);
 	bool SysMatchPattern(const std::string& pattern, const std::string& target);
+	inline consteval std::uint32_t SysFastHashConstEval(const std::string_view str)
+	{
+		std::uint32_t hash = 0x811C9DC5u;
+		for(std::uint64_t i = 0; i < str.size(); i++)
+		{
+			hash ^= static_cast<std::uint8_t>(str[i]);
+			hash *= 0x01000193u;
+		}
+		return hash;
+	}
 
 	bool SysSpawnProcess(const std::string& binary, const std::string& workdir, const std::vector<std::string>& argv);
 #ifdef __linux__
@@ -376,5 +387,105 @@ namespace mulex
 		// std::uint8_t _padding[28];
 	};
 
-	 SysHandshakeHeader SysGetHandshakeHeader();
+	SysHandshakeHeader SysGetHandshakeHeader();
+
+	template<typename T>
+	concept SysMPSCQueueTypeConstraint = std::is_default_constructible_v<T>;
+
+	template<SysMPSCQueueTypeConstraint T> 
+	class SysMPSCQueue
+	{
+	public:
+		SysMPSCQueue(std::uint64_t size, SysAsyncEventLoop& io) : _io(io)
+		{
+			_seq.resize(size);
+			_data.resize(size); // Calls T()
+			std::iota(_seq.begin(), _seq.end(), 0);
+		}
+
+		bool shouldFlushNow() const
+		{
+			size_t t = _tail.load(std::memory_order_relaxed);
+			size_t h = _head.load(std::memory_order_relaxed);
+			return (t - h) >= (_capacity - _capacity / 8); // at least 7/8 full
+		}
+
+		bool enqueue(const T& item)
+		{
+			// Check where to write
+			std::uint64_t pos = _tail.fetch_add(1ULL, std::memory_order_relaxed);
+			std::uint64_t index = pos & (_capacity - 1);
+			std::atomic<std::uint64_t>& order = _seq[index];
+			T& value = _data[index];
+
+			// Check availability
+			std::uint64_t s = order.load(std::memory_order_acquire);
+			std::int64_t diff = static_cast<std::int64_t>(s) - static_cast<std::int64_t>(pos);
+
+			if(diff != 0)
+			{
+				return false;
+			}
+
+			// Store item
+			value = item;
+			order.store(pos + 1, std::memory_order_release);
+			return true;
+		}
+
+		void flush(std::vector<T>& out)
+		{
+			std::uint64_t h = _head.load(std::memory_order_relaxed);
+
+			while(true)
+			{
+				std::uint64_t index = h & (_capacity - 1);
+				std::atomic<std::uint64_t>& order = _seq[index];
+				T& value = _data[index];
+
+				std::uint64_t s = order.load(std::memory_order_acquire);
+				std::int64_t diff = static_cast<std::int64_t>(s) - static_cast<std::int64_t>(h + 1);
+
+				if(diff != 0)
+				{
+					break;
+				}
+
+				out.push_back(value);
+
+				order.store(h + _capacity, std::memory_order_release);
+
+				h++;
+			}
+
+			_head.store(h, std::memory_order_release);
+		}
+
+	private:
+		std::deque<std::atomic<std::uint64_t>> _seq;
+		std::vector<T> _data;
+		std::uint64_t  _capacity;
+		SysAsyncEventLoop& _io;
+
+		// Force 64-bit (typical) cacheline size
+		alignas(64) std::atomic<std::uint64_t> _head;
+		alignas(64) std::atomic<std::uint64_t> _tail;
+	};
+
+	template<SysMPSCQueueTypeConstraint T> 
+	class SysMPSCLocalQueue
+	{
+	public:
+		SysMPSCLocalQueue(SysMPSCQueue<T>& queue, std::uint64_t size);
+
+		bool enqueue(const T& item);
+
+	private:
+		void flush();
+
+	private:
+		SysMPSCQueue<T>& _queue;
+		std::vector<T>   _data;
+		std::uint64_t	 _capacity;
+	};
 } // namespace mulex

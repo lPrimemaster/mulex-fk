@@ -561,7 +561,7 @@ namespace mulex
 		{
 			// Dangling event with no subscriptions
 			// Silently ignore
-			LogTrace("Dangling event <%s>.", event.c_str());
+			LogTrace("[evtserver] Dangling event <%s>.", event.c_str());
 			return false;
 		}
 
