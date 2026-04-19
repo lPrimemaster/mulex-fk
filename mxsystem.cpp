@@ -5,8 +5,6 @@
 #include <cstdlib>
 #include <memory>
 #include <mutex>
-#include <numeric>
-#include <regex>
 #include <signal.h>
 #include "mxlogger.h"
 #include "mxtrace.h"
