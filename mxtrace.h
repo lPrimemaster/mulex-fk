@@ -1,20 +1,20 @@
 #pragma once
 #include <cstdint>
-#include <string_view>
 
 #define TrxTarget(type, tags, name) \
-	const TrxScopeGuard __trx_target(type, tags, TrxInternStringHash(SysFastHashConstEval(std::string_view(name)), std::string_view(name)));
+	static constexpr const char* __trx_fname { name }; \
+	const TrxScopeGuard __trx_target(type, tags, SysFastHashConstEval(__trx_fname), __trx_fname);
 
 namespace mulex
 {
 	// NOTE: (César) Mental notes on tracing
-	// - [ ] Tags for filtering
-	// - [ ] Time ordering (relatively easy)
+	// - [x] Tags for filtering
+	// - [x] Time ordering (relatively easy)
 	// - [ ] Causality (complex) figure out best way to implement
-	// - [ ] Passing the record data around threads
+	// - [x] Passing the record data around threads
 	// - [ ] Passing the record data around backends
-	// - [ ] Tracing should have a relatively low impact
-	// - [ ] String interning
+	// - [x] Tracing should have a relatively low impact
+	// - [x] String interning
 	
 	// Record types
 	enum class TrxType : std::uint8_t
@@ -62,13 +62,18 @@ namespace mulex
 
 		TrxType		  _type;
 		TrxTag        _tags;
+		TrxFuncId	  _fid;
 	};
 
 	// Use RAII to manage trx record transfers
+	// NOTE: (César) There are improvements possible here
+	// 				 However, this runs with ctor/dtor
+	// 				 P99 timings of around 180ns on my system
+	// 				 Which is more than enough for us
 	class TrxScopeGuard
 	{
 	public:
-		[[nodiscard]] TrxScopeGuard(TrxType type, TrxTag tags, TrxFuncId id);
+		[[nodiscard]] TrxScopeGuard(TrxType type, TrxTag tags, TrxFuncId id, const char* fname);
 		~TrxScopeGuard();
 
 		// No copy
@@ -76,15 +81,12 @@ namespace mulex
 		TrxScopeGuard& operator=(const TrxScopeGuard&) = delete;
 
 	private:
-		TrxType   	  _type;
-		TrxTag    	  _tags;
-		TrxFuncId 	  _fid;
-		std::uint64_t _rid;
+		TrxType   	  	 _type;
+		TrxTag    	  	 _tags;
+		TrxFuncId 	  	 _fid;
+		std::uint64_t 	 _rid;
+		const char*		 _fname;
 	};
 
-	// String interner to store metadata for each record function
-	TrxFuncId TrxInternStringHash(std::uint32_t hash, std::string_view str);
-
-	TrxRecord TrxGenerateRecord(TrxType type, TrxTag tags, std::uint64_t rid);
 	void TrxInit();
 } // namespace mulex

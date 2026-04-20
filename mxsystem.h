@@ -13,6 +13,12 @@
 #include <functional>
 #include "mxtypes.h"
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#else
+#define ZoneScoped
+#endif
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -341,6 +347,8 @@ namespace mulex
 	bool SysMatchPattern(const std::string& pattern, const std::string& target);
 	inline consteval std::uint32_t SysFastHashConstEval(const std::string_view str)
 	{
+		// TODO: (César) Const Eval hash might be more relaxed
+		// 				 so to get better hashes
 		std::uint32_t hash = 0x811C9DC5u;
 		for(std::uint64_t i = 0; i < str.size(); i++)
 		{
@@ -396,10 +404,10 @@ namespace mulex
 	class SysMPSCQueue
 	{
 	public:
-		SysMPSCQueue(std::uint64_t size, SysAsyncEventLoop& io) : _io(io)
+		SysMPSCQueue(std::uint64_t size, SysAsyncEventLoop& io) : _io(io), _tail(0), _head(0), _capacity(size)
 		{
-			_seq.resize(size);
-			_data.resize(size); // Calls T()
+			_seq.resize(_capacity);
+			_data.resize(_capacity); // Calls T()
 			std::iota(_seq.begin(), _seq.end(), 0);
 		}
 
@@ -412,6 +420,7 @@ namespace mulex
 
 		bool enqueue(const T& item)
 		{
+			ZoneScoped;
 			// Check where to write
 			std::uint64_t pos = _tail.fetch_add(1ULL, std::memory_order_relaxed);
 			std::uint64_t index = pos & (_capacity - 1);
@@ -422,8 +431,9 @@ namespace mulex
 			std::uint64_t s = order.load(std::memory_order_acquire);
 			std::int64_t diff = static_cast<std::int64_t>(s) - static_cast<std::int64_t>(pos);
 
-			if(diff != 0)
+			if(diff != 0) // [[unlikely]]
 			{
+				_tail.fetch_sub(1ULL, std::memory_order_relaxed);
 				return false;
 			}
 
