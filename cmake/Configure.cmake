@@ -121,5 +121,5 @@ macro(generate_mxconfig)
 		COMMENT "Checking mxconfig.h"
 		VERBATIM
 	)
-	add_dependencies(mxmain generate_build_info)
+	add_dependencies(mxapi generate_build_info)
 endmacro()
