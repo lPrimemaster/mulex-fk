@@ -933,6 +933,7 @@ namespace mulex
 
 	void SysAsyncEventLoop::schedule(SysAsyncTask& task)
 	{
+		ZoneScopedN("SysAsyncEventLoop::schedule (single)");
 		std::unique_lock<std::mutex> lock(_mutex);
 		_queue.push(std::move(task));
 		_cv.notify_all();
@@ -940,6 +941,7 @@ namespace mulex
 
 	void SysAsyncEventLoop::schedule(SysAsyncTask::Job job, std::int64_t delay, std::int64_t interval)
 	{
+		ZoneScopedN("SysAsyncEventLoop::schedule (multi)");
 		std::unique_lock<std::mutex> lock(_mutex);
 		_queue.push({
 			._job = std::move(job),
@@ -951,7 +953,7 @@ namespace mulex
 
 	std::int64_t SysGetCurrentTime()
 	{
-		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 	}
 
 	std::string_view SysGetCacheDir()
@@ -1268,7 +1270,7 @@ namespace mulex
 
 	std::uint64_t SysGetClientId()
 	{
-		if(_sys_cid == 0x00)
+		if(_sys_cid == 0x00) [[unlikely]]
 		{
 			std::string bname = std::string(SysGetBinaryName());
 			std::string hname = std::string(SysGetHostname());
@@ -1637,9 +1639,19 @@ namespace mulex
 		}
 
 		// Erase file and write PID
-		static_cast<void>(::ftruncate(_sys_lock_handle, 0));
+		if(::ftruncate(_sys_lock_handle, 0) < 0)
+		{
+			LogError("SysLockCurrentProcess: Failed to truncate lockfile.");
+			return false;
+		}
+
 		std::string pid = std::to_string(::getpid());
-		static_cast<void>(::write(_sys_lock_handle, pid.c_str(), pid.size() + 1));
+
+		if(::write(_sys_lock_handle, pid.c_str(), pid.size() + 1) < 0)
+		{
+			LogError("SysLockCurrentProcess: Failed to write lockfile.");
+			return false;
+		}
 #else
 		_sys_lock_handle = CreateFileA(
 			proc_lock_file.c_str(),
