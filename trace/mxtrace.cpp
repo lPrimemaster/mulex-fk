@@ -11,7 +11,7 @@
 #include <unordered_map>
 
 static constexpr std::int64_t  TRX_STREAM_INTERVAL = 500;
-static constexpr std::uint64_t 		TRX_MPSCQ_SIZE = 32;
+static constexpr std::uint64_t 		TRX_MPSCQ_SIZE = 1024;
 
 // NOTE: (César)
 // 56B Alignment (8)
@@ -118,10 +118,14 @@ namespace mulex
 			{
 				TrxInternEmitValue(hash, str);
 			}
+			else
+			{
+				LogError("[mxtrace] TrxInternStringHash: Failed to intern <%s>. Hash collision.", str.data());
+			}
 		}
 	}
 
-	static TrxRecordWithMeta TrxGenerateRecordWithMeta(TrxType type, TrxTag tags, std::uint64_t rid, TrxFuncId fid, const char* str)
+	static TrxRecordWithMeta TrxGenerateRecordWithMeta(TrxTag tags, std::uint64_t rid, TrxFuncId fid, const char* str)
 	{
 		ZoneScoped;
 		return TrxRecordWithMeta {
@@ -133,7 +137,6 @@ namespace mulex
 				._trigger_cid = 0x00, // TODO: (César)
 
 				._timestamp = SysGetCurrentTime(),
-				._type = type,
 				._tags = tags,
 				._fid  = fid
 			},
@@ -159,7 +162,7 @@ namespace mulex
 				std::uint64_t(_trx_emit_buffer.size()),
 				std::vector<uint8_t>(
 					reinterpret_cast<uint8_t*>(_trx_emit_buffer.data()),
-					reinterpret_cast<uint8_t*>(_trx_emit_buffer.data()) + _trx_flush_buffer.size() * sizeof(TrxRecord)
+					reinterpret_cast<uint8_t*>(_trx_emit_buffer.data() + _trx_emit_buffer.size())// * sizeof(TrxRecord)
 				)
 		);
 	}
@@ -222,15 +225,20 @@ namespace mulex
 		_trx_emit_io.schedule(TrxFlushQueue, 0, TRX_STREAM_INTERVAL);
 	}
 
-	TrxScopeGuard::TrxScopeGuard(TrxType type, TrxTag tags, TrxFuncId id, const char* fname) : _type(type), _tags(tags), _fid(id), _fname(fname), _rid(TrxGetNextRecordId())
+	mulex::RPCGenericType TrxGetInternedMap()
+	{
+		return {};
+	}
+
+	TrxScopeGuard::TrxScopeGuard(TrxTag tags, TrxFuncId id, const char* fname) : _tags(tags), _fid(id), _fname(fname), _rid(0)
 	{
 		ZoneScoped;
-		TrxScheduleEmitRecord(TrxGenerateRecordWithMeta(_type, _tags | TrxTag::TRX_START, _rid, _fid, _fname));
+		TrxScheduleEmitRecord(TrxGenerateRecordWithMeta(_tags | TrxTag::TRX_START, _rid, _fid, _fname));
 	}
 
 	TrxScopeGuard::~TrxScopeGuard()
 	{
 		ZoneScoped;
-		TrxScheduleEmitRecord(TrxGenerateRecordWithMeta(_type, _tags | TrxTag::TRX_STOP, _rid, _fid, _fname));
+		TrxScheduleEmitRecord(TrxGenerateRecordWithMeta(_tags | TrxTag::TRX_STOP, _rid, _fid, _fname));
 	}
 } // namespace mulex

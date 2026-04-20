@@ -757,7 +757,7 @@ namespace mulex
 	RPCGenericType RdbReadValueDirect(RdbKeyName keyname)
 	{
 		ZoneScoped;
-		TrxTarget(TrxType::RDB, TrxTag::NONE, "RdbRead");
+		TrxTarget("Rdb", "Read");
 		std::shared_lock lock_ops(_rdb_rw_lock);
 
 		const RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
@@ -805,7 +805,7 @@ namespace mulex
 	void RdbWriteValueDirect(mulex::RdbKeyName keyname, RPCGenericType data)
 	{
 		ZoneScoped;
-		TrxTarget(TrxType::RDB, TrxTag::NONE, "RdbWrite");
+		TrxTarget("Rdb", "Write");
 		std::shared_lock lock_ops(_rdb_rw_lock);
 
 		RdbEntry* entry = RdbFindEntryByNameUnlocked(keyname);
@@ -840,14 +840,14 @@ namespace mulex
 	bool RdbCreateValueDirect(mulex::RdbKeyName keyname, mulex::RdbValueType type, std::uint64_t count, mulex::RPCGenericType data)
 	{
 		ZoneScoped;
-		TrxTarget(TrxType::RDB, TrxTag::NONE, "RdbCreate");
+		TrxTarget("Rdb", "Create");
 		return (RdbNewEntry(keyname, type, data.getData(), count) != nullptr);
 	}
 
 	void RdbDeleteValueDirect(mulex::RdbKeyName keyname)
 	{
 		ZoneScoped;
-		TrxTarget(TrxType::RDB, TrxTag::NONE, "RdbDelete");
+		TrxTarget("Rdb", "Delete");
 		RdbDeleteEntry(keyname);
 	}
 

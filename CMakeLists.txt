@@ -87,6 +87,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 		-Wno-implicit-fallthrough					# I like implicit fallthroughs
 		$<$<COMPILE_LANGUAGE:CXX>:-Wno-reorder>     # Usually I don't use this and when I do, stuff don't depend on one another (this could mean bugs tho...)
 		-Wno-unused-function 						# RPC Generation might be usefull on some compilation units in the future
+		-flto=auto									# Allow inlining across TUs via LTO
 	)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 	add_definitions(/FI"${CMAKE_SOURCE_DIR}/network/rpc_macros.h")
@@ -103,6 +104,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 		/wd4458								# Class member hiding
 		/wd4702								# Unreachable code (this is usefull for hiding code on tracing)
 		/wd4815								# Zero sized arrays
+		/LTCG								# Allow inlining across TUs via LTO
 	)
 endif()
 

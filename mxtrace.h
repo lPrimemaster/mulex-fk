@@ -1,9 +1,23 @@
 #pragma once
+#include "network/rpc.h"
 #include <cstdint>
 
-#define TrxTarget(type, tags, name) \
-	static constexpr const char* __trx_fname { name }; \
-	const TrxScopeGuard __trx_target(type, tags, SysFastHashConstEval(__trx_fname), __trx_fname);
+// NOTE: (César) name must be known at compile-time
+#define TrxTargetTags(group, name, tags) \
+	static constexpr const char* __trx_fname { group ":" name }; \
+	const TrxScopeGuard __trx_target(tags, SysFastHashConstEval(__trx_fname), __trx_fname);
+
+#define TrxTarget(group, name) \
+	static constexpr const char* __trx_fname { group ":" name }; \
+	const TrxScopeGuard __trx_target(TrxTag::NONE, SysFastHashConstEval(__trx_fname), __trx_fname);
+
+#if defined(_MSC_VER)
+    #define FORCE_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+    #define FORCE_INLINE inline __attribute__((always_inline))
+#else
+    #define FORCE_INLINE inline
+#endif
 
 namespace mulex
 {
@@ -15,14 +29,6 @@ namespace mulex
 	// - [ ] Passing the record data around backends
 	// - [x] Tracing should have a relatively low impact
 	// - [x] String interning
-	
-	// Record types
-	enum class TrxType : std::uint8_t
-	{
-		RPC,
-		RDB,
-		EVT
-	};
 
 	using TrxFuncId = std::uint32_t;
 
@@ -60,7 +66,6 @@ namespace mulex
 
 		std::int64_t  _timestamp;
 
-		TrxType		  _type;
 		TrxTag        _tags;
 		TrxFuncId	  _fid;
 	};
@@ -68,12 +73,12 @@ namespace mulex
 	// Use RAII to manage trx record transfers
 	// NOTE: (César) There are improvements possible here
 	// 				 However, this runs with ctor/dtor
-	// 				 P99 timings of around 180ns on my system
-	// 				 Which is more than enough for us
+	// 				 P90 timings of ~200 ns on my system
+	// 				 which is more than enough for us
 	class TrxScopeGuard
 	{
 	public:
-		[[nodiscard]] TrxScopeGuard(TrxType type, TrxTag tags, TrxFuncId id, const char* fname);
+		[[nodiscard]] TrxScopeGuard(TrxTag tags, TrxFuncId id, const char* fname);
 		~TrxScopeGuard();
 
 		// No copy
@@ -81,7 +86,6 @@ namespace mulex
 		TrxScopeGuard& operator=(const TrxScopeGuard&) = delete;
 
 	private:
-		TrxType   	  	 _type;
 		TrxTag    	  	 _tags;
 		TrxFuncId 	  	 _fid;
 		std::uint64_t 	 _rid;
@@ -89,4 +93,6 @@ namespace mulex
 	};
 
 	void TrxInit();
+
+	MX_RPC_METHOD mulex::RPCGenericType TrxGetInternedMap();
 } // namespace mulex
