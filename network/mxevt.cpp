@@ -26,11 +26,6 @@
 
 static std::atomic<std::uint64_t> _client_msg_id = 0;
 
-// NOTE: (Cesar) In theory this could be thread unsafe
-// 				 But this practically guards vs using
-// 				 RPC calls on a local context
-static std::atomic<std::uint64_t> _client_current_caller = 0;
-
 static std::map<std::string, std::uint16_t> _evt_server_reg;
 static std::shared_mutex _evt_reg_lock;
 static std::atomic<std::uint16_t> _evt_server_reg_next = 0;
@@ -576,7 +571,7 @@ namespace mulex
 		vdata.resize(sizeof(EvtHeader) + len);
 
 		std::memcpy(vdata.data(), &header, sizeof(EvtHeader));
-		if(len > 0)
+		if(len > 0 && data != nullptr)
 		{
 			std::memcpy(vdata.data() + sizeof(EvtHeader), data, len);
 		}
