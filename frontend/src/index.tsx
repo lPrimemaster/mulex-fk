@@ -19,6 +19,7 @@ import { RouterCatcher } from './components/RouterCatcher';
 import { Dashboard } from './Dashboard';
 import { LogBook } from './LogBook';
 import { RunViewer } from './RunViewer';
+import { TraceViewer } from './TraceViewer';
 
 const root = document.getElementById('root');
 
@@ -49,6 +50,7 @@ render(() => (
 						<Route path='/backends' component={BackendViewer}/>
 						<Route path='/dashboard' component={Dashboard}/>
 						<Route path='/logbook' component={LogBook}/>
+						<Route path='/tracer' component={TraceViewer}/>
 						<DynamicRouter/>
 						<RouterCatcher/>
 					</Router>

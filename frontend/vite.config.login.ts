@@ -3,11 +3,12 @@ import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import path from "path";
 import fs from 'fs';
+import { expandHome } from './dev/helper';
 // import devtools from 'solid-devtools/vite';
 
 const manifest = JSON.parse(fs.readFileSync('./../build/manifest.json', 'utf-8'));
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     /* 
     Uncomment the following line to enable solid-devtools.
@@ -22,6 +23,7 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+	outDir: mode === 'dev' ? expandHome(process.env.MX_HOME ?? 'dist') : 'dist',
 	rollupOptions: {
 		input: {
 			login: 'login.html'
@@ -45,4 +47,4 @@ export default defineConfig({
 	  __APP_GHASH__: JSON.stringify(manifest.hash),
 	  __APP_GBRANCH__: JSON.stringify(manifest.branch)
   }
-});
+}));

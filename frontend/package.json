@@ -4,9 +4,10 @@
   "description": "",
   "scripts": {
     "start": "vite",
-    "dev:main": "vite --config vite.config.main.ts --host",
-    "dev:login": "vite --config vite.config.login.ts --host",
-    "dev": "npm-run-all --parallel dev:main dev:login",
+	"dev:swapserver": "MX_HOME=~/.mxcache/testexp node ./dev/hotreload.mjs",
+    "dev:main": "MX_HOME=~/.mxcache/testexp vite build --watch --mode dev --config vite.config.main.ts",
+    "dev:login": "MX_HOME=~/.mxcache/testexp vite build --watch --mode dev --config vite.config.login.ts",
+    "dev": "npm-run-all --parallel dev:swapserver dev:main dev:login",
     "build": "vite build --config vite.config.main.ts && vite build --config vite.config.login.ts",
     "serve": "vite preview"
   },
