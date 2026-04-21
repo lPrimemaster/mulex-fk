@@ -39,7 +39,7 @@ static std::shared_mutex  									  			  _trx_id_interner_lock;
 struct TrxInternNewValueEvent
 {
 	mulex::TrxFuncId _id;
-	mulex::string512 _str;
+	mulex::string128 _str;
 };
 
 namespace mulex
@@ -227,7 +227,21 @@ namespace mulex
 
 	mulex::RPCGenericType TrxGetInternedMap()
 	{
-		return {};
+		std::shared_lock lock(_trx_id_interner_lock);
+
+		std::uint64_t size = _trx_id_interner_map.size() * (sizeof(TrxInternNewValueEvent));
+		std::vector<std::uint8_t> buffer;
+		buffer.reserve(size);
+
+		for(const auto& [fid, str] : _trx_id_interner_map)
+		{
+			SysPackArguments(buffer, TrxInternNewValueEvent {
+				._id = fid,
+				._str = str
+			});
+		}
+
+		return buffer;
 	}
 
 	TrxScopeGuard::TrxScopeGuard(TrxTag tags, TrxFuncId id, const char* fname) : _tags(tags), _fid(id), _fname(fname), _rid(0)
