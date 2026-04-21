@@ -4,11 +4,11 @@
 
 // NOTE: (César) name must be known at compile-time
 #define TrxTargetTags(group, name, tags) \
-	static constexpr const char* __trx_fname { group ":" name }; \
+	static constexpr const char* __trx_fname { TrxStaticStringAssert(group ":" name) }; \
 	const TrxScopeGuard __trx_target(tags, SysFastHashConstEval(__trx_fname), __trx_fname);
 
 #define TrxTarget(group, name) \
-	static constexpr const char* __trx_fname { group ":" name }; \
+	static constexpr const char* __trx_fname { TrxStaticStringAssert(group ":" name) }; \
 	const TrxScopeGuard __trx_target(TrxTag::NONE, SysFastHashConstEval(__trx_fname), __trx_fname);
 
 #if defined(_MSC_VER)
@@ -91,6 +91,14 @@ namespace mulex
 		std::uint64_t 	 _rid;
 		const char*		 _fname;
 	};
+
+	template<std::size_t N>
+	consteval auto& TrxStaticStringAssert(char const (&str)[N])
+	{
+		// We use string128 for passing data around in events
+		static_assert(N < 128, "TrxStaticStringAssert: cannot use descriptors with more than 128 chars.");
+		return str;
+	}
 
 	void TrxInit();
 
