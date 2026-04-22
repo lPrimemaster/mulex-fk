@@ -6,7 +6,7 @@ import path from 'path';
 const OUT_DIR = (process.env.MX_HOME ?? 'dist').replace(/^~/, os.homedir());
 const clients = [];
 
-// SSE server on port 3001
+// SSE server on port 3000
 http.createServer((req, res) => {
 	res.writeHead(200, {
 		'Content-Type': 'text/event-stream',
