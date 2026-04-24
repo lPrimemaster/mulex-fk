@@ -6,6 +6,7 @@
 #include "../mxevt.h"
 #include <atomic>
 #include <functional>
+#include <memory>
 #include <shared_mutex>
 #include <tracy/Tracy.hpp>
 #include <unordered_map>
@@ -21,12 +22,12 @@ struct alignas(8) TrxRecordWithMeta
 	const char*		 _meta;
 };
 
-static std::atomic<std::uint64_t>    		  _trx_record_id = 0;
-static mulex::SysAsyncEventLoop 	 		  _trx_emit_io;
-static mulex::SysMPSCQueue<TrxRecordWithMeta> _trx_record_queue(TRX_MPSCQ_SIZE, _trx_emit_io);
-static std::vector<TrxRecordWithMeta> 		  _trx_flush_buffer;
-static std::vector<mulex::TrxRecord>		  _trx_emit_buffer;
-static std::atomic<bool>					  _trx_flush_pending = false;
+static std::atomic<std::uint64_t>    		  	 _trx_record_id = 0;
+static std::unique_ptr<mulex::SysAsyncEventLoop> _trx_emit_io;
+static mulex::SysMPSCQueue<TrxRecordWithMeta> 	 _trx_record_queue(TRX_MPSCQ_SIZE);
+static std::vector<TrxRecordWithMeta> 		  	 _trx_flush_buffer;
+static std::vector<mulex::TrxRecord>		  	 _trx_emit_buffer;
+static std::atomic<bool>					  	 _trx_flush_pending = false;
 
 // NOTE: (César) This assumes that the string interning is
 // 				 always done on string literals
@@ -131,13 +132,14 @@ namespace mulex
 		return TrxRecordWithMeta {
 			._record = {
 				._self_rid = rid,
-				._self_cid = SysGetClientId(),
+				._self_cid = GetCurrentCallerId(),
 
 				._trigger_rid = 0x00, // TODO: (César)
 				._trigger_cid = 0x00, // TODO: (César)
 
-				._timestamp = SysGetCurrentTime(),
+				._timestamp = SysGetCurrentTimeNs(),
 				._tags = tags,
+				._padding = {},
 				._fid  = fid
 			},
 			._meta = str
@@ -184,7 +186,7 @@ namespace mulex
 		ZoneScoped;
 		if (!_trx_flush_pending.exchange(true, std::memory_order_acq_rel))
 		{
-			_trx_emit_io.schedule([](){
+			_trx_emit_io->schedule([](){
 				_trx_flush_pending.store(false, std::memory_order_release);
 				TrxFlushQueue();
 			});
@@ -221,15 +223,22 @@ namespace mulex
 		_trx_flush_buffer.reserve(TRX_MPSCQ_SIZE);
 		_trx_emit_buffer.reserve(TRX_MPSCQ_SIZE);
 
+		_trx_emit_io = std::make_unique<SysAsyncEventLoop>();
+
 		// Stream only once every X ms
-		_trx_emit_io.schedule(TrxFlushQueue, 0, TRX_STREAM_INTERVAL);
+		_trx_emit_io->schedule(TrxFlushQueue, 0, TRX_STREAM_INTERVAL);
+	}
+
+	void TrxClose()
+	{
+		_trx_emit_io.reset();
 	}
 
 	mulex::RPCGenericType TrxGetInternedMap()
 	{
 		std::shared_lock lock(_trx_id_interner_lock);
 
-		std::uint64_t size = _trx_id_interner_map.size() * (sizeof(TrxInternNewValueEvent));
+		std::uint64_t size = _trx_id_interner_map.size() * sizeof(TrxInternNewValueEvent);
 		std::vector<std::uint8_t> buffer;
 		buffer.reserve(size);
 
@@ -241,10 +250,16 @@ namespace mulex
 			});
 		}
 
+		LogTrace("[mxtrace] TrxGetInternedMap:");
+		for(const auto& v : _trx_id_interner_map)
+		{
+			LogTrace("[mxtrace] %u -> %s", v.first, v.second.data());
+		}
+
 		return buffer;
 	}
 
-	TrxScopeGuard::TrxScopeGuard(TrxTag tags, TrxFuncId id, const char* fname) : _tags(tags), _fid(id), _fname(fname), _rid(0)
+	TrxScopeGuard::TrxScopeGuard(TrxTag tags, TrxFuncId id, const char* fname) : _tags(tags), _fid(id), _fname(fname), _rid(TrxGetNextRecordId())
 	{
 		ZoneScoped;
 		TrxScheduleEmitRecord(TrxGenerateRecordWithMeta(_tags | TrxTag::TRX_START, _rid, _fid, _fname));

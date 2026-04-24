@@ -318,6 +318,7 @@ namespace mulex
 	void SysAddArgument(const std::string& longname, const char shortname, bool needvalue, std::function<void(const std::string&)> action, const std::string& helptxt = "");
 	bool SysParseArguments(int argc, char* argv[]);
 	std::int64_t SysGetCurrentTime();
+	std::int64_t SysGetCurrentTimeNs();
 	std::string_view SysGetCacheDir();
 	std::string_view SysGetCacheLockDir();
 	std::string_view SysGetCachePrivateDir();
@@ -404,7 +405,7 @@ namespace mulex
 	class SysMPSCQueue
 	{
 	public:
-		SysMPSCQueue(std::uint64_t size, SysAsyncEventLoop& io) : _io(io), _tail(0), _head(0), _capacity(size)
+		SysMPSCQueue(std::uint64_t size) : _tail(0), _head(0), _capacity(size)
 		{
 			_seq.resize(_capacity);
 			_data.resize(_capacity); // Calls T()
@@ -475,7 +476,6 @@ namespace mulex
 		std::deque<std::atomic<std::uint64_t>> _seq;
 		std::vector<T> _data;
 		std::uint64_t  _capacity;
-		SysAsyncEventLoop& _io;
 
 		// Force 64-bit (typical) cacheline size
 		alignas(64) std::atomic<std::uint64_t> _head;

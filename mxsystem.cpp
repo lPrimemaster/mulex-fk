@@ -380,6 +380,9 @@ namespace mulex
 
 	void SysCloseExperiment()
 	{
+		// Stop tracing
+		TrxClose();
+
 		// Force run stop if running
 		RunStop();
 
@@ -956,6 +959,11 @@ namespace mulex
 		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 	}
 
+	std::int64_t SysGetCurrentTimeNs()
+	{
+		return std::chrono::steady_clock::now().time_since_epoch().count();
+	}
+
 	std::string_view SysGetCacheDir()
 	{
 		if(!_mxcachedir.empty())
@@ -1384,6 +1392,7 @@ namespace mulex
 
 	bool EvtEmit(const std::string& event, const std::uint8_t* data, std::uint64_t len)
 	{
+		TrxTarget("Evt", "Emit");
 		return _sys_evt_thread->emit(event, data, len);
 	}
 

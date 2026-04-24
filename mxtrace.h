@@ -11,14 +11,6 @@
 	static constexpr const char* __trx_fname { TrxStaticStringAssert(group ":" name) }; \
 	const TrxScopeGuard __trx_target(TrxTag::NONE, SysFastHashConstEval(__trx_fname), __trx_fname);
 
-#if defined(_MSC_VER)
-    #define FORCE_INLINE __forceinline
-#elif defined(__GNUC__) || defined(__clang__)
-    #define FORCE_INLINE inline __attribute__((always_inline))
-#else
-    #define FORCE_INLINE inline
-#endif
-
 namespace mulex
 {
 	// NOTE: (César) Mental notes on tracing
@@ -67,6 +59,7 @@ namespace mulex
 		std::int64_t  _timestamp;
 
 		TrxTag        _tags;
+		std::uint8_t  _padding[3];
 		TrxFuncId	  _fid;
 	};
 
@@ -101,6 +94,7 @@ namespace mulex
 	}
 
 	void TrxInit();
+	void TrxClose();
 
 	MX_RPC_METHOD mulex::RPCGenericType TrxGetInternedMap();
 } // namespace mulex
