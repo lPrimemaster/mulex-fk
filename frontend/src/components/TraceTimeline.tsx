@@ -11,7 +11,7 @@ interface Timestamp {
 	end: number;
 };
 
-interface TraceRecord {
+export interface TraceRecord {
 	group: string;
 	name: string;
 	timestamp: Timestamp;
@@ -54,7 +54,7 @@ interface RenderContext {
 	renderMode: 'prop' | 'nonprop';
 };
 
-const TraceTimeline: Component = () => {
+export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) => {
 	// Element references
 	let canvas!: HTMLCanvasElement;
 	let wrap!: HTMLDivElement;
@@ -756,9 +756,6 @@ const TraceTimeline: Component = () => {
 			renderMode: 'nonprop'
 		};
 
-		// Setup lane 0 'System' first always
-		// lanes.set(0n, { name: 'System' });
-
 		// Setup canvas callbacks
 		let dragViewStart = 0;
 		let dragViewEnd = 0;
@@ -820,6 +817,7 @@ const TraceTimeline: Component = () => {
 			wrap.classList.remove('cursor-grabbing');
 
 			if(hoveringRecord && hoveringRecord === downRecord) {
+				props.onRecordSelect && props.onRecordSelect(hoveringRecord, lanes.get(hoveringRecord.clientid)?.name);
 				return;
 			}
 		});
@@ -864,5 +862,3 @@ const TraceTimeline: Component = () => {
 		</div>
 	);
 };
-
-export default TraceTimeline;
