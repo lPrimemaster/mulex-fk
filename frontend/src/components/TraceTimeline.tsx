@@ -2,7 +2,7 @@ import { Component, createSignal, onMount } from "solid-js";
 import { MxDoubleSwitch } from "~/api/Switch";
 import { MxGenericType } from "~/lib/convert";
 import { MxRdb } from "~/lib/rdb";
-import { hsvToRgb } from "~/lib/utils";
+import { formatTime, hsvToRgb } from "~/lib/utils";
 import { MxWebsocket } from "~/lib/websocket";
 import Card from "./Card";
 
@@ -41,6 +41,8 @@ interface TraceLane {
 	hidden: boolean;
 };
 
+type DisplayMode = 'prop' | 'nonprop';
+
 interface RenderContext {
 	rc: CanvasRenderingContext2D;
 	laneCount: number;
@@ -51,7 +53,7 @@ interface RenderContext {
 
 	titlesz: number;
 
-	renderMode: 'prop' | 'nonprop';
+	renderMode: DisplayMode;
 };
 
 export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) => {
@@ -102,6 +104,7 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 	// Shared state between draw state and solidjs
 	const [shouldStop, setShouldStop] = createSignal<boolean>(false);
 	const [showSysRecords, setShowSysRecords] = createSignal<boolean>(false);
+	const [displayMode, setDisplayMode] = createSignal<DisplayMode>('nonprop');
 
 	// Zero time offset
 	let timeOffset: BigInt | undefined = undefined;
@@ -352,28 +355,6 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 		}
 
 		return left < 2 ? '' : chars.slice(0, left - 1).join('') + ellipsis;
-	}
-
-	function formatTime(ns: number, digits: number = 0) {
-		const units = [
-			{ label: "ns", scale: 1 },
-			{ label: "us", scale: 1e3 },
-			{ label: "ms", scale: 1e6 },
-			{ label: "s",  scale: 1e9 },
-		];
-
-		let value = ns;
-		let unit = "ns";
-
-		for (let i = 0; i < units.length; i++) {
-			if (ns < units[i].scale * 1000 || i === units.length - 1) {
-				value = ns / units[i].scale;
-				unit = units[i].label;
-				break;
-			}
-		}
-
-		return `${value.toFixed(digits)}${unit}`;
 	}
 
 	function calculateTimeDelta(record: TraceRecord) {
@@ -753,7 +734,7 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 
 			titlesz: computeLaneStartOffset(lctx),
 
-			renderMode: 'nonprop'
+			renderMode: displayMode()
 		};
 
 		// Setup canvas callbacks
@@ -846,6 +827,7 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 								jumpToNow();
 							}
 						}}/>
+
 						<div class="text-sm font-bold">System Records</div>
 						<MxDoubleSwitch labelFalse="No" labelTrue="Yes" value={showSysRecords()} onChange={(v: boolean) => {
 							if(lanes.has(0x0n)) {
@@ -853,6 +835,12 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 								lanes.get(0x0n)!.hidden = !v;
 							}
 						}}/>
+
+						<div class="text-sm font-bold">Display Mode</div>
+						<div class="ml-[-60px]"><MxDoubleSwitch labelFalse="Proportional" labelTrue="Non-proportional" value={displayMode() === 'nonprop'} onChange={(v: boolean) => {
+							ctx.renderMode = v ? 'nonprop' : 'prop';
+							setDisplayMode(ctx.renderMode);
+						}}/></div>
 					</div>
 				</div>
 			</Card>

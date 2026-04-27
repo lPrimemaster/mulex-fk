@@ -6,6 +6,29 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function formatTime(ns: number, digits: number = 0, useSpace: boolean = false) {
+	const units = [
+		{ label: "ns", scale: 1 },
+		{ label: "us", scale: 1e3 },
+		{ label: "ms", scale: 1e6 },
+		{ label: "s",  scale: 1e9 },
+	];
+
+	let value = ns;
+	let unit = "ns";
+
+	for (let i = 0; i < units.length; i++) {
+		if (ns < units[i].scale * 1000 || i === units.length - 1) {
+			value = ns / units[i].scale;
+			unit = units[i].label;
+			break;
+		}
+	}
+
+	return `${value.toFixed(digits)}${useSpace ? ' ' : ''}${unit}`;
+}
+
+
 export function hsvToRgb(h: number, s: number, v: number) {
 	const c = v * s;
 	const x = c * (1 - Math.abs((h / 60) % 2 - 1));

@@ -3,6 +3,7 @@ import { DynamicTitle } from "./components/DynamicTitle";
 import Sidebar from "./components/Sidebar";
 import { TraceTimeline, TraceRecord } from "./components/TraceTimeline";
 import { MxPopup } from "./components/Popup";
+import { formatTime } from "./lib/utils";
 
 export const TraceViewer: Component = () => {
 	const [record, setRecord] = createSignal<TraceRecord | undefined>(undefined);
@@ -26,13 +27,13 @@ export const TraceViewer: Component = () => {
 		const r = record();
 		if(!r) return '';
 		if(!r.complete) return 'Still running...';
-		return (r.timestamp.end - r.timestamp.begin).toFixed(3); // TODO: (César) Format the string
+		return formatTime((r.timestamp.end - r.timestamp.begin) * 1_000_000, 3, true);
 	});
 
 	const recordStartTime = createMemo(() => {
 		const r = record();
 		if(!r) return '';
-		return (r.timestamp.begin).toFixed(3); // TODO: (César) Format the string
+		return formatTime(r.timestamp.begin * 1_000_000, 3, true);
 	});
 
 	return (
