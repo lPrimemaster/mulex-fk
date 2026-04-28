@@ -4,12 +4,12 @@
 
 // NOTE: (César) name must be known at compile-time
 #define TrxTargetTags(group, name, tags) \
-	static constexpr const char* __trx_fname { TrxStaticStringAssert(group ":" name) }; \
-	const TrxScopeGuard __trx_target(tags, SysFastHashConstEval(__trx_fname), __trx_fname);
+	static constexpr const char* __trx_fname { mulex::TrxStaticStringAssert(group ":" name) }; \
+	const mulex::TrxScopeGuard __trx_target(tags, mulex::SysFastHashConstEval(__trx_fname), __trx_fname);
 
 #define TrxTarget(group, name) \
-	static constexpr const char* __trx_fname { TrxStaticStringAssert(group ":" name) }; \
-	const TrxScopeGuard __trx_target(TrxTag::NONE, SysFastHashConstEval(__trx_fname), __trx_fname);
+	static constexpr const char* __trx_fname { mulex::TrxStaticStringAssert(group ":" name) }; \
+	const mulex::TrxScopeGuard __trx_target(mulex::TrxTag::NONE, mulex::SysFastHashConstEval(__trx_fname), __trx_fname);
 
 namespace mulex
 {
