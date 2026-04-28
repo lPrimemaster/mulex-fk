@@ -22,9 +22,12 @@ http.createServer((req, res) => {
 let lastSent = 0;
 chokidar.watch([path.join(OUT_DIR, 'index.html')], { ignoreInitial: true }).on('change', () => {
 	const now = Date.now();
-	if(now - lastSent < 1000) return;
+	if(now - lastSent < 5000) {
+		console.log('[reload] Debounce triggered...');
+		return;
+	}
 
-	console.log('[reload] Build changed, notifying clients...');
 	lastSent = now;
+	console.log('[reload] Build changed, notifying clients...');
 	clients.forEach(r => r.write('data: reload\n\n'));
 });

@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import { TraceTimeline, TraceRecord } from "./components/TraceTimeline";
 import { MxPopup } from "./components/Popup";
 import { formatTime } from "./lib/utils";
+import { SearchBarProvider } from "./components/SearchBar";
 
 export const TraceViewer: Component = () => {
 	const [record, setRecord] = createSignal<TraceRecord | undefined>(undefined);
@@ -41,7 +42,9 @@ export const TraceViewer: Component = () => {
 			<DynamicTitle title="Tracing"/>
 			<Sidebar/>
 			<div class="p-5 ml-36 mr-auto">
-				<TraceTimeline onRecordSelect={setRecordAndClientName}/>
+				<SearchBarProvider>
+					<TraceTimeline onRecordSelect={setRecordAndClientName}/>
+				</SearchBarProvider>
 			</div>
 			<MxPopup title='Trace Record' open={record() !== undefined} onOpenChange={() => setRecord(undefined)}>
 				<div class="grid grid-rows-6 grid-cols-2 gap-2">

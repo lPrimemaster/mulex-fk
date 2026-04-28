@@ -1,10 +1,14 @@
-import { Component, createSignal, onMount } from "solid-js";
+import { Accessor, Component, createEffect, createSignal, For, onMount, useContext } from "solid-js";
 import { MxDoubleSwitch } from "~/api/Switch";
 import { MxGenericType } from "~/lib/convert";
 import { MxRdb } from "~/lib/rdb";
 import { formatTime, hsvToRgb } from "~/lib/utils";
 import { MxWebsocket } from "~/lib/websocket";
 import Card from "./Card";
+import { SearchBar, SearchBarContext, SearchBarContextType } from "./SearchBar";
+import { untrack } from "solid-js/web";
+import { BadgeLabel } from "./ui/badge-label";
+import CrossIcon from '../assets/cross-circle.svg';
 
 interface Timestamp {
 	begin: number;
@@ -20,6 +24,7 @@ export interface TraceRecord {
 	complete: boolean;
 	layer: number;
 	hidden?: boolean;
+	filtered?: boolean;
 };
 
 interface TraceRecordBounds {
@@ -89,6 +94,7 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 	let internedStrings: Map<number, string> | undefined = undefined;
 	const addRecordWaiting = new Map<BigInt, Promise<boolean>>();
 	const systemAliasCids = new Map<BigInt, BigInt>();
+	const laneNamesDeferred = new Array<Function | undefined>();
 
 	// Colors
 	const CBG_0 = '#f3f4f6';
@@ -105,6 +111,8 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 	const [shouldStop, setShouldStop] = createSignal<boolean>(false);
 	const [showSysRecords, setShowSysRecords] = createSignal<boolean>(false);
 	const [displayMode, setDisplayMode] = createSignal<DisplayMode>('nonprop');
+	const [filters, setFilters] = createSignal<Array<string>>([]);
+	const { selectedItem } = useContext(SearchBarContext) as SearchBarContextType;
 
 	// Zero time offset
 	let timeOffset: BigInt | undefined = undefined;
@@ -143,26 +151,9 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 		}
 
 		let size = 0;
-		//for(const layer of lane.layers) {
 		for(let i = 0; i < lane.layers.length; i++) {
 			const layer = lane.layers[i];
-			/*
-			// Layer is empty -> hide
-			if(layer.length === 0) continue;
-			if(i < 3) console.log(i, 'A ');
-
-			// Layer is all to the left of the current view -> hide
-			let ts = getRecordRelativeTimestamp(ctx, layer[0]);
-			if(ts.begin > ctx.viewEnd) continue;
-			if(i < 3) console.log(i, 'B ');
-
-			// Layer is all to the left of the current view -> hide
-			ts = getRecordRelativeTimestamp(ctx, layer[layer.length - 1]);
-			if(ts.end < ctx.viewStart) continue;
-			if(i < 3) console.log(i, 'C ');
-			*/
-
-			// Otherwise check one-by-one -> hide
+			// Check one-by-one -> hide
 			if(layer.every(x => x.hidden) || lane.hidden) continue;
 			size++;
 		}
@@ -182,45 +173,48 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 			.reduce((r: number, x: TraceLane) => r + getLaneVisibleLayersCount(x) * LANE_HEIGHT, 0);
 	}
 
-	function drawLane(ctx: RenderContext, lane: TraceLane) {
+	function drawLaneDeferred(ctx: RenderContext, lane: TraceLane) {
 		if(lane.hidden) return;
-
-		const laney = getLaneY(ctx.laneCount);
 		lane.renderIndex = ctx.laneCount;
 
+		const laney = getLaneY(ctx.laneCount);
 		const laneh = LANE_HEIGHT * getLaneVisibleLayersCount(lane);
-
-		// BG on name
-		ctx.rc.fillStyle = (ctx.laneCount & 1) ? CBG_0 : CBG_1;
-		ctx.rc.fillRect(0, laney, 2 * LANE_ML + ctx.titlesz, laneh);
+		if(laneh === 0) return;
 
 		// BG on lane itself
-		ctx.rc.fillStyle = (ctx.laneCount & 1) ? muted(CBG_0) : muted(CBG_1);
+		ctx.rc.fillStyle = (lane.renderIndex! & 1) ? muted(CBG_0) : muted(CBG_1);
 		ctx.rc.fillRect(2 * LANE_ML + ctx.titlesz, laney, canvas.width, laneh);
-
-		// Lane name
-		ctx.rc.fillStyle = CTEXT;
 		ctx.rc.textBaseline = 'middle';
-		ctx.rc.textAlign = 'left';
-		ctx.rc.font = '14px monospace';
-		ctx.rc.fillText(lane.name, LANE_ML, laney + laneh / 2);
 
-		// Lane vertical boundary 
-		ctx.rc.strokeStyle = CLINE_0;
-		ctx.rc.lineWidth = 1.5;
-		ctx.rc.beginPath();
-		ctx.rc.moveTo(2 * LANE_ML + ctx.titlesz, laney);
-		ctx.rc.lineTo(2 * LANE_ML + ctx.titlesz, laney + laneh);
-		ctx.rc.stroke();
-		ctx.rc.closePath();
-		ctx.rc.lineWidth = 1;
+		return () => {
+			// BG on name
+			ctx.rc.fillStyle = (lane.renderIndex! & 1) ? CBG_0 : CBG_1;
+			ctx.rc.fillRect(0, laney, 2 * LANE_ML + ctx.titlesz, laneh);
 
-		// Lane horizontal boundary
-		ctx.rc.beginPath();
-		ctx.rc.moveTo(0, laney + laneh);
-		ctx.rc.lineTo(canvas.width, laney + laneh);
-		ctx.rc.stroke();
-		ctx.rc.closePath();
+			// Lane name
+			ctx.rc.fillStyle = CTEXT;
+			ctx.rc.textBaseline = 'middle';
+			ctx.rc.textAlign = 'left';
+			ctx.rc.font = '14px monospace';
+			ctx.rc.fillText(lane.name, LANE_ML, laney + laneh / 2);
+
+			// Lane vertical boundary 
+			ctx.rc.strokeStyle = CLINE_0;
+			ctx.rc.lineWidth = 1.5;
+			ctx.rc.beginPath();
+			ctx.rc.moveTo(2 * LANE_ML + ctx.titlesz, laney);
+			ctx.rc.lineTo(2 * LANE_ML + ctx.titlesz, laney + laneh);
+			ctx.rc.stroke();
+			ctx.rc.closePath();
+			ctx.rc.lineWidth = 1;
+
+			// Lane horizontal boundary
+			ctx.rc.beginPath();
+			ctx.rc.moveTo(0, laney + laneh);
+			ctx.rc.lineTo(canvas.width, laney + laneh);
+			ctx.rc.stroke();
+			ctx.rc.closePath();
+		};
 	}
 
 	function msToX(ctx: RenderContext, ms: number) {
@@ -295,9 +289,16 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 		return performance.now() - perfStartTime;
 	}
 
-	function isRecordHidden(ctx: RenderContext, begin: number, end: number) {
+	function isRecordFiltered(record: TraceRecord) {
+		const recordType = record.group + ':' + record.name;
+		const f = filters();
+		return f.length > 0 && !f.includes(recordType);
+	}
+
+	function isRecordHidden(ctx: RenderContext, record: TraceRecord, begin: number, end: number) {
 		return end < (ctx.viewStart + Number(ctx.viewOffset.valueOf())) ||
-			   begin > (ctx.viewEnd + Number(ctx.viewOffset.valueOf()));
+			   begin > (ctx.viewEnd + Number(ctx.viewOffset.valueOf())) ||
+			   isRecordFiltered(record);
 	}
 
 	function getRecordRelativeTimestamp(ctx: RenderContext, record: TraceRecord) {
@@ -319,8 +320,8 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 			return groupColors.get(group)!;
 		}
 
-		// TODO: Insert random-ish color for new group
-		// 		 (color wheel based ?)
+		// TODO: (César) Insert random-ish color for new group
+		// 		 		 (color wheel based ?)
 		return undefined;
 	}
 
@@ -363,14 +364,8 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 		return formatTime(ns);
 	}
 
-	// TODO: (César) Optimize
 	function isLayerDrawable(layer: TraceLayer) {
-		/*
-		for(let i = 0; i < layer.length; i++) {
-			console.log('Checking layer: ', i, ' record: ', layer[i].recordReference.complete);
-		}
-		*/
-		return layer.length === 0 || layer.reverse().every(x => x.complete);
+		return layer.length === 0 || layer.reverse().every(x => x.complete || x.filtered);
 	}
 
 	function getLaneFirstAvailableLayer(lane: TraceLane) {
@@ -391,12 +386,12 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 		const rts = getRecordRelativeTimestamp(ctx, record);
 		const diff = rts.end - rts.begin;
 		const extraw = (ctx.renderMode === 'nonprop' && diff < RECORD_MIN_W_MS) ? RECORD_MIN_W_MS - diff : 0;
-		const rxs = Math.max(msToX(ctx, rts.begin), ctx.titlesz + 2 * LANE_ML);
+		const rxs = Math.max(msToX(ctx, rts.begin), 0);// ctx.titlesz + 2 * LANE_ML);
 		const rxe = Math.min(msToX(ctx, rts.end + extraw), canvas.width);
 		const rw = rxe - rxs;
 
 		// If the record is out of the view skip rendering it
-		record.hidden = isRecordHidden(ctx, rts.begin, rts.end + extraw);
+		record.hidden = isRecordHidden(ctx, record, rts.begin, rts.end + extraw);
 		if(record.hidden) return;
 
 		const lane = getRecordLane(record);
@@ -405,6 +400,8 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 			// Skip rendering to avoid crashes
 			return;
 		}
+
+		if(lane.name !== 'System') console.log(lane, record);
 
 		const layer = record.layer;
 		const ry = getLaneY(lane.renderIndex);
@@ -524,8 +521,9 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 		ctx.rc.fillRect(0, 0, W, H);
 
 		// Lanes
+		laneNamesDeferred.length = 0;
 		for(const [_, lane] of lanes) {
-			drawLane(ctx, lane);
+			laneNamesDeferred.push(drawLaneDeferred(ctx, lane));
 			ctx.laneCount++;
 		}
 
@@ -535,6 +533,11 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 		// Draw data
 		for(const record of records) {
 			drawRecord(ctx, record);
+		}
+
+		// Lane headers
+		for(const drawLaneNameHeader of laneNamesDeferred) {
+			drawLaneNameHeader && drawLaneNameHeader();
 		}
 
 		// Draw now line
@@ -568,6 +571,11 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 		const addInternal = () => {
 			record.clientid = recordMutateSysCids(record);
 			record.layer = getLaneFirstAvailableLayer(getRecordLane(record)!);
+			record.filtered = isRecordFiltered(record);
+			// TODO: (César) If we want filtered records to "come back" to the line
+			// 				 while the filter was on we need to refresh all records
+			// 				 on filter change
+			if(record.filtered) return;
 			records.push(record);
 			lanes.get(record.clientid)!.layers[record.layer].push(record);
 			resize();
@@ -709,16 +717,36 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 		draw();
 		requestAnimationFrame(tick);
 	}
+	
+	createEffect(() => {
+		const newFilter = selectedItem();
+		if(newFilter.length === 0) return;
 
-	onMount(() => {
+		const lfilters = untrack(filters);
+		if(!lfilters.includes(newFilter)) {
+			setFilters((p) => [...p, newFilter]);
+		}
+	});
+
+	onMount(async () => {
 		// Get interned strings
-		MxWebsocket.instance.rpc_call('mulex::TrxGetInternedMap', [], 'generic').then((value: MxGenericType) => {
-			const data = value.unpack(['uint32', 'str128']);
-			internedStrings = new Map<number, string>(data);
-		});
+		const value = await MxWebsocket.instance.rpc_call('mulex::TrxGetInternedMap', [], 'generic');
+		const data = value.unpack(['uint32', 'str128']);
+		internedStrings = new Map<number, string>(data);
 
 		// Trace record events
 		MxWebsocket.instance.subscribe('mxtrace::record', (data: Uint8Array) => readRecordsEventBuffer(data));
+
+		// New interned string events
+		MxWebsocket.instance.subscribe('mxtrace::intern_newval', async (data: Uint8Array) => {
+			if(internedStrings) {
+				const [id, name] = MxGenericType.fromData(data).unpack(['uint32', 'str128'])[0];
+				internedStrings.set(id, name);
+			}
+			else {
+				console.error('Interned Strings map is undefined.');
+			}
+		});
 
 		// Rendering
 		// Compute lane name max size
@@ -818,8 +846,8 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 	return (
 		<div>
 			<Card title="Options">
-				<div class="flex gap-10">
-					<div class="grid grid-rows-2 grid-cols-2 gap-2 items-center">
+				<div class="flex gap-10 mt-5">
+					<div class="grid grid-rows-3 grid-cols-2 gap-2 items-center">
 						<div class="text-sm font-bold">Realtime</div>
 						<MxDoubleSwitch labelFalse="No" labelTrue="Yes" value={!shouldStop()} onChange={(v: boolean) => {
 							setShouldStop(!v);
@@ -836,11 +864,31 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 							}
 						}}/>
 
-						<div class="text-sm font-bold">Display Mode</div>
-						<div class="ml-[-60px]"><MxDoubleSwitch labelFalse="Proportional" labelTrue="Non-proportional" value={displayMode() === 'nonprop'} onChange={(v: boolean) => {
-							ctx.renderMode = v ? 'nonprop' : 'prop';
+						<div class="text-sm font-bold">Proportional Mode</div>
+						<MxDoubleSwitch labelFalse="No" labelTrue="Yes" value={displayMode() === 'prop'} onChange={(v: boolean) => {
+							ctx.renderMode = v ? 'prop' : 'nonprop';
 							setDisplayMode(ctx.renderMode);
-						}}/></div>
+						}}/>
+					</div>
+					<div class="flex flex-col gap-2 w-full">
+						<div class="w-full">
+							<SearchBar
+								items={records.map(x => x.group + ':' + x.name).filter((o, i, s) => i == s.findIndex(t => t === o))}
+								dropdown={true}
+								placeholder="Filter Records..."
+							/>
+						</div>
+						<div class="flex gap-1">
+							<For each={filters()}>{(filter: string, index: Accessor<number>) => 
+								<BadgeLabel type="display" class="flex gap-1 -ml-1">
+									<span class="cursor-pointer" onClick={() => setFilters((p) => p.filter((_, i) => i !== index()))}>
+										{ /* @ts-ignore */}
+										<CrossIcon class="size-4"/>
+									</span>
+									<span>{filter}</span>
+								</BadgeLabel>
+							}</For>
+						</div>
 					</div>
 				</div>
 			</Card>

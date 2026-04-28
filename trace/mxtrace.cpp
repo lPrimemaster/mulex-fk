@@ -37,7 +37,7 @@ static std::atomic<bool>					  	 _trx_flush_pending = false;
 static std::unordered_map<std::uint32_t, std::string_view, std::identity> _trx_id_interner_map;
 static std::shared_mutex  									  			  _trx_id_interner_lock;
 
-struct TrxInternNewValueEvent
+struct alignas(4) TrxInternNewValueEvent
 {
 	mulex::TrxFuncId _id;
 	mulex::string128 _str;
