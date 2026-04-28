@@ -21,6 +21,7 @@ for multiple backends and frontends. As long as your machines have ethernet conn
 - User login system
 - Electronic logbook
 - Run file logging
+- Basic tracing
 
 ## Natively Supported Backend APIs
 - C++
