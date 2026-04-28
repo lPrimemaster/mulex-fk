@@ -459,7 +459,6 @@ class RPCGenerator:
         self.buffer.write('#else\n')
         self.buffer.write('#define ZoneScoped\n')
         self.buffer.write('#endif\n')
-        # self.buffer.write('#include ')
         self._write_newline()
         for file, methods in self.methods.items():
             if len(methods):
@@ -532,6 +531,9 @@ class RPCGenerator:
         method, mid, _ = idt
         self._write_indented(3, f'case {mid}:\n')
         self._write_indented(3, '{\n')
+
+        # Generate trace record info
+        self._write_indented(4, f'TrxTarget("Rpc", \"{method.name}\");\n')
 
         # Static assertion checks for trivially copyable
         # for non void and non generic types
