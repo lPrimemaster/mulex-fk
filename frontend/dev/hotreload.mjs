@@ -19,7 +19,12 @@ http.createServer((req, res) => {
 }).listen(3000);
 
 // Watch the output dir for changes
+let lastSent = 0;
 chokidar.watch([path.join(OUT_DIR, 'index.html')], { ignoreInitial: true }).on('change', () => {
+	const now = Date.now();
+	if(now - lastSent < 1000) return;
+
 	console.log('[reload] Build changed, notifying clients...');
+	lastSent = now;
 	clients.forEach(r => r.write('data: reload\n\n'));
 });
