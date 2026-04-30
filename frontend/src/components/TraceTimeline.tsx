@@ -874,7 +874,7 @@ export const TraceTimeline: Component<{ onRecordSelect?: Function }> = (props) =
 						<div class="w-full">
 							<SearchBar
 								items={records.map(x => x.group + ':' + x.name).filter((o, i, s) => i == s.findIndex(t => t === o))}
-								dropdown={true}
+								dropdown
 								placeholder="Filter Records..."
 							/>
 						</div>

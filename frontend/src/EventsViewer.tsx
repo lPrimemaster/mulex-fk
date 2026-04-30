@@ -61,7 +61,7 @@ interface CaptureDataList {
 
 export const EventsViewer : Component = () => {
 
-	const [gmode, setGmode] = createSignal<boolean>(false);
+	const [gmode, setGmode] = createSignal<boolean>(true);
 	const [sysEvents, setSysEvents] = createSignal<boolean>(false);
 	const [pollFast, setPollFast] = createSignal<boolean>(true);
 	const [popupID, setPopupID] = createSignal<number>(0);
@@ -255,7 +255,7 @@ export const EventsViewer : Component = () => {
 					<div class="flex gap-10">
 						<div class="grid grid-rows-2 grid-cols-2 gap-2 items-center">
 							<div class="text-sm font-bold">Mode</div>
-							<MxDoubleSwitch labelFalse="Table" labelTrue="Graphical" value={gmode()} onChange={() => setGmode(!gmode())} disabled/>
+							<MxDoubleSwitch labelFalse="Table" labelTrue="Graphical" value={gmode()} onChange={() => setGmode(!gmode())}/>
 
 							<div class="text-sm font-bold">View System Events</div>
 							{
@@ -275,16 +275,16 @@ export const EventsViewer : Component = () => {
 					<DiGraph
 						nodes={[
 							{
-								x: 100, y: 100, title: 'Node 1', id: 'n0', content: <div class="text-wrap">Hello content! With wrapping enabled, since it is large.</div>
+								x: 100, y: 100, title: 'Node 1', id: 'n0'
 							},
 							{
-								x: 300, y: 150, title: 'Node 2', id: 'n1', content: <div>Hello content!</div>
+								x: 300, y: 150, title: 'Node 2', id: 'n1'
 							},
 							{
-								x: 300, y: 300, title: 'Node 3', id: 'n2', content: <div>Hello content!</div>
+								x: 300, y: 300, title: 'Node 3', id: 'n2'
 							}
 						]}
-						edges={[{ from: 'n0', to: 'n1', label: '5 Gb/s' }, { from: 'n0', to: 'n2' }]}
+						edges={[{ source: 'n0', target: 'n1', label: '5 Gb/s' }, { source: 'n0', target: 'n2' }]}
 					/>
 				</Show>
 				<Show when={!gmode()}>
