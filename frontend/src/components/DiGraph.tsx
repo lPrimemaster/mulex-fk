@@ -1,7 +1,8 @@
-import { Component, onMount } from "solid-js";
+import { Component, createEffect, onMount } from "solid-js";
 import { hsvToRgb } from "~/lib/utils";
 
 type NodeId = string;
+type EdgeId = string;
 
 // NOTE: (César)
 // Node ids are like following for identification:
@@ -10,8 +11,6 @@ type NodeId = string;
 // -> bck-0, bck-1, ...
 
 interface Node {
-	x: number;
-	y: number;
 	title: string;
 	id: NodeId;
 };
@@ -20,6 +19,16 @@ interface Edge {
 	source: NodeId;
 	target: NodeId;
 	label?: string;
+};
+
+export type {
+	Node as DiNode,
+	Edge as DiEdge
+};
+
+interface NodeInternal {
+	x: number;
+	y: number;
 };
 
 export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (props) => {
@@ -43,10 +52,11 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	const NODE_H = 128;
 	const NODE_HEADER_H = 20;
 	const EDGE_W = 3;
+	const NODE_P = NODE_W / 16;
 
 	// Containers
-	const nodes = new Array<Node>();
-	const edges = new Array<Edge>();
+	const nodes = new Map<NodeId, NodeInternal>();
+	//const edges = new Map<EdgeId, Edge>();
 
 	// Other
 	let lastFrameTime = performance.now();
@@ -169,6 +179,17 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	}
 	`;
 
+	createEffect(() => {
+		for(const node of props.nodes) {
+			if(!nodes.has(node.id)) {
+				nodes.set(node.id, {
+					x: 0,
+					y: 0
+				});
+			}
+		}
+	});
+
 	onMount(() => {
 		ctx = canvas.getContext('2d')!;
 		gl = glCanvas.getContext('webgl2', { alpha: true })!;
@@ -186,41 +207,9 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 
 		initGL();
 
-		nodes.push({
-			x: 100,
-			y: 100,
-			title: 'My Node',
-			id: 'evt-0'
-		});
-
-		nodes.push({
-			x: 700,
-			y: 300,
-			title: 'My Bck',
-			id: 'bck-0'
-		});
-
-		nodes.push({
-			x: 900,
-			y: 50,
-			title: 'My Bck',
-			id: 'bck-1'
-		});
-
-		edges.push({
-			source: 'evt-0',
-			target: 'bck-0'
-		});
-
-		edges.push({
-			source: 'bck-0',
-			target: 'bck-1'
-		});
-
-
 		// Setup canvas callbacks
-		let hoveringNode: Node | undefined = undefined;
-		let downNode: Node | undefined = undefined;
+		let hoveringNode: NodeInternal | undefined = undefined;
+		let downNode: NodeInternal | undefined = undefined;
 		let mouseDown: { x: number, y: number } | undefined = undefined;
 		canvas.addEventListener('mousemove', (event: MouseEvent) => {
 			const p = mousePos(event);
@@ -233,7 +222,7 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 
 			wrap.classList.replace('cursor-grab', 'cursor-default');
 			hoveringNode = undefined;
-			for(const node of nodes) {
+			for(const node of nodes.values()) {
 				if(intersectNode(p, node)) {
 					wrap.classList.add('cursor-grab');
 					hoveringNode = node;
@@ -263,24 +252,27 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		return { x, y };
 	}
 
-	function intersectNode(mpos: { x: number, y: number }, node: Node) {
+	function intersectNode(mpos: { x: number, y: number }, node: NodeInternal) {
 		return mpos.x >= node.x && mpos.x <= node.x + NODE_W && mpos.y >= node.y && mpos.y <= node.y + NODE_H;
 	}
 
 	function drawBG() {
-		ctx.fillStyle = CBG_0;
-		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+	}
+
+	function getNodeType(node: Node) {
+		return node.id.split('-')[0];
 	}
 
 	function getNodeColor(node: Node) {
-		const nodeType = node.id.split('-')[0];
-		return nodeType === 'evt' ?
+		return getNodeType(node) === 'evt' ?
 			hsvToRgb(10, 0.8, 0.7) :
 			hsvToRgb(120, 0.8, 0.6);
 	}
 
-	function drawNode(node: Node) {
-		const color = getNodeColor(node);
+	function drawNode(node: NodeInternal, enode: Node) {
+		const type = getNodeType(enode);
+		const color = getNodeColor(enode);
 
 		ctx.fillStyle = color + 'C0';
 		ctx.beginPath();
@@ -301,13 +293,30 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		ctx.stroke();
 		ctx.closePath();
 
-		const nodeType = node.id.split('-')[0];
-		const nodeTitle = nodeType === 'evt' ? 'Event' : 'Client';
+		const nodeTitle = type === 'evt' ? 'Event' : 'Client';
 		ctx.font = '17px monospace';
 		ctx.textBaseline = 'middle';
 		ctx.textAlign = 'center';
 		ctx.fillStyle = CTEXT;
 		ctx.fillText(nodeTitle, node.x + NODE_W / 2, node.y + NODE_HEADER_H / 2);
+
+		const TEXT_OFFSET = 16;
+		let offset = 0;
+		const nodeId = '  Id: 0x' + enode.id;
+		ctx.font = '17px monospace';
+		ctx.textBaseline = 'top';
+		ctx.textAlign = 'left';
+		ctx.fillStyle = CTEXT;
+		ctx.fillText(nodeId, node.x + NODE_P, node.y + NODE_HEADER_H + NODE_P / 2 + offset);
+		offset += TEXT_OFFSET;
+
+		const nodeName = 'Name: ' + enode.title;
+		ctx.font = '17px monospace';
+		ctx.textBaseline = 'top';
+		ctx.textAlign = 'left';
+		ctx.fillStyle = CTEXT;
+		ctx.fillText(nodeName, node.x + NODE_P, node.y + NODE_HEADER_H + NODE_P / 2 + offset);
+		offset += TEXT_OFFSET;
 	}
 
 	function getBezierControlPoints(sx: number, sy: number, tx: number, ty: number) {
@@ -404,7 +413,6 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 
 	function drawFlowAnimatedBezier(sx: number, sy: number, tx: number, ty: number) {
 		const cp = getBezierControlPoints(sx, sy, tx, ty);
-		console.log((sx / glCanvas.width) * 2.0 - 1.0, (sy / glCanvas.height) * 2.0 - 1.0);
 		gl.uniform2f(glloc.p0, sx, sy);
 		gl.uniform2f(glloc.p1, cp.x1, cp.y1);
 		gl.uniform2f(glloc.p2, cp.x2, cp.y2);
@@ -413,10 +421,13 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	}
 
 	function drawEdge(edge: Edge) {
-		const sourceNode = nodes.find(n => n.id === edge.source);
-		const targetNode = nodes.find(n => n.id === edge.target);
+		const sourceNode = nodes.get(edge.source);
+		const targetNode = nodes.get(edge.target);
 
-		if(!sourceNode || !targetNode || sourceNode === targetNode) return;
+		const sourceNodeP = props.nodes.find(n => n.id === edge.source);
+		const targetNodeP = props.nodes.find(n => n.id === edge.target);
+
+		if(!sourceNode || !targetNode || sourceNode === targetNode || !sourceNodeP || !targetNodeP) return;
 
 		const sx = sourceNode.x + NODE_W;
 		const sy = sourceNode.y + NODE_H / 2;
@@ -424,7 +435,7 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		const ty = targetNode.y + NODE_H / 2;
 
 		// TODO: (César) De-duplicate
-		const colorSource = getNodeColor(sourceNode);
+		const colorSource = getNodeColor(sourceNodeP);
 		ctx.fillStyle = colorSource + 'FF';
 		ctx.strokeStyle = CLINE_0;
 		ctx.beginPath();
@@ -434,7 +445,7 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		ctx.closePath();
 
 		// TODO: (César) De-duplicate
-		const colorTarget = getNodeColor(targetNode);
+		const colorTarget = getNodeColor(targetNodeP);
 		ctx.fillStyle = colorTarget + 'FF';
 		ctx.strokeStyle = CLINE_0;
 		ctx.beginPath();
@@ -460,9 +471,12 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		drawBG();
 		
 		setupGLRenderThisFrame();
-		for(const edge of edges) { drawEdge(edge); }
+		if(props.edges) for(const edge of props.edges) { drawEdge(edge); }
 
-		for(const node of nodes) { drawNode(node); }
+		for(const node of props.nodes) {
+			const inode = nodes.get(node.id);
+			inode && drawNode(inode, node);
+		}
 
 		requestAnimationFrame(draw);
 	}
@@ -480,8 +494,8 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	return (
 		<div>
 			<div ref={wrap} class='relative'>
+				<canvas ref={glCanvas} class='rounded-lg absolute inset-0 pointer-events-none bg-gray-100'/>
 				<canvas ref={canvas} class='rounded-lg shadow-md hover:shadow-lg absolute inset-0'/>
-				<canvas ref={glCanvas} class='rounded-lg absolute inset-0 pointer-events-none'/>
 			</div>
 		</div>
 	);

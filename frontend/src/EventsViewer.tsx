@@ -2,7 +2,7 @@ import { Component, createEffect, createSignal, Show, on, For } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import Sidebar from './components/Sidebar';
 import { DynamicTitle } from './components/DynamicTitle';
-import { DiGraph } from './components/DiGraph';
+import { DiEdge, DiGraph, DiNode } from './components/DiGraph';
 import { MxWebsocket } from './lib/websocket';
 import Card from './components/Card';
 import { MxDoubleSwitch } from './api/Switch';
@@ -18,6 +18,7 @@ import { MxCaptureBadge, MxTickBadge } from './components/Badges';
 import { createSetStore } from './lib/rset';
 import { MxTree, MxTreeNode } from './components/TreeNode';
 import { MxHexTable } from './components/HexTable';
+import { MxRdb } from './lib/rdb';
 
 interface EventIO {
 	read: number;
@@ -59,8 +60,17 @@ interface CaptureDataList {
 	[key: number]: Uint8Array;
 };
 
-export const EventsViewer : Component = () => {
+interface NodeList {
+	[key: string]: DiNode;
+};
 
+interface EdgeList {
+	[key: string]: DiEdge;
+};
+
+// TODO: (César) Add event filter
+
+export const EventsViewer : Component = () => {
 	const [gmode, setGmode] = createSignal<boolean>(true);
 	const [sysEvents, setSysEvents] = createSignal<boolean>(false);
 	const [pollFast, setPollFast] = createSignal<boolean>(true);
@@ -74,6 +84,10 @@ export const EventsViewer : Component = () => {
 	const [captureTick, captureTickActions] = createSetStore<number>([]);
 	const [captureCollapse, captureCollapseActions] = createMapStore<number, boolean>(new Map<number, boolean>());
 
+	const [nodes, setNodes] = createStore<NodeList>();
+	const [edges, setEdges] = createStore<EdgeList>();
+
+	const clientNameCache = new Map<string, string>();
 
 	let iid: NodeJS.Timeout;
 
@@ -138,6 +152,142 @@ export const EventsViewer : Component = () => {
 		return (evt !== undefined && evt.clients !== undefined) ? Array.from(Object.entries(evt.clients)) : [];
 	}
 
+	function getUniqueClients() {
+		const clients = new Array<string>();
+		for(const key in eventsMeta) {
+			const event = eventsMeta[key];
+			for(const ckey in event.clients) {
+				if(clients.find(x => ckey === x) === undefined) {
+					clients.push(ckey);
+				}
+			}
+		}
+		return clients;
+	}
+
+	async function getClientName(client: string) {
+		if(clientNameCache.has(client)) {
+			return clientNameCache.get(client)!;
+		}
+
+		const rdb = new MxRdb();
+		const tkey = '/system/backends/' + client + '/name';
+		if(await rdb.exists(tkey)) {
+			const name = await rdb.read(tkey);
+			clientNameCache.set(client, name);
+			return name as string;
+		}
+
+		// We are a ghost
+		const name = 'System (FE)';
+		clientNameCache.set(client, name);
+		return name;
+	}
+
+	// TODO: (César) Check if node is ghost and thus
+	// 				 insert it as a system node
+	async function updateNodes() {
+		const clients = getUniqueClients();
+
+		if(sysEvents()) {
+			setNodes('0', { title: 'System', id: '0' });
+			for(const client of clients) {
+				if((await getClientName(client)).includes('System (FE)')) {
+					setNodes(client, { title: await getClientName(client), id: client });
+				}
+			}
+		}
+		else {
+			setNodes(produce(s => delete s['0']));
+			for(const client of clients) {
+				if((await getClientName(client)).includes('System (FE)')) {
+					setNodes(produce(s => delete s[client]));
+				}
+			}
+		}
+
+		for(const client of clients) {
+			if(!(await getClientName(client)).includes('System (FE)')) {
+				setNodes(client, { title: await getClientName(client), id: client });
+			}
+		}
+	}
+
+	function findSinksAndSources() {
+		const total = new Array<{ name: string, sinks: Array<string>, sources: Array<string> }>();
+
+
+		for(const key in eventsMeta) {
+			const event = eventsMeta[key];
+			const sinks = new Array<string>();
+			const sources = new Array<string>();
+
+			for(const client in event.clients) {
+				const io = event.clients[client];
+				console.log(client, '->', io?.read, io?.write);
+				if(io && io.read > 0) sinks.push(client);
+				if(io && io.write > 0) sources.push(client);
+			}
+
+			(sinks.length > 0 || sources.length > 0) && total.push({
+				name: event.name,
+				sinks: sinks,
+				sources: sources
+			});
+		}
+
+		return total;
+	}
+
+	// NOTE: (César) Here we can add all regardless
+	// 				 and let the renderer figure out
+	// 				 what to use given the available
+	// 				 nodes that were exposed
+	function updateEdges() {
+		const eventss = findSinksAndSources();
+
+		setEdges(produce(s => {
+			for(const e in s) {
+				delete s[e];
+			}
+		}));
+
+		for(const ess of eventss) {
+			if(ess.sources.length === 0 && ess.sinks.length !== 0) {
+				// We have rogue sinks
+				// These come from System events
+				for(const sink of ess.sinks) {
+					setEdges('0-' + sink, {
+						source: '0',
+						target: sink
+					});
+					console.log('Setting edge:', '0-'+sink);
+				}
+			}
+			else if(ess.sources.length !== 0 && ess.sinks.length === 0) {
+				// We have rogue sources
+				// These come from System events
+				for(const source of ess.sources) {
+					setEdges(source + '-0', {
+						source: source,
+						target: '0'
+					});
+					console.log('Setting edge:', source+'-0');
+				}
+			}
+			else {
+				for(const source of ess.sources) {
+					for(const sink of ess.sinks) {
+						setEdges(source + '-' + sink, {
+							source: source,
+							target: sink
+						});
+					}
+				}
+			}
+		}
+	}
+
 	async function readEventStatistics() {
 		const data = await MxWebsocket.instance.rpc_call('mulex::EvtGetAllMetadata', [], 'generic');
 		const events = data.unpack(['int16', 'str32', 'uint64', 'bytearray', 'bytearray']);
@@ -195,6 +345,11 @@ export const EventsViewer : Component = () => {
 					}
 				};
 			});
+		}
+
+		if(gmode()) {
+			updateNodes();
+			updateEdges();
 		}
 	}
 
@@ -273,18 +428,8 @@ export const EventsViewer : Component = () => {
 				</Card>
 				<Show when={gmode()}>
 					<DiGraph
-						nodes={[
-							{
-								x: 100, y: 100, title: 'Node 1', id: 'n0'
-							},
-							{
-								x: 300, y: 150, title: 'Node 2', id: 'n1'
-							},
-							{
-								x: 300, y: 300, title: 'Node 3', id: 'n2'
-							}
-						]}
-						edges={[{ source: 'n0', target: 'n1', label: '5 Gb/s' }, { source: 'n0', target: 'n2' }]}
+						nodes={Object.values(nodes)}
+						edges={Object.values(edges)}
 					/>
 				</Show>
 				<Show when={!gmode()}>
