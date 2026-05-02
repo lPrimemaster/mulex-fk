@@ -33,7 +33,7 @@ class TestBackend(Backend):
 
         print('Tesing event subscription...')
 
-        # self.subscribe('TestBackend::dummy', lambda data: print(data))
+        self.subscribe('TestBackend::dummy', lambda data: print(data))
 
         self.log(TestBackend.LogType.INFO, 'Getting events from test_bck...')
 

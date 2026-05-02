@@ -31,13 +31,19 @@ interface NodeInternal {
 	y: number;
 };
 
+interface EdgeInternal {
+	extraHeight: number;
+};
+
 export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (props) => {
 	// Element references
 	let canvas!: HTMLCanvasElement;
 	let glCanvas!: HTMLCanvasElement;
+	let bgCanvas!: HTMLCanvasElement;
 	let wrap!: HTMLDivElement;
 	let ctx!: CanvasRenderingContext2D;
 	let gl!: WebGL2RenderingContext;
+	let bgctx!: CanvasRenderingContext2D;
 
 	// Colors
 	const CBG_0 = '#f3f4f6';
@@ -46,6 +52,7 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	const CLINE_0 = '#b4b4b7';
 	const CLINE_1 = '#d4d4d7';
 	const CLINE_2 = '#545457';
+	const CLINE_3 = '#f4f4f7';
 
 	// Sizes
 	const NODE_W = 256;
@@ -53,13 +60,23 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	const NODE_HEADER_H = 20;
 	const EDGE_W = 3;
 	const NODE_P = NODE_W / 16;
+	const LABEL_W = 128;
+	const LABEL_H = 25;
+	const BG_XLINES = 20;
 
 	// Containers
 	const nodes = new Map<NodeId, NodeInternal>();
-	//const edges = new Map<EdgeId, Edge>();
+	const edges = new Map<EdgeId, EdgeInternal>();
+	let persistentNodePosition = new Map<NodeId, NodeInternal>();
+	const animations = new Array<{ callback: Function, frame: number }>;
 
 	// Other
 	let lastFrameTime = performance.now();
+	const view = { x: 0, y: 0 };
+	const mouseLastFrame = { x: 0, y: 0 };
+	let gxoff = 0;
+	let gyoff = 0;
+	let labelExpandedH = 0;
 
 	// OpenGL stuff
 	let glloc = {
@@ -70,6 +87,7 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		time: null as WebGLUniformLocation | null,
 		resolution: null as WebGLUniformLocation | null,
 		ewidth: null as WebGLUniformLocation | null,
+		view: null as WebGLUniformLocation | null
 	};
 	const SEGMENTS = 64;
 	let vertexCount = 0;
@@ -128,6 +146,7 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 
 	uniform float u_thickness;
 	uniform vec2 u_resolution;
+	uniform vec2 u_view;
 
 	out float vT;
 	out float vSide;
@@ -167,7 +186,7 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		// perpendicular
 		vec2 normal = vec2(-tan.y, tan.x);
 
-		pos += normal * a_side * u_thickness;
+		pos += normal * a_side * u_thickness + u_view;
 
 		// screen → clip space
 		vec2 clip = toClip(pos);
@@ -179,13 +198,41 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	}
 	`;
 
+	
+	// TODO: (César): Build tree instead of using naive getNextAvailablePos
+	function buildNodeTree() {
+	}
+
+	function restoreNodePos(id: string) {
+		return persistentNodePosition.get(id);
+	}
+
+	function getNextAvailablePos() {
+		const pos = { x: gxoff, y: gyoff };
+
+		pos.x = Math.max(10, pos.x);
+		pos.y = Math.max(10, pos.y);
+
+		gxoff += NODE_W * 2.5;
+		gyoff += NODE_H * 0.5;
+		return pos;
+	}
+
 	createEffect(() => {
 		for(const node of props.nodes) {
 			if(!nodes.has(node.id)) {
-				nodes.set(node.id, {
-					x: 0,
-					y: 0
-				});
+				nodes.set(node.id, restoreNodePos(node.id) ?? getNextAvailablePos());
+				persistentNodePosition.set(node.id, nodes.get(node.id)!);
+			}
+		}
+	});
+
+	createEffect(() => {
+		if(!props.edges) return;
+		for(const edge of props.edges) {
+			const key = edge.source + '-' + edge.target;
+			if(!edges.has(key)) {
+				edges.set(key, { extraHeight: 0 });
 			}
 		}
 	});
@@ -193,6 +240,21 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	onMount(() => {
 		ctx = canvas.getContext('2d')!;
 		gl = glCanvas.getContext('webgl2', { alpha: true })!;
+		bgctx = bgCanvas.getContext('2d')!;
+
+		const rawnp = localStorage.getItem('persistent-node-position');
+		if(rawnp) {
+			persistentNodePosition = new Map(JSON.parse(rawnp));
+		}
+
+		const rawview = localStorage.getItem('persistent-view');
+		if(rawview) {
+			const lview = JSON.parse(rawview);
+			view.x = lview.x;
+			view.y = lview.y;
+		}
+
+		wrap.classList.add('cursor-move');
 
 		const dpr = window.devicePixelRatio || 1;
 		canvas.width = canvas.clientWidth * dpr;
@@ -211,22 +273,43 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		let hoveringNode: NodeInternal | undefined = undefined;
 		let downNode: NodeInternal | undefined = undefined;
 		let mouseDown: { x: number, y: number } | undefined = undefined;
+		let atLabel: Edge | undefined = undefined;
 		canvas.addEventListener('mousemove', (event: MouseEvent) => {
 			const p = mousePos(event);
+			const md = getMouseDelta(event);
 
-			if(mouseDown && downNode) {
-				downNode.x += p.x - mouseDown.x;
-				downNode.y += p.y - mouseDown.y;
-				mouseDown = p;
+			if(!atLabel) {
+				if(mouseDown && downNode) {
+					downNode.x += p.x - mouseDown.x;
+					downNode.y += p.y - mouseDown.y;
+					mouseDown = p;
+				}
+				else if(mouseDown) {
+					view.x += md.dx;
+					view.y += md.dy;
+				}
 			}
 
-			wrap.classList.replace('cursor-grab', 'cursor-default');
+			atLabel = undefined;
+
+			wrap.classList.replace('cursor-grab', 'cursor-move');
+			wrap.classList.replace('cursor-pointer', 'cursor-move');
 			hoveringNode = undefined;
 			for(const node of nodes.values()) {
 				if(intersectNode(p, node)) {
-					wrap.classList.add('cursor-grab');
+					wrap.classList.replace('cursor-move', 'cursor-grab');
 					hoveringNode = node;
-					break;
+					return;
+				}
+			}
+
+			if(props.edges) {
+				for(const edge of props.edges) {
+					if(intersectEdgeLabel(p, edge)) {
+						wrap.classList.replace('cursor-move', 'cursor-pointer');
+						atLabel = edge;
+						return;
+					}
 				}
 			}
 		});
@@ -234,30 +317,135 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		canvas.addEventListener('mousedown', (event: MouseEvent) => {
 			if(event.button !== 0) return;
 			downNode = hoveringNode;
+			if(downNode) {
+				wrap.classList.replace('cursor-grab', 'cursor-grabbing');
+			}
 			mouseDown = mousePos(event);
 		});
 
 		canvas.addEventListener('mouseup', (event: MouseEvent) => {
 			if(event.button !== 0) return;
+
+			if(downNode) {
+				localStorage.setItem('persistent-node-position', JSON.stringify([...persistentNodePosition]));
+			}
+			else {
+				localStorage.setItem('persistent-view', JSON.stringify(view));
+			}
+
+			if(atLabel) {
+				const key = atLabel.source + '-' + atLabel.target;
+				const iedge = edges.get(key);
+				if(iedge) {
+					const op = iedge.extraHeight >= 70 ? () => iedge.extraHeight -= 10 : () => iedge.extraHeight += 10;
+					pushAnimation((frame: number, self: number) => {
+						op();
+						if(frame > 7) {
+							// TODO: (César) Add some data to the node
+
+							popAnimation(self);
+						}
+					});
+				}
+			}
+
 			downNode = undefined;
+			mouseDown = undefined;
+			wrap.classList.replace('cursor-grabbing', 'cursor-grab');
 		});
 
 		resize();
 	});
 
+	function pushAnimation(callback: Function) {
+		animations.push({ callback: callback, frame: 0 });
+	}
+
+	function popAnimation(id: number) {
+		animations.splice(id, 1);
+	}
+
 	function mousePos(event: MouseEvent) {
+		const rect = canvas.getBoundingClientRect();
+		const x = event.clientX - rect.left - view.x;
+		const y = event.clientY - rect.top - view.y;
+		return { x, y };
+	}
+
+	function getMouseDelta(event: MouseEvent) {
 		const rect = canvas.getBoundingClientRect();
 		const x = event.clientX - rect.left;
 		const y = event.clientY - rect.top;
-		return { x, y };
+
+		const dx = x - mouseLastFrame.x;
+		const dy = y - mouseLastFrame.y;
+
+		mouseLastFrame.x = x;
+		mouseLastFrame.y = y;
+
+		return { dx, dy };
 	}
 
 	function intersectNode(mpos: { x: number, y: number }, node: NodeInternal) {
 		return mpos.x >= node.x && mpos.x <= node.x + NODE_W && mpos.y >= node.y && mpos.y <= node.y + NODE_H;
 	}
 
+	function intersectEdgeLabel(mpos: { x: number, y: number }, edge: Edge) {
+		if(!nodes.has(edge.source) || !nodes.has(edge.target)) return false;
+
+		const sourceNode = nodes.get(edge.source)!;
+		const targetNode = nodes.get(edge.target)!;
+
+		const sx = sourceNode.x + NODE_W;
+		const sy = sourceNode.y + NODE_H / 2;
+		const tx = targetNode.x;
+		const ty = targetNode.y + NODE_H / 2;
+
+		const cp = getBezierControlPoints(sx, sy, tx, ty);
+		const bangle = getBezierMidpointAngle(sx, sy, tx, ty, cp);
+
+		const cx = (sx + tx) / 2;
+		const cy = (sy + ty) / 2;
+
+		const dx = mpos.x - cx;
+		const dy = mpos.y - cy;
+
+		const ct = Math.cos(bangle);
+		const st = Math.sin(bangle);
+
+		const lx = dx * ct + dy * st;
+		const ly = -dx * st + dy * ct
+
+		const key = edge.source + '-' + edge.target;
+		const extraH = edges.get(key)?.extraHeight ?? 0;
+
+		return Math.abs(lx) <= LABEL_W / 2 && Math.abs(ly) <= (LABEL_H + extraH) / 2;
+	}
+
 	function drawBG() {
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		const ylines = bgCanvas.height / bgCanvas.width * BG_XLINES;
+		const size = bgCanvas.width / BG_XLINES;
+
+		for(let i = -2; i < BG_XLINES + 2; i++) {
+			const x = ((i + 0.5) / BG_XLINES) * bgCanvas.width;
+
+			bgctx.beginPath();
+			bgctx.strokeStyle = CLINE_1;
+			bgctx.moveTo(x, -2 * size);
+			bgctx.lineTo(x, bgCanvas.height + 2 * size);
+			bgctx.stroke();
+			bgctx.closePath();
+		}
+		for(let j = -2; j < ylines + 2; j++) {
+			const y = ((j + 0.5) / ylines) * bgCanvas.height;
+
+			bgctx.beginPath();
+			bgctx.strokeStyle = CLINE_1;
+			bgctx.moveTo(-2 * size, y);
+			bgctx.lineTo(bgCanvas.width + 2 * size, y);
+			bgctx.stroke();
+			bgctx.closePath();
+		}
 	}
 
 	function getNodeType(node: Node) {
@@ -397,6 +585,7 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		glloc.time = gl.getUniformLocation(program, "u_time");
 		glloc.resolution = gl.getUniformLocation(program, "u_resolution");
 		glloc.ewidth = gl.getUniformLocation(program, "u_thickness");
+		glloc.view = gl.getUniformLocation(program, "u_view");
 
 		initGeometry();
 	}
@@ -406,13 +595,38 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		gl.useProgram(program);
 		gl.bindVertexArray(vao);
 
+		gl.uniform2f(glloc.view, view.x, view.y);
 		gl.uniform2f(glloc.resolution, glCanvas.width, glCanvas.height);
 		gl.uniform1f(glloc.time, performance.now());
 		gl.uniform1f(glloc.ewidth, EDGE_W);
 	}
 
-	function drawFlowAnimatedBezier(sx: number, sy: number, tx: number, ty: number) {
-		const cp = getBezierControlPoints(sx, sy, tx, ty);
+	function getBezierMidpointAngle(
+		sx: number, sy: number,
+		tx: number, ty: number,
+		cp: { x1: number, y1: number, x2: number, y2: number }
+	) {
+		const Ax = (sx + cp.x1) / 2;
+		const Bx = (cp.x1 + cp.x2) / 2;
+		const Cx = (cp.x2 + tx) / 2;
+
+		const Ay = (sy + cp.y1) / 2;
+		const By = (cp.y1 + cp.y2) / 2;
+		const Cy = (cp.y2 + ty) / 2;
+
+		const Dx = (Ax + Bx) / 2;
+		const Dy = (Ay + By) / 2;
+
+		const Ex = (Bx + Cx) / 2;
+		const Ey = (By + Cy) / 2;
+
+		const dx = Ex - Dx;
+		const dy = Ey - Dy;
+
+		return Math.atan2(dy, dx);
+	}
+
+	function drawFlowAnimatedBezier(sx: number, sy: number, tx: number, ty: number, cp: { x1: number, y1: number, x2: number, y2: number }) {
 		gl.uniform2f(glloc.p0, sx, sy);
 		gl.uniform2f(glloc.p1, cp.x1, cp.y1);
 		gl.uniform2f(glloc.p2, cp.x2, cp.y2);
@@ -434,7 +648,6 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		const tx = targetNode.x;
 		const ty = targetNode.y + NODE_H / 2;
 
-		// TODO: (César) De-duplicate
 		const colorSource = getNodeColor(sourceNodeP);
 		ctx.fillStyle = colorSource + 'FF';
 		ctx.strokeStyle = CLINE_0;
@@ -444,7 +657,6 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		ctx.stroke();
 		ctx.closePath();
 
-		// TODO: (César) De-duplicate
 		const colorTarget = getNodeColor(targetNodeP);
 		ctx.fillStyle = colorTarget + 'FF';
 		ctx.strokeStyle = CLINE_0;
@@ -454,7 +666,51 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		ctx.stroke();
 		ctx.closePath();
 
-		drawFlowAnimatedBezier(sx, sy, tx, ty);
+		const cp = getBezierControlPoints(sx, sy, tx, ty);
+
+		if(Math.hypot(sx - tx, sy - ty) > 200) {
+			const key = edge.source + '-' + edge.target;
+			const iedge = edges.get(key);
+			const extraH = (iedge?.extraHeight ?? 0);
+			const bangle = getBezierMidpointAngle(sx, sy, tx, ty, cp);
+			const offset = (Math.abs(bangle) > Math.PI / 2) ? Math.PI : 0.0;
+			// Render label
+			ctx.fillStyle = hsvToRgb(120, 0.7, 0.7) + 'F0';
+			const lx = (tx + sx) / 2;
+			const ly = (ty + sy) / 2;
+			ctx.beginPath();
+			ctx.save();
+			ctx.translate(lx, ly);
+			ctx.rotate(bangle);
+			ctx.roundRect(-LABEL_W / 2, -LABEL_H / 2 - extraH / 2, LABEL_W, LABEL_H + extraH, 3);
+			ctx.fill();
+			if(edge.label) {
+				ctx.font = '12px monospace';
+				ctx.textAlign = 'center';
+				ctx.textBaseline = 'middle';
+				ctx.fillStyle = CTEXT;
+				ctx.rotate(offset);
+				ctx.fillText(edge.label, 0, -extraH / 2, LABEL_W - 2);
+			}
+			ctx.restore();
+			ctx.closePath();
+		}
+
+		drawFlowAnimatedBezier(sx, sy, tx, ty, cp);
+	}
+
+	function translateView(render: Function) {
+		ctx.save();
+		bgctx.save();
+
+		const size = bgCanvas.width / BG_XLINES;
+		ctx.translate(view.x, view.y);
+		bgctx.translate(view.x % size, view.y % size);
+
+		render();
+
+		ctx.restore();
+		bgctx.restore();
 	}
 
 	function draw(now: number | null) {
@@ -468,22 +724,35 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 			lastFrameTime = now;
 		}
 
-		drawBG();
-		
-		setupGLRenderThisFrame();
-		if(props.edges) for(const edge of props.edges) { drawEdge(edge); }
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		bgctx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
 
-		for(const node of props.nodes) {
-			const inode = nodes.get(node.id);
-			inode && drawNode(inode, node);
+		// Update animations (Frame based for now)
+		for(const [i, anim] of animations.entries()) {
+			anim.callback(anim.frame++, i);
 		}
 
-		requestAnimationFrame(draw);
+		translateView(() => {
+			drawBG();
+			
+			setupGLRenderThisFrame();
+			if(props.edges) for(const edge of props.edges) { drawEdge(edge); }
+
+			for(const node of props.nodes) {
+				const inode = nodes.get(node.id);
+				inode && drawNode(inode, node);
+			}
+
+			requestAnimationFrame(draw);
+		});
 	}
 
 	function resize() {
 		canvas.width = wrap.clientWidth;
 		canvas.height = 500;
+
+		bgCanvas.width = wrap.clientWidth;
+		bgCanvas.height = 500;
 
 		glCanvas.width = wrap.clientWidth;
 		glCanvas.height = 500;
@@ -494,7 +763,8 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	return (
 		<div>
 			<div ref={wrap} class='relative'>
-				<canvas ref={glCanvas} class='rounded-lg absolute inset-0 pointer-events-none bg-gray-100'/>
+				<canvas ref={bgCanvas} class='rounded-lg absolute inset-0 pointer-events-none bg-gray-100'/>
+				<canvas ref={glCanvas} class='rounded-lg absolute inset-0 pointer-events-none'/>
 				<canvas ref={canvas} class='rounded-lg shadow-md hover:shadow-lg absolute inset-0'/>
 			</div>
 		</div>

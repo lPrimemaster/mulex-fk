@@ -184,8 +184,6 @@ export const EventsViewer : Component = () => {
 		return name;
 	}
 
-	// TODO: (César) Check if node is ghost and thus
-	// 				 insert it as a system node
 	async function updateNodes() {
 		const clients = getUniqueClients();
 
@@ -224,7 +222,6 @@ export const EventsViewer : Component = () => {
 
 			for(const client in event.clients) {
 				const io = event.clients[client];
-				console.log(client, '->', io?.read, io?.write);
 				if(io && io.read > 0) sinks.push(client);
 				if(io && io.write > 0) sources.push(client);
 			}
@@ -254,25 +251,27 @@ export const EventsViewer : Component = () => {
 
 		for(const ess of eventss) {
 			if(ess.sources.length === 0 && ess.sinks.length !== 0) {
+				if(!checkSystemEvent(ess.name)) continue;
 				// We have rogue sinks
 				// These come from System events
 				for(const sink of ess.sinks) {
 					setEdges('0-' + sink, {
 						source: '0',
-						target: sink
+						target: sink,
+						label: ess.name
 					});
-					console.log('Setting edge:', '0-'+sink);
 				}
 			}
 			else if(ess.sources.length !== 0 && ess.sinks.length === 0) {
+				if(!checkSystemEvent(ess.name)) continue;
 				// We have rogue sources
 				// These come from System events
 				for(const source of ess.sources) {
 					setEdges(source + '-0', {
 						source: source,
-						target: '0'
+						target: '0',
+						label: ess.name
 					});
-					console.log('Setting edge:', source+'-0');
 				}
 			}
 			else {
@@ -280,7 +279,8 @@ export const EventsViewer : Component = () => {
 					for(const sink of ess.sinks) {
 						setEdges(source + '-' + sink, {
 							source: source,
-							target: sink
+							target: sink,
+							label: ess.name
 						});
 					}
 				}
