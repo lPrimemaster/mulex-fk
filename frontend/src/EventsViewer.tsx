@@ -71,7 +71,7 @@ interface EdgeList {
 // TODO: (César) Add event filter
 
 export const EventsViewer : Component = () => {
-	const [gmode, setGmode] = createSignal<boolean>(true);
+	const [gmode, setGmode] = createSignal<boolean>(false);
 	const [sysEvents, setSysEvents] = createSignal<boolean>(false);
 	const [pollFast, setPollFast] = createSignal<boolean>(true);
 	const [popupID, setPopupID] = createSignal<number>(0);
@@ -212,7 +212,7 @@ export const EventsViewer : Component = () => {
 	}
 
 	function findSinksAndSources() {
-		const total = new Array<{ name: string, sinks: Array<string>, sources: Array<string> }>();
+		const total = new Array<{ name: string, sinks: Array<string>, sources: Array<string>, meta: EventMeta }>();
 
 
 		for(const key in eventsMeta) {
@@ -229,7 +229,8 @@ export const EventsViewer : Component = () => {
 			(sinks.length > 0 || sources.length > 0) && total.push({
 				name: event.name,
 				sinks: sinks,
-				sources: sources
+				sources: sources,
+				meta: event
 			});
 		}
 
@@ -258,7 +259,8 @@ export const EventsViewer : Component = () => {
 					setEdges('0-' + sink, {
 						source: '0',
 						target: sink,
-						label: ess.name
+						label: ess.name,
+						throughput: ess.meta.clients?.[sink]?.read
 					});
 				}
 			}
@@ -270,7 +272,8 @@ export const EventsViewer : Component = () => {
 					setEdges(source + '-0', {
 						source: source,
 						target: '0',
-						label: ess.name
+						label: ess.name,
+						throughput: ess.meta.clients?.[source]?.write
 					});
 				}
 			}
@@ -280,7 +283,8 @@ export const EventsViewer : Component = () => {
 						setEdges(source + '-' + sink, {
 							source: source,
 							target: sink,
-							label: ess.name
+							label: ess.name,
+							throughput: ess.meta.clients?.[source]?.write
 						});
 					}
 				}

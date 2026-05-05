@@ -1,5 +1,7 @@
-import { Component, createEffect, onMount } from "solid-js";
-import { hsvToRgb } from "~/lib/utils";
+import { Component, createEffect, onMount, Show } from "solid-js";
+import { MxSpinner } from "~/api";
+import { bps_to_string, hsvToRgb } from "~/lib/utils";
+import { MxPopup } from "./Popup";
 
 type NodeId = string;
 type EdgeId = string;
@@ -19,6 +21,7 @@ interface Edge {
 	source: NodeId;
 	target: NodeId;
 	label?: string;
+	throughput?: number;
 };
 
 export type {
@@ -63,6 +66,9 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	const LABEL_W = 128;
 	const LABEL_H = 25;
 	const BG_XLINES = 20;
+	const LABEL_EXPAND_H = 50;
+	const LABEL_EXPAND_RATE = 10;
+	const LABEL_DISPLAY_THR = 200;
 
 	// Containers
 	const nodes = new Map<NodeId, NodeInternal>();
@@ -76,7 +82,6 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	const mouseLastFrame = { x: 0, y: 0 };
 	let gxoff = 0;
 	let gyoff = 0;
-	let labelExpandedH = 0;
 
 	// OpenGL stuff
 	let glloc = {
@@ -218,6 +223,10 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		return pos;
 	}
 
+	function getEdgeKey(edge: Edge) {
+		return edge.source + '-' + edge.target;
+	}
+
 	createEffect(() => {
 		for(const node of props.nodes) {
 			if(!nodes.has(node.id)) {
@@ -230,7 +239,7 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 	createEffect(() => {
 		if(!props.edges) return;
 		for(const edge of props.edges) {
-			const key = edge.source + '-' + edge.target;
+			const key = getEdgeKey(edge);
 			if(!edges.has(key)) {
 				edges.set(key, { extraHeight: 0 });
 			}
@@ -334,18 +343,16 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 			}
 
 			if(atLabel) {
-				const key = atLabel.source + '-' + atLabel.target;
+				const key = getEdgeKey(atLabel);
 				const iedge = edges.get(key);
 				if(iedge) {
-					const op = iedge.extraHeight >= 70 ? () => iedge.extraHeight -= 10 : () => iedge.extraHeight += 10;
-					pushAnimation((frame: number, self: number) => {
-						op();
-						if(frame > 7) {
-							// TODO: (César) Add some data to the node
-
-							popAnimation(self);
-						}
-					});
+					const operation = iedge.extraHeight >= LABEL_EXPAND_H ?
+						() => iedge.extraHeight -= LABEL_EXPAND_RATE :
+						() => iedge.extraHeight += LABEL_EXPAND_RATE;
+					const predicate = iedge.extraHeight >= LABEL_EXPAND_H ?
+						() => iedge.extraHeight > 0 :
+						() => iedge.extraHeight <= LABEL_EXPAND_H;
+					pushAnimationPredicate(operation, predicate);
 				}
 			}
 
@@ -357,8 +364,20 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		resize();
 	});
 
+	/*
 	function pushAnimation(callback: Function) {
 		animations.push({ callback: callback, frame: 0 });
+	}
+	*/
+
+	function pushAnimationPredicate(callback: Function, predicate: Function) {
+		animations.push({
+			callback: (frame: number, self: number) => {
+				callback(frame, self);
+				if(!predicate()) popAnimation(self);
+			},
+			frame: 0
+		});
 	}
 
 	function popAnimation(id: number) {
@@ -401,6 +420,10 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		const tx = targetNode.x;
 		const ty = targetNode.y + NODE_H / 2;
 
+		if(Math.hypot(sx - tx, sy - ty) <= LABEL_DISPLAY_THR) {
+			return false;
+		}
+
 		const cp = getBezierControlPoints(sx, sy, tx, ty);
 		const bangle = getBezierMidpointAngle(sx, sy, tx, ty, cp);
 
@@ -416,10 +439,10 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 		const lx = dx * ct + dy * st;
 		const ly = -dx * st + dy * ct
 
-		const key = edge.source + '-' + edge.target;
+		const key = getEdgeKey(edge);
 		const extraH = edges.get(key)?.extraHeight ?? 0;
 
-		return Math.abs(lx) <= LABEL_W / 2 && Math.abs(ly) <= (LABEL_H + extraH) / 2;
+		return Math.abs(lx) <= LABEL_W / 2 && Math.abs(ly - extraH / 2) <= (LABEL_H / 2) + extraH / 2;
 	}
 
 	function drawBG() {
@@ -668,32 +691,47 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 
 		const cp = getBezierControlPoints(sx, sy, tx, ty);
 
-		if(Math.hypot(sx - tx, sy - ty) > 200) {
-			const key = edge.source + '-' + edge.target;
+		// Render label
+		if(Math.hypot(sx - tx, sy - ty) > LABEL_DISPLAY_THR) {
+			const key = getEdgeKey(edge);
 			const iedge = edges.get(key);
 			const extraH = (iedge?.extraHeight ?? 0);
 			const bangle = getBezierMidpointAngle(sx, sy, tx, ty, cp);
 			const offset = (Math.abs(bangle) > Math.PI / 2) ? Math.PI : 0.0;
-			// Render label
 			ctx.fillStyle = hsvToRgb(120, 0.7, 0.7) + 'F0';
 			const lx = (tx + sx) / 2;
 			const ly = (ty + sy) / 2;
-			ctx.beginPath();
 			ctx.save();
+			ctx.beginPath();
 			ctx.translate(lx, ly);
-			ctx.rotate(bangle);
-			ctx.roundRect(-LABEL_W / 2, -LABEL_H / 2 - extraH / 2, LABEL_W, LABEL_H + extraH, 3);
+			ctx.rotate(bangle + offset);
+			ctx.roundRect(-LABEL_W / 2, -LABEL_H / 2, LABEL_W, LABEL_H + extraH, 3);
 			ctx.fill();
+			ctx.closePath();
 			if(edge.label) {
 				ctx.font = '12px monospace';
 				ctx.textAlign = 'center';
 				ctx.textBaseline = 'middle';
 				ctx.fillStyle = CTEXT;
-				ctx.rotate(offset);
-				ctx.fillText(edge.label, 0, -extraH / 2, LABEL_W - 2);
+				ctx.fillText(edge.label, 0, 0, LABEL_W - 2);
+
+				if(extraH >= LABEL_EXPAND_H) {
+					const pad = 35;
+					const size = 25;
+					ctx.textAlign = 'center';
+					ctx.textBaseline = 'bottom';
+					ctx.fillText('Throughtput', 0, pad, LABEL_W - 2);
+					ctx.fillStyle = CBG_0;
+					ctx.beginPath();
+					ctx.roundRect(-LABEL_W / 2 + 10, pad + 2, LABEL_W - 20, size, 3);
+					ctx.fill();
+					ctx.closePath();
+					ctx.textBaseline = 'middle';
+					ctx.fillStyle = CTEXT;
+					ctx.fillText(edge.throughput && bps_to_string(edge.throughput, false) || 'unknown', 0, pad + 2 + size / 2);
+				}
 			}
 			ctx.restore();
-			ctx.closePath();
 		}
 
 		drawFlowAnimatedBezier(sx, sy, tx, ty, cp);
@@ -766,6 +804,13 @@ export const DiGraph: Component<{ nodes: Array<Node>, edges?: Array<Edge> }> = (
 				<canvas ref={bgCanvas} class='rounded-lg absolute inset-0 pointer-events-none bg-gray-100'/>
 				<canvas ref={glCanvas} class='rounded-lg absolute inset-0 pointer-events-none'/>
 				<canvas ref={canvas} class='rounded-lg shadow-md hover:shadow-lg absolute inset-0'/>
+				<Show when={props.nodes.length === 0}>
+					<div class='absolute inset-0 flex items-center justify-center h-32'>
+						<div class='py-5 bg-gray-200 w-1/4 rounded-lg shadow-md'>
+							<MxSpinner description={'Waiting for events...'}/>
+						</div>
+					</div>
+				</Show>
 			</div>
 		</div>
 	);
