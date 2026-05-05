@@ -405,8 +405,10 @@ namespace mulex
 				failLog("Not running. Not marked required.");
 			}
 		}
-
-		LogDebug("[rexdependencymanager] Dependency <%s> already running.", _dep_name.c_str());
+		else
+		{
+			LogDebug("[rexdependencymanager] Dependency <%s> already running.", _dep_name.c_str());
+		}
 	}
 
 	bool MxRexDependencyManager::checkDependencyExists()
