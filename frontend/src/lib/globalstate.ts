@@ -226,10 +226,12 @@ async function init_backend_status() {
 	});
 
 	// Connection metrics
-	rdb.watch('/system/backends/*/statistics/event/*', async (key: string) => {
-		const res = await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(key)], 'generic');
+	rdb.watch('/system/backends/*/statistics/event/*', async (key: string, value: MxGenericType) => {
+		//const res = await MxWebsocket.instance.rpc_call('mulex::RdbReadValueDirect', [MxGenericType.str512(key)], 'generic');
 		const cid = extract_backend_name(key);
-		const speed = res.astype('uint32');
+		//const speed = res.astype('uint32');
+		const speed = value.astype('uint32');
+		//console.log(speed, value.astype('uint32'));
 		if(key.endsWith('read')) {
 			setBackends(cid, { evt_download_speed: speed });
 		}
