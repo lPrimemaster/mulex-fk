@@ -544,6 +544,25 @@ namespace mulex
 		LogTrace("[mxbackend] Log run file OK.");
 	}
 
+	void MxBackend::runStart()
+	{
+		if(_init_ok && _experiment)
+		{
+			if(!_experiment->_rpc_client->call<bool>(RPC_CALL_MULEX_RUNSTART))
+			{
+				LogError("[mxbackend] Failed to programatically change run state to start.");
+			}
+		}
+	}
+
+	void MxBackend::runStop()
+	{
+		if(_init_ok && _experiment)
+		{
+			_experiment->_rpc_client->callRaw(RPC_CALL_MULEX_RUNSTOP, {}, nullptr);
+		}
+	}
+
 	void MxBackend::bypassIntHandler(bool value)
 	{
 		_bypass_int_sig = value;
