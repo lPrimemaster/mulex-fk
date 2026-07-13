@@ -156,7 +156,7 @@ namespace mulex
 	template<typename T>
 	inline constexpr std::size_t SysVargSize(T& t)
 	{
-		if constexpr(std::is_same_v<T, mulex::RPCGenericType>)
+		if constexpr(std::is_same_v<std::remove_cvref_t<T>, mulex::RPCGenericType>)
 		{
 			return t.getSize() + sizeof(std::uint64_t);
 		}

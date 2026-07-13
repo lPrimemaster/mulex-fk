@@ -238,7 +238,11 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 								<MxButton onClick={() => {
 									MxWebsocket.instance.rpc_call('mulex::RdbWriteValueDirect', [
 										MxGenericType.str512(path() + '/' + name()),
-										MxGenericType.fromValue(writeValue(), type().toLowerCase(), 'generic')
+										MxGenericType.fromValue(
+											writeValue(),
+											type().toLowerCase() + (type().toLowerCase() === 'string' ? '512' : ''),
+											'generic'
+										)
 									], 'none');
 									setOpenEdit(false);
 								}} disabled={!editValidator()}>Save</MxButton>
