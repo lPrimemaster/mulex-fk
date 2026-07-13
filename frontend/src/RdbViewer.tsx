@@ -79,6 +79,11 @@ const RdbKeyDisplay: Component<{ ref?: HTMLDivElement }> = (props) => {
 			return false;
 		}
 
+		if(typeof writeValue() === 'string' &&
+		   (writeValue() as string).length === 0) {
+			return false;
+		}
+
 		return true;
 	}
 
