@@ -18,7 +18,7 @@ option(GH_ACTION_MODE "Signals this configure is running in a github action." OF
 option(CREATE_PACKAGE "Create a tar package for this install target. Package for kpm." OFF)
 
 # Version configuration
-project(mulex-fk VERSION 1.2.5)
+project(mulex-fk VERSION 1.2.6)
 set(PROJECT_VNAME "Aquarii")
 
 set(CMAKE_CXX_STANDARD 20)
