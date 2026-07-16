@@ -359,7 +359,7 @@ namespace mulex
 		return hash;
 	}
 
-	bool SysSpawnProcess(const std::string& binary, const std::string& workdir, const std::vector<std::string>& argv);
+	bool SysSpawnProcess(const std::string& binary, const std::optional<std::string>& workdir, const std::vector<std::string>& argv);
 #ifdef __linux__
 	using SysProcHandle = pid_t;
 #else

@@ -40,25 +40,12 @@ static bool RexStartBackgroundDaemon(const char* self)
 	LogMessage("[mxrexs] Rexs daemon started.");
 	return true;
 #else
-	// On Windows spawn this process in the background without arguments
-	STARTUPINFOA si;
-	PROCESS_INFORMATION pi;
-	ZeroMemory(&si, sizeof(si));
-	ZeroMemory(&pi, sizeof(pi));
-
-	if(!CreateProcess(
-		NULL, const_cast<char*>(self), NULL, NULL, FALSE,
-		CREATE_NO_WINDOW | DETACHED_PROCESS,
-		NULL, NULL, &si, &pi
-	))
+	if(!SysSpawnProcess(self, std::nullopt, {}))
 	{
-		LogError("[mxrexs] Failed to start rexs daemon.");
+		LogError("[mxrexs] Daemonize failed or not available on this system.");
+		LogDebug("[mxrexs] Aborting execution.");
 		return false;
 	}
-
-	LogMessage("[mxrexs] Rexs daemon started.");
-	CloseHandle(pi.hProcess);
-	CloseHandle(pi.hThread);
 	return true;
 #endif
 }

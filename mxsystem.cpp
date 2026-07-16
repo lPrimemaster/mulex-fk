@@ -158,15 +158,15 @@ namespace mulex
 		SysAddArgumentI("daemon", 'D', false, [](const std::string&){
 			if(!SysDaemonize())
 			{
-#ifdef __linux__
 				LogError("Daemonize failed or not available on this system.");
-#else
-				LogError("Daemonize is not available on Windows.");
-#endif
 				LogDebug("Aborting execution.");
 				::exit(0);
 			}
-		}, "Turn the current process into a daemon (linux only).");
+
+#ifdef _WIN32
+			::exit(0);
+#endif
+		}, "Turn the current process into a daemon.");
 
 		SysAddArgumentI("version", 'v', false, [](const std::string&){
 			std::cout << "v" MX_VSTR " - " MX_VNAME << " (" << MX_HASH "-" << MX_BRANCH << ")" << std::endl;
@@ -291,11 +291,23 @@ namespace mulex
 
 		return true;
 #else
-		// Do nothing on windows
-		// TODO: (Cesar) Implement a service or some other mechanism to mimic a daemon on windows
-		//				 This already works on mxrexs with '--start'
-		//				 One could just reimplement this for '-D'
-		return false;
+		auto commands = SysStringSplitOnTokenSkipCommas(GetCommandLineA(), ' ');
+		std::erase(commands, "-D");
+		std::erase(commands, "--daemon");
+
+		std::stringstream ss;
+		for(const auto& cmd : commands)
+		{
+			ss << cmd << " ";
+		}
+
+		if(!SysSpawnProcess(ss.str(), std::nullopt, {}))
+		{
+			LogError("[mxrexs] Daemonize failed or not available on this system.");
+			LogDebug("[mxrexs] Aborting execution.");
+			return false;
+		}
+		return true;
 #endif
 	}
 
@@ -1455,7 +1467,7 @@ namespace mulex
 		return false;	
 	}
 
-	bool SysSpawnProcess(const std::string& binary, const std::string& workdir, const std::vector<std::string>& argv)
+	bool SysSpawnProcess(const std::string& binary, const std::optional<std::string>& workdir, const std::vector<std::string>& argv)
 	{
 #ifdef __linux__
 		pid_t pid = ::fork();
@@ -1464,13 +1476,15 @@ namespace mulex
 			LogError("SysSpawnProcess: Failed to fork process.");
 			return false;
 		}
+
+		const char* wdir = workdir.has_value() ? workdir.value().c_str() : nullptr;
 		
 		// Child process
 		if(pid == 0)
 		{
-			if(::chdir(workdir.c_str()) != 0)
+			if(wdir && ::chdir(wdir) != 0)
 			{
-				LogError("SysSpawnProcess: Failed to change to working directory <%s>.", workdir.c_str());
+				LogError("SysSpawnProcess: Failed to change to working directory <%s>.", wdir);
 				::exit(EXIT_FAILURE);
 			}
 
@@ -1495,7 +1509,7 @@ namespace mulex
 			LogDebug("\tName: %s", filename.c_str());
 			LogDebug("\tBinary: %s", binary.c_str());
 			LogDebug("\tArgs: %s", ss.str().c_str());
-			LogDebug("\tWorkdir: %s", workdir.c_str());
+			LogDebug("\tWorkdir: %s", wdir ? wdir : "<same as parent>");
 
 			for(int i = 0; i < 3; i++)
 			{
@@ -1533,6 +1547,8 @@ namespace mulex
 		PROCESS_INFORMATION pi;
 		ZeroMemory( &pi, sizeof(pi) );
 
+		const char* wdir = workdir.has_value() ? workdir.value().c_str() : nullptr;
+
 		std::string filename = binary.substr(binary.find_last_of("/\\") + 1);
 		std::ostringstream ss;
 
@@ -1545,7 +1561,7 @@ namespace mulex
 		LogDebug("Details:");
 		LogDebug("\tName: %s", filename.c_str());
 		LogDebug("\tArgs: %s", ss.str().c_str());
-		LogDebug("\tWorkdir: %s", workdir.c_str());
+		LogDebug("\tWorkdir: %s", wdir ? wdir : "<same as parent>");
 
 		BOOL success = CreateProcessA(
 			NULL, //filename.c_str(),
@@ -1555,7 +1571,7 @@ namespace mulex
 			FALSE,
 			CREATE_NO_WINDOW | DETACHED_PROCESS,
 			NULL,
-			workdir.c_str(),
+			wdir,
 			&si,
 			&pi
 		);
