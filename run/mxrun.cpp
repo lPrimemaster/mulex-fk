@@ -223,6 +223,12 @@ namespace mulex
 		});
 	}
 
+	mulex::RPCGenericType RunGetName()
+	{
+		std::string name = RunComputeAliasFields(_run_current_alias_fmt);
+		return string512(name);
+	}
+
 	mulex::RPCGenericType RunLogGetRuns(std::uint64_t limit, std::uint64_t page)
 	{
 		static PdbAccessLocal accessor;
