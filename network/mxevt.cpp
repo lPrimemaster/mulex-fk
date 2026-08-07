@@ -524,6 +524,8 @@ namespace mulex
 		std::for_each(_evt_emit_stack.begin(), _evt_emit_stack.end(), [](auto& t){ t.second.requestUnblock(); });
 #ifdef WIN32
 		std::for_each(_evt_stream.begin(), _evt_stream.end(), [](auto& t){ t.second->requestUnblock(); });
+#else
+		std::for_each(_evt_stream.begin(), _evt_stream.end(), [](auto& t){ t.second->requestUnblock(); });
 #endif
 		std::for_each(_evt_emit_thread.begin(), _evt_emit_thread.end(), [](auto& t){ t.second->join(); });
 		std::for_each(_evt_listen_thread.begin(), _evt_listen_thread.end(), [](auto& t){ t.second->join(); });
@@ -697,6 +699,9 @@ namespace mulex
 		// On client disconnect unsubscribe from events
 		// We can run into issues if there is a crash on the client side, which we don't control
 		OnClientDisconnect(_evt_client_socket_pair.at(socket._handle));
+
+		// _evt_stream erase might happen before the destructor is triggered
+		sbs.requestUnblock();
 
 		{
 			std::unique_lock<std::mutex> lock(_connections_mutex);

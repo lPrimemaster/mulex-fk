@@ -748,7 +748,12 @@ namespace mulex
 			// LogTrace("Current buffer offset = %llu", _buffer_offset);
 			// LogTrace("Buffer total size = %llu", _buffer.size());
 			
-			_notifier.wait(lock, [&](){ return payloadsize <= _buffer_offset; });
+			_notifier.wait(lock, [&](){ return (payloadsize <= _buffer_offset) || _unblock_sig.load(); });
+
+			if(_unblock_sig.load())
+			{
+				return 0;
+			}
 
 			std::memcpy(buffer, _buffer.data(), payloadsize);
 			_buffer_offset -= payloadsize;
